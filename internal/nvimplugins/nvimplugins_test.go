@@ -10,8 +10,10 @@ func TestParseLockfile(t *testing.T) {
 	dir := t.TempDir()
 	lockfile := filepath.Join(dir, "nvim-pack-lock.json")
 	os.WriteFile(lockfile, []byte(`{
-  "telescope.nvim": { "branch": "master", "commit": "abc123" },
-  "nvim-treesitter": { "branch": "master", "commit": "def456" }
+  "plugins": {
+    "telescope.nvim": { "rev": "abc123", "src": "https://github.com/nvim-telescope/telescope.nvim" },
+    "nvim-treesitter": { "rev": "def456", "src": "https://github.com/nvim-treesitter/nvim-treesitter" }
+  }
 }`), 0644)
 
 	plugins, err := ParseLockfile(lockfile)
@@ -29,8 +31,8 @@ func TestParseLockfile(t *testing.T) {
 
 	if p, ok := byName["telescope.nvim"]; !ok {
 		t.Error("missing telescope.nvim")
-	} else if p.Commit != "abc123" {
-		t.Errorf("telescope commit = %s, want abc123", p.Commit)
+	} else if p.Rev != "abc123" {
+		t.Errorf("telescope rev = %s, want abc123", p.Rev)
 	}
 }
 
@@ -40,8 +42,10 @@ func TestSyncPlugins(t *testing.T) {
 	// Create lockfile
 	lockfile := filepath.Join(dir, "nvim-pack-lock.json")
 	os.WriteFile(lockfile, []byte(`{
-  "myplugin": { "branch": "main", "commit": "aaa" },
-  "missing": { "branch": "main", "commit": "bbb" }
+  "plugins": {
+    "myplugin": { "rev": "aaa", "src": "https://github.com/test/myplugin" },
+    "missing": { "rev": "bbb", "src": "https://github.com/test/missing" }
+  }
 }`), 0644)
 
 	// Create local plugin directory (only myplugin exists)

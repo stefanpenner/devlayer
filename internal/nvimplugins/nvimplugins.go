@@ -12,9 +12,9 @@ import (
 
 // Plugin represents one entry from nvim-pack-lock.json.
 type Plugin struct {
-	Name   string
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
+	Name string
+	Rev  string `json:"rev"`
+	Src  string `json:"src"`
 }
 
 // ParseLockfile reads nvim-pack-lock.json and returns plugin entries.
@@ -24,13 +24,16 @@ func ParseLockfile(path string) ([]Plugin, error) {
 		return nil, err
 	}
 
-	var raw map[string]Plugin
-	if err := json.Unmarshal(data, &raw); err != nil {
+	// vim.pack lockfile format: {"plugins": {"name": {"rev": "...", "src": "..."}}}
+	var lockfile struct {
+		Plugins map[string]Plugin `json:"plugins"`
+	}
+	if err := json.Unmarshal(data, &lockfile); err != nil {
 		return nil, fmt.Errorf("parse nvim-pack-lock.json: %w", err)
 	}
 
-	plugins := make([]Plugin, 0, len(raw))
-	for name, p := range raw {
+	plugins := make([]Plugin, 0, len(lockfile.Plugins))
+	for name, p := range lockfile.Plugins {
 		p.Name = name
 		plugins = append(plugins, p)
 	}
@@ -111,7 +114,7 @@ func copyDirNoGit(src, dst string) error {
 			return os.MkdirAll(target, 0755)
 		}
 
-		// Skip symlinks to avoid issues
+		// Preserve symlinks
 		if d.Type()&fs.ModeSymlink != 0 {
 			linkTarget, err := os.Readlink(path)
 			if err != nil {

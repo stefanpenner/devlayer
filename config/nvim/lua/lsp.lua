@@ -17,7 +17,7 @@ require("lazydev").setup()
 -- Completion
 require("blink.cmp").setup({
   keymap = { preset = "default" },
-  fuzzy = { implementation = "lua" },
+  fuzzy = { implementation = "prefer_rust" },
   appearance = { nerd_font_variant = "mono" },
   sources = {
     default = { "lsp", "path", "snippets", "buffer", "lazydev" },

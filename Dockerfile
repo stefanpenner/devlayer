@@ -96,7 +96,8 @@ RUN curl -fsSL "https://github.com/aristocratos/btop/archive/refs/tags/v${BTOP_V
 # neovim — static
 # ============================================================
 FROM base AS nvim-build
-RUN git clone --depth 1 --branch stable https://github.com/neovim/neovim.git && \
+ARG NVIM_VERSION=0.12.0
+RUN git clone --depth 1 --branch v${NVIM_VERSION} https://github.com/neovim/neovim.git && \
     cd neovim && \
     make CMAKE_BUILD_TYPE=Release \
          CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX=/opt/nvim -DCMAKE_EXE_LINKER_FLAGS='-static -Wl,--export-dynamic'" \

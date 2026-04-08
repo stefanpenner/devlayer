@@ -967,7 +967,7 @@ func buildDotfiles(scriptDir string) error {
 		src := filepath.Join(home, rel)
 		dst := filepath.Join(staging, rel)
 
-		info, err := os.Stat(src)
+		_, err := os.Stat(src)
 		if os.IsNotExist(err) {
 			fmt.Printf("  skipped (not found): %s\n", rel)
 			continue
@@ -976,15 +976,28 @@ func buildDotfiles(scriptDir string) error {
 			return err
 		}
 
-		if info.IsDir() {
-			if err := copyDirSimple(src, dst); err != nil {
+		// Resolve symlinks — we want actual content in the tarball
+		realSrc, err := filepath.EvalSymlinks(src)
+		if err != nil {
+			return fmt.Errorf("resolve %s: %w", rel, err)
+		}
+		realInfo, err := os.Stat(realSrc)
+		if err != nil {
+			return err
+		}
+
+		if realInfo.IsDir() {
+			if err := os.MkdirAll(dst, 0755); err != nil {
+				return err
+			}
+			if err := copyDirSimple(realSrc, dst); err != nil {
 				return fmt.Errorf("copy %s: %w", rel, err)
 			}
 		} else {
 			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 				return err
 			}
-			if err := copyFile(src, dst); err != nil {
+			if err := copyFile(realSrc, dst); err != nil {
 				return fmt.Errorf("copy %s: %w", rel, err)
 			}
 		}
@@ -1000,7 +1013,8 @@ func buildDotfiles(scriptDir string) error {
 	return nil
 }
 
-// buildNvimPlugins copies locally-installed nvim plugins into a tarball.
+// buildNvimPlugins packages nvim plugins, treesitter parsers, and Mason LSP
+// servers into a single tarball for deployment.
 // Skipped silently if nvim-pack-lock.json doesn't exist.
 func buildNvimPlugins(scriptDir string) error {
 	lockfile := nvimplugins.LockfilePath()
@@ -1016,14 +1030,56 @@ func buildNvimPlugins(scriptDir string) error {
 	}
 	defer os.RemoveAll(staging)
 
+	home, _ := os.UserHomeDir()
+	nvimData := filepath.Join(home, ".local", "share", "nvim")
+
+	// 1. Plugins from lockfile
 	pluginDir := filepath.Join(staging, "site", "pack", "core", "opt")
 	if err := nvimplugins.SyncPlugins(lockfile, nvimplugins.LocalPluginDir(), pluginDir); err != nil {
 		return fmt.Errorf("sync nvim plugins: %w", err)
 	}
-
-	// Count plugins
 	entries, _ := os.ReadDir(pluginDir)
 	fmt.Printf("  %d plugins\n", len(entries))
+
+	// 2. Treesitter parsers (.so files) and queries
+	parserSrc := filepath.Join(nvimData, "site", "parser")
+	if _, err := os.Stat(parserSrc); err == nil {
+		parserDst := filepath.Join(staging, "site", "parser")
+		if err := copyDirSimple(parserSrc, parserDst); err != nil {
+			return fmt.Errorf("copy treesitter parsers: %w", err)
+		}
+		parsers, _ := os.ReadDir(parserDst)
+		fmt.Printf("  %d treesitter parsers\n", len(parsers))
+	}
+	// Treesitter queries are symlinks to plugin dirs — resolve and copy content
+	querySrc := filepath.Join(nvimData, "site", "queries")
+	if entries, err := os.ReadDir(querySrc); err == nil {
+		queryDst := filepath.Join(staging, "site", "queries")
+		if err := os.MkdirAll(queryDst, 0755); err != nil {
+			return fmt.Errorf("mkdir queries: %w", err)
+		}
+		for _, e := range entries {
+			src := filepath.Join(querySrc, e.Name())
+			realSrc, err := filepath.EvalSymlinks(src)
+			if err != nil {
+				continue
+			}
+			if err := copyDirSimple(realSrc, filepath.Join(queryDst, e.Name())); err != nil {
+				return fmt.Errorf("copy query %s: %w", e.Name(), err)
+			}
+		}
+	}
+
+	// 3. Mason LSP servers
+	masonSrc := filepath.Join(nvimData, "mason")
+	if _, err := os.Stat(masonSrc); err == nil {
+		masonDst := filepath.Join(staging, "mason")
+		if err := copyDirSimple(masonSrc, masonDst); err != nil {
+			return fmt.Errorf("copy mason packages: %w", err)
+		}
+		pkgs, _ := os.ReadDir(filepath.Join(masonDst, "packages"))
+		fmt.Printf("  %d mason packages\n", len(pkgs))
+	}
 
 	outputFile := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
 	if err := archive.CreateTarGz(outputFile, staging); err != nil {

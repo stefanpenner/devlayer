@@ -8,6 +8,8 @@ vim.api.nvim_create_autocmd("User", {
   end,
 })
 
+-- vim.pack requires nvim 0.12+; on older versions, plugins are loaded via packadd below
+if vim.pack then
 vim.pack.add({
   -- LSP & Completion
   "https://github.com/neovim/nvim-lspconfig",
@@ -62,6 +64,7 @@ vim.pack.add({
   "https://github.com/nvim-lua/plenary.nvim",
   "https://github.com/b0o/SchemaStore.nvim",
 })
+end -- vim.pack
 
 -- Load all installed opt packages onto runtimepath
 local pack_dir = vim.fn.stdpath("data") .. "/site/pack/core/opt"
