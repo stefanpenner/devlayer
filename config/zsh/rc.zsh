@@ -1,4 +1,4 @@
-# Shared zsh config — managed by dotpack
+# Shared zsh config — managed by devlayer
 # Sourced from ~/.zshrc before machine-specific config.
 
 # --- Helpers ---
