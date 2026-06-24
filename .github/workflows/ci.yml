@@ -7,6 +7,11 @@ on:
   release:
     types: [created]
 
+# Cancel superseded runs on the same PR/branch; never cancel release runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: write
   id-token: write
@@ -16,6 +21,7 @@ jobs:
   # Build + test with Bazel on all platforms
   test:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
@@ -40,8 +46,12 @@ jobs:
       - name: Build CLI
         run: bazel build //:devlayer
 
+      # Scope tests to the Go code. `bazel test //...` would also force-build
+      # every //third_party source tool (htop, btop, zsh, …) on all three
+      # platforms — slow, redundant with the bundle jobs, and impossible on a
+      # bare Windows runner.
       - name: Run tests
-        run: bazel test //...
+        run: bazel test //cmd/... //internal/...
 
       - name: Smoke test
         shell: bash
@@ -109,6 +119,7 @@ jobs:
   linux:
     needs: cli
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
@@ -139,6 +150,9 @@ jobs:
         run: |
           bazel build //linux:bundle_${{ matrix.arch }}
           cp bazel-bin/linux/devlayer-linux-${{ matrix.arch }}.tar.gz .
+          # Bazel outputs are read-only (0444); clear the bit so the re-tar
+          # below can overwrite this same filename.
+          chmod u+w devlayer-linux-${{ matrix.arch }}.tar.gz
           # Inject devlayer CLI into the bundle
           tmpdir=$(mktemp -d)
           tar xzf devlayer-linux-${{ matrix.arch }}.tar.gz -C "$tmpdir"

@@ -108,6 +108,12 @@ func (p *Platform) RustTargetFor(project string) string {
 			return "x86_64-apple-darwin"
 		}
 		return p.RustTarget
+	case "eza":
+		// eza only ships a windows-gnu build (no msvc)
+		if p.OS == "windows" {
+			return p.RustArch + "-pc-windows-gnu"
+		}
+		return p.RustTarget
 	default:
 		return p.RustTarget
 	}

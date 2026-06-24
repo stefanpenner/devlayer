@@ -76,7 +76,9 @@ def _tool_repos_impl(module_ctx):
 
     http_archive(
         name = "zsh_src",
-        urls = ["https://www.zsh.org/pub/zsh-{}.tar.xz".format(v["ZSH"])],
+        # zsh.org keeps only the current release in /pub; older releases move
+        # to /pub/old (the bare /pub/zsh-5.9.tar.xz URL now 404s).
+        urls = ["https://www.zsh.org/pub/old/zsh-{}.tar.xz".format(v["ZSH"])],
         strip_prefix = "zsh-{}".format(v["ZSH"]),
         build_file_content = _ALL_SRCS,
     )
