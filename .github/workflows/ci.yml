@@ -16,6 +16,7 @@ jobs:
   # Build + test with Bazel on all platforms
   test:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
@@ -36,6 +37,13 @@ jobs:
             ~/.cache/bazelisk
           key: bazel-${{ matrix.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-${{ matrix.os }}-
+
+      # `bazel test //...` transitively builds the source-compiled tools
+      # (htop via autotools, btop via cmake), so the macOS test job needs the
+      # same build deps the darwin bundle job installs.
+      - name: Install build dependencies (macOS)
+        if: matrix.os == 'darwin'
+        run: brew install cmake ninja autoconf automake libtool
 
       - name: Build CLI
         run: bazel build //:devlayer
@@ -109,6 +117,7 @@ jobs:
   linux:
     needs: cli
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
@@ -139,6 +148,9 @@ jobs:
         run: |
           bazel build //linux:bundle_${{ matrix.arch }}
           cp bazel-bin/linux/devlayer-linux-${{ matrix.arch }}.tar.gz .
+          # Bazel outputs are read-only (0444); clear the bit so the re-tar
+          # below can overwrite this same filename.
+          chmod u+w devlayer-linux-${{ matrix.arch }}.tar.gz
           # Inject devlayer CLI into the bundle
           tmpdir=$(mktemp -d)
           tar xzf devlayer-linux-${{ matrix.arch }}.tar.gz -C "$tmpdir"
