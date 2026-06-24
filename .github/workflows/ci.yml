@@ -7,6 +7,11 @@ on:
   release:
     types: [created]
 
+# Cancel superseded runs on the same PR/branch; never cancel release runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: write
   id-token: write
@@ -38,18 +43,15 @@ jobs:
           key: bazel-${{ matrix.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-${{ matrix.os }}-
 
-      # `bazel test //...` transitively builds the source-compiled tools
-      # (htop via autotools, btop via cmake), so the macOS test job needs the
-      # same build deps the darwin bundle job installs.
-      - name: Install build dependencies (macOS)
-        if: matrix.os == 'darwin'
-        run: brew install cmake ninja autoconf automake libtool
-
       - name: Build CLI
         run: bazel build //:devlayer
 
+      # Scope tests to the Go code. `bazel test //...` would also force-build
+      # every //third_party source tool (htop, btop, zsh, …) on all three
+      # platforms — slow, redundant with the bundle jobs, and impossible on a
+      # bare Windows runner.
       - name: Run tests
-        run: bazel test //...
+        run: bazel test //cmd/... //internal/...
 
       - name: Smoke test
         shell: bash
