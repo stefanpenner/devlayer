@@ -125,6 +125,11 @@ func TestRustTargetFor(t *testing.T) {
 		{"dust darwin x86_64", "darwin", "x86_64", "dust", "x86_64-apple-darwin"},
 		{"dust linux x86_64", "linux", "x86_64", "dust", "x86_64-unknown-linux-musl"},
 		{"dust linux aarch64", "linux", "aarch64", "dust", "aarch64-unknown-linux-musl"},
+		// eza only ships a windows-gnu build (no msvc); other platforms use the default target.
+		{"eza windows x86_64", "windows", "x86_64", "eza", "x86_64-pc-windows-gnu"},
+		{"eza windows arm64", "windows", "arm64", "eza", "aarch64-pc-windows-gnu"},
+		{"eza linux x86_64", "linux", "x86_64", "eza", "x86_64-unknown-linux-musl"},
+		{"eza darwin arm64", "darwin", "arm64", "eza", "aarch64-apple-darwin"},
 	}
 
 	for _, tt := range tests {
