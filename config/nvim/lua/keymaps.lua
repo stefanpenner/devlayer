@@ -133,11 +133,8 @@ map("n", "<leader>sC", function() Snacks.picker.commands() end, { desc = "Comman
 map("n", "<leader>e", function() Snacks.explorer() end, { desc = "File explorer" })
 map("n", "<leader>fe", function() Snacks.explorer() end, { desc = "File explorer" })
 
--- Git (lazygit themed to match tokyonight)
-local lg_theme = vim.fn.globpath(vim.fn.stdpath("data") .. "/site/pack", "**/tokyonight_night.yml", false, true)[1]
-local lg_cmd = lg_theme
-  and ("LG_CONFIG_FILE=" .. vim.fn.shellescape(lg_theme) .. ",$HOME/.config/lazygit/config.yml lazygit")
-  or "lazygit"
+-- Git (lazygit themed via ~/.config/lazygit/config.yml)
+local lg_cmd = "lazygit"
 map("n", "<leader>gg", function() Snacks.terminal(lg_cmd) end, { desc = "Lazygit" })
 map("n", "<leader>gb", function() Snacks.picker.git_branches() end, { desc = "Git branches" })
 map("n", "<leader>gl", function() Snacks.picker.git_log() end, { desc = "Git log" })

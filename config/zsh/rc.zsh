@@ -15,6 +15,12 @@ path_prepend() {
 
 path_prepend "$HOME/.local/bin"
 
+# --- Accessibility wrappers ---
+
+copilot() {
+  command copilot --screen-reader --no-mouse --plain-diff "$@"
+}
+
 # --- Zsh plugins (installed by devlayer to ~/.local/share) ---
 
 local _share="$HOME/.local/share"

@@ -1,8 +1,14 @@
 -- Colorscheme
-require("tokyonight").setup({
-  style = "night",
+require("nightfox").setup({
+  options = {
+    styles = {
+      comments = "NONE",
+      keywords = "NONE",
+      types = "NONE",
+    },
+  },
 })
-vim.cmd.colorscheme("tokyonight-night")
+vim.cmd.colorscheme("carbonfox")
 
 -- Icons (must be set up before plugins that use them)
 require("mini.icons").setup()
@@ -10,7 +16,7 @@ require("mini.icons").setup()
 -- Statusline
 require("lualine").setup({
   options = {
-    theme = "tokyonight",
+    theme = "carbonfox",
     globalstatus = true,
     component_separators = { left = "", right = "" },
     section_separators = { left = "", right = "" },

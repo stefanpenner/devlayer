@@ -96,6 +96,14 @@ Wrapper scripts in `bin/` handle `GOROOT`, `GIT_EXEC_PATH`, `VIMRUNTIME`, and `F
 **Bash** (`~/.bashrc` or `~/.bash_profile`):
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+
+claude() {
+  command claude --ax-screen-reader "$@"
+}
+
+copilot() {
+  command copilot --screen-reader --no-mouse --plain-diff "$@"
+}
 ```
 
 **Zsh** (`~/.zshrc`):
@@ -111,6 +119,15 @@ source "$HOME/.local/share/powerlevel10k/powerlevel10k.zsh-theme"
 # fzf keybindings and completion (optional)
 source "$HOME/.local/share/fzf/key-bindings.zsh"
 source "$HOME/.local/share/fzf/completion.zsh"
+
+# Accessibility wrappers
+claude() {
+  command claude --ax-screen-reader "$@"
+}
+
+copilot() {
+  command copilot --screen-reader --no-mouse --plain-diff "$@"
+}
 ```
 
 **Windows (PowerShell profile)**:
@@ -142,7 +159,10 @@ devlayer can bundle your dotfiles and pre-downloaded nvim plugins alongside the 
 ```toml
 [dotfiles]
 sync = [
+  ".config/ghostty",
   ".config/nvim",
+  ".config/opencode",
+  ".bash_profile",
   ".zshrc",
   ".tmux.conf",
   ".gitconfig",

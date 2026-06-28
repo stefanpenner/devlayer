@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
 	"github.com/stefanpenner/devlayer/internal/config"
@@ -149,7 +150,7 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir string) e
 		{"zig", "zig/zig", nil},
 	}
 
-	// Create eza wrapper that sets EZA_CONFIG_DIR for tokyo-night theme
+	// Create eza wrapper that sets EZA_CONFIG_DIR for the bundled theme
 	// Real binary lives in libexec/eza to avoid naming conflict with wrapper
 	ezaWrapper := `#!/bin/sh
 PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
@@ -395,6 +396,7 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 		fmt.Sprintf("-j%d", runtime.NumCPU()),
 	)
 	build.Dir = srcRoot
+	build.Env = nvimBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -403,6 +405,7 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 
 	install := exec.Command("make", "install")
 	install.Dir = srcRoot
+	install.Env = nvimBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	install.Stdout = os.Stdout
 	install.Stderr = os.Stderr
 	if err := install.Run(); err != nil {
@@ -410,6 +413,51 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	}
 
 	return nil
+}
+
+func nvimBuildEnv(base []string, goos, clang, clangxx, sdk string) []string {
+	if goos != "darwin" || clang == "" || clangxx == "" || sdk == "" {
+		return base
+	}
+	env := append([]string{}, base...)
+	env = append(env, "CC="+clang)
+	env = append(env, "CXX="+clangxx)
+	env = append(env, "SDKROOT="+sdk)
+	return env
+}
+
+func findXcodeTool(name string) string {
+	path, err := exec.LookPath("xcrun")
+	if err != nil {
+		return ""
+	}
+	out, err := exec.Command(path, "--find", name).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func findXcodeSDK() string {
+	path, err := exec.LookPath("xcrun")
+	if err != nil {
+		return ""
+	}
+	out, err := exec.Command(path, "--show-sdk-path").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func touchTree(root string) error {
+	now := time.Now()
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chtimes(path, now, now)
+	})
 }
 
 // buildHtop builds htop from source using autotools.
@@ -441,6 +489,11 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	if err := autogen.Run(); err != nil {
 		return fmt.Errorf("htop autogen: %w", err)
 	}
+
+	if err := touchTree(srcRoot); err != nil {
+		return fmt.Errorf("htop touch tree: %w", err)
+	}
+	time.Sleep(2 * time.Second)
 
 	// configure
 	configure := exec.Command("./configure", "CFLAGS=-Os -DNDEBUG")
@@ -532,8 +585,8 @@ func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip
 		}
 	}
 
-	// eza tokyo-night theme
-	if err := downloadEzaTheme(out); err != nil {
+	// eza Carbonfox theme
+	if err := installEzaTheme(out); err != nil {
 		return fmt.Errorf("eza theme: %w", err)
 	}
 
@@ -815,18 +868,6 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	}
 
 	return nil
-}
-
-// downloadEzaTheme downloads the tokyo-night theme for eza into the share directory.
-func downloadEzaTheme(outDir string) error {
-	fmt.Println("  eza tokyo-night theme")
-	ezaConfigDir := filepath.Join(outDir, "share", "eza")
-	if err := os.MkdirAll(ezaConfigDir, 0755); err != nil {
-		return err
-	}
-
-	themeURL := "https://raw.githubusercontent.com/eza-community/eza-themes/main/themes/tokyonight.yml"
-	return download.File(themeURL, filepath.Join(ezaConfigDir, "theme.yml"))
 }
 
 // buildMake compiles GNU make from source.
