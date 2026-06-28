@@ -1,0 +1,19 @@
+[dotfiles]
+sync = [
+  # shell
+  ".bash_profile",
+  ".zshrc",
+  ".config/zsh",
+  ".p10k.zsh",
+
+  # terminal + editor
+  ".config/ghostty",
+  ".config/nvim",
+  ".config/opencode",
+  ".tmux.conf",
+  ".gitconfig",
+
+  # optional SSH layer: config only, never private keys
+  ".ssh/config",
+  ".ssh/config.d",
+]
