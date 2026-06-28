@@ -18,7 +18,7 @@ func TestHtopBuildEnvPrefersSystemPath(t *testing.T) {
 	if path == "" {
 		t.Fatal("PATH not found")
 	}
-	if !strings.HasPrefix(path, "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin:") {
+	if path != "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin" {
 		t.Fatalf("unexpected PATH: %s", path)
 	}
 }

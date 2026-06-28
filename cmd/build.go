@@ -328,6 +328,7 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 		"-DBTOP_GPU=OFF",
 		"-DBTOP_LTO=ON",
 	)
+	configure.Env = btopBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	configure.Stdout = os.Stdout
 	configure.Stderr = os.Stderr
 	if err := configure.Run(); err != nil {
@@ -336,6 +337,7 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 
 	// cmake build
 	build := exec.Command("cmake", "--build", buildDir, "--config", "Release")
+	build.Env = btopBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -416,6 +418,14 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 }
 
 func nvimBuildEnv(base []string, goos, clang, clangxx, sdk string) []string {
+	return darwinXcodeEnv(base, goos, clang, clangxx, sdk)
+}
+
+func btopBuildEnv(base []string, goos, clang, clangxx, sdk string) []string {
+	return darwinXcodeEnv(base, goos, clang, clangxx, sdk)
+}
+
+func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
 	if goos != "darwin" || clang == "" || clangxx == "" || sdk == "" {
 		return base
 	}
@@ -480,18 +490,27 @@ func withEnv(env []string, key, value string) []string {
 
 func htopBuildEnv(base []string) []string {
 	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
+	return withEnv(base, "PATH", systemPath)
+}
 
-	var current string
-	for _, entry := range base {
-		if strings.HasPrefix(entry, "PATH=") {
-			current = strings.TrimPrefix(entry, "PATH=")
-			break
-		}
+func ezaBuildEnv(base []string, goos, cargoPath, clang, clangxx, sdk string) []string {
+	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
+	if goos != "darwin" {
+		return base
 	}
-	if current != "" {
-		return withEnv(base, "PATH", systemPath+":"+current)
+	env := darwinXcodeEnv(base, goos, clang, clangxx, sdk)
+	cargoDir := filepath.Dir(cargoPath)
+	if cargoDir == "" || cargoDir == "." {
+		return withEnv(env, "PATH", systemPath)
 	}
-	return append([]string{}, "PATH="+systemPath)
+	return withEnv(env, "PATH", cargoDir+":"+systemPath)
+}
+
+func buildMakeTool(goos string) string {
+	if goos == "darwin" {
+		return "/usr/bin/make"
+	}
+	return "make"
 }
 
 // buildHtop builds htop from source using autotools.
@@ -891,8 +910,13 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	}
 
 	// Build with cargo
-	build := exec.Command("cargo", "build", "--release")
+	cargoPath, err := exec.LookPath("cargo")
+	if err != nil {
+		return fmt.Errorf("find cargo: %w", err)
+	}
+	build := exec.Command(cargoPath, "build", "--release")
 	build.Dir = srcRoot
+	build.Env = ezaBuildEnv(os.Environ(), runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -939,9 +963,15 @@ func buildMake(binDir string, vers *versions.Versions) error {
 		return fmt.Errorf("make source directory not found")
 	}
 
+	if err := touchTree(srcRoot); err != nil {
+		return fmt.Errorf("make touch tree: %w", err)
+	}
+	time.Sleep(2 * time.Second)
+
 	// configure
 	configure := exec.Command("./configure", "CFLAGS=-Os -DNDEBUG")
 	configure.Dir = srcRoot
+	configure.Env = htopBuildEnv(os.Environ())
 	configure.Stdout = os.Stdout
 	configure.Stderr = os.Stderr
 	if err := configure.Run(); err != nil {
@@ -949,8 +979,9 @@ func buildMake(binDir string, vers *versions.Versions) error {
 	}
 
 	// build
-	build := exec.Command("make", fmt.Sprintf("-j%d", runtime.NumCPU()))
+	build := exec.Command(buildMakeTool(runtime.GOOS), fmt.Sprintf("-j%d", runtime.NumCPU()))
 	build.Dir = srcRoot
+	build.Env = htopBuildEnv(os.Environ())
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
