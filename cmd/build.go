@@ -460,6 +460,40 @@ func touchTree(root string) error {
 	})
 }
 
+func withEnv(env []string, key, value string) []string {
+	out := make([]string, 0, len(env)+1)
+	prefix := key + "="
+	replaced := false
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			out = append(out, prefix+value)
+			replaced = true
+			continue
+		}
+		out = append(out, entry)
+	}
+	if !replaced {
+		out = append(out, prefix+value)
+	}
+	return out
+}
+
+func htopBuildEnv(base []string) []string {
+	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
+
+	var current string
+	for _, entry := range base {
+		if strings.HasPrefix(entry, "PATH=") {
+			current = strings.TrimPrefix(entry, "PATH=")
+			break
+		}
+	}
+	if current != "" {
+		return withEnv(base, "PATH", systemPath+":"+current)
+	}
+	return append([]string{}, "PATH="+systemPath)
+}
+
 // buildHtop builds htop from source using autotools.
 func buildHtop(binDir string, vers *versions.Versions) error {
 	ver := vers.Get("HTOP_VERSION")
@@ -484,6 +518,7 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	// autogen
 	autogen := exec.Command("./autogen.sh")
 	autogen.Dir = srcRoot
+	autogen.Env = htopBuildEnv(os.Environ())
 	autogen.Stdout = os.Stdout
 	autogen.Stderr = os.Stderr
 	if err := autogen.Run(); err != nil {
@@ -498,6 +533,7 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	// configure
 	configure := exec.Command("./configure", "CFLAGS=-Os -DNDEBUG")
 	configure.Dir = srcRoot
+	configure.Env = htopBuildEnv(os.Environ())
 	configure.Stdout = os.Stdout
 	configure.Stderr = os.Stderr
 	if err := configure.Run(); err != nil {
@@ -507,6 +543,7 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	// build
 	make := exec.Command("make", fmt.Sprintf("-j%d", runtime.NumCPU()))
 	make.Dir = srcRoot
+	make.Env = htopBuildEnv(os.Environ())
 	make.Stdout = os.Stdout
 	make.Stderr = os.Stderr
 	if err := make.Run(); err != nil {
