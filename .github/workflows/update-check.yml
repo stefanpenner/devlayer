@@ -1,8 +1,8 @@
 name: Check for updates
 
 on:
-  schedule:
-    - cron: '0 9 * * 0'  # Sunday 9am UTC
+  # Clock is the NAS (Sunday 08:00), not GitHub cron.
+  # GitHub disables on:schedule after 60 days; bot merges do not reset that.
   workflow_dispatch:
 
 permissions:
@@ -29,10 +29,12 @@ jobs:
 
       - name: Install Bazelisk
         run: |
-          curl -fsSL -o /usr/local/bin/bazel \
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/bazel" \
             https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64
-          chmod +x /usr/local/bin/bazel
-          bazel version
+          chmod +x "$HOME/bin/bazel"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/bazel" version
 
       - name: Check for newer versions
         id: check
@@ -80,7 +82,7 @@ jobs:
           $(cat /tmp/updates.txt)
 
           ---
-          Sunday auto-bump. Tests + URL probe ran in [update-check](.github/workflows/update-check.yml).
+          NAS-dispatched auto-bump. Tests + URL probe ran in [update-check](.github/workflows/update-check.yml).
           Squash-merged from this job (GITHUB_TOKEN PRs do not trigger pull_request CI).
           EOF
           )")
