@@ -78,7 +78,7 @@ devlayer build --os windows       # Build Windows bundle
 devlayer push nas                 # Deploy to remote host via SSH
 devlayer status                   # Check installed versions locally
 devlayer status nas               # Check installed versions on host
-devlayer upgrade                  # Download and install latest release
+devlayer upgrade                  # Show notes (if any) and install latest release
 devlayer install                  # Install bundle locally
 devlayer init                     # Write ~/.config/devlayer/config.toml
 devlayer doctor                   # Check the local install

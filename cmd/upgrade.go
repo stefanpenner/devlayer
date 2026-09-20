@@ -40,12 +40,17 @@ func Upgrade(currentVersion string) error {
 	}
 
 	latestTag := release.TagName
-	if latestTag == currentVersion {
+	if sameVersion(latestTag, currentVersion) {
 		fmt.Printf("==> Already up to date (%s)\n", currentVersion)
 		return nil
 	}
 
 	fmt.Printf("==> Upgrading %s → %s\n", currentVersion, latestTag)
+	if notes := strings.TrimSpace(release.Body); notes != "" {
+		fmt.Println()
+		fmt.Println(notes)
+		fmt.Println()
+	}
 
 	// Download the bundle
 	assetName := fmt.Sprintf("devlayer-%s-%s.%s", osName, arch, ext)
@@ -112,7 +117,23 @@ func Upgrade(currentVersion string) error {
 
 type ghRelease struct {
 	TagName string    `json:"tag_name"`
+	Body    string    `json:"body"`
 	Assets  []ghAsset `json:"assets"`
+}
+
+func sameVersion(a, b string) bool {
+	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
+}
+
+func formatNotice(current, latest, body string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "==> New version %s (you have %s)\n    run: devlayer upgrade\n", latest, current)
+	if strings.TrimSpace(body) != "" {
+		b.WriteString("\n")
+		b.WriteString(strings.TrimSpace(body))
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 type ghAsset struct {

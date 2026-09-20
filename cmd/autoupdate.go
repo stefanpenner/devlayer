@@ -12,10 +12,9 @@ import (
 
 const autoUpdateInterval = 24 * time.Hour
 
-// AutoUpdate checks for a newer release if enough time has passed since the
-// last check.  When an update is available it downloads and installs it
-// automatically.  Errors are printed but never fatal – normal command
-// execution continues regardless.
+// AutoUpdate checks for a newer GitHub release at most once per day.
+// It prints a notice (and release notes if present). It never installs;
+// run `devlayer upgrade` for that.
 func AutoUpdate(currentVersion string) {
 	if os.Getenv("DEVLAYER_NO_AUTOUPDATE") != "" {
 		return
@@ -39,14 +38,11 @@ func AutoUpdate(currentVersion string) {
 		return // network errors are silently ignored
 	}
 
-	if release.TagName == currentVersion {
+	if sameVersion(release.TagName, currentVersion) {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "==> Auto-updating %s → %s\n", currentVersion, release.TagName)
-	if err := Upgrade(currentVersion); err != nil {
-		fmt.Fprintf(os.Stderr, "==> Auto-update failed: %v\n", err)
-	}
+	fmt.Fprint(os.Stderr, formatNotice(currentVersion, release.TagName, release.Body))
 }
 
 func autoUpdateStampFile() string {
