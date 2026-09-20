@@ -38,15 +38,20 @@ def _docker_build(name, arch, image_tag, env = {}):
 
     native.genrule(
         name = name + "_" + arch,
-        srcs = [":base_image_" + arch],
+        srcs = [
+            ":base_image_" + arch,
+            "Dockerfile.base",
+        ],
         tools = [tool],
         outs = ["{}_{}.tar.gz".format(name, arch)],
         cmd = """
 set -euo pipefail
+docker image inspect {tag} >/dev/null 2>&1 || \
+  docker build --platform {platform} -t {tag} -f $$(realpath $(location Dockerfile.base)) .
 toolbin=$$(mktemp)
 cp $$(realpath $(location {tool})) $$toolbin
 chmod +x $$toolbin
-docker run --rm --platform {platform} {env} -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
+docker run --rm --pull never --platform {platform} {env} -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
 rm -f $$toolbin
 """.format(
             platform = docker_platform,
