@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// zsh-5.9 termcap vs newer ncurses — clone master, not the pin.
 var zshStaticModules = []string{
 	"compctl", "complete", "complist", "computil",
 	"zle", "zutil", "parameter", "terminfo",
@@ -14,9 +13,13 @@ var zshStaticModules = []string{
 	"net/socket", "net/tcp",
 }
 
-// Zsh clones master, static-links selected modules, and tars to stdout.
+// Zsh clones the pinned tag zsh-$ZSH_VERSION, static-links selected modules, tars.
 func Zsh(x Exec, out Output, env map[string]string, stdout io.Writer) error {
-	if err := x("", "git", "clone", "--depth", "1", "https://github.com/zsh-users/zsh.git"); err != nil {
+	ver, err := requireEnv(env, "ZSH_VERSION")
+	if err != nil {
+		return err
+	}
+	if err := x("", "git", "clone", "--depth", "1", "--branch", "zsh-"+ver, "https://github.com/zsh-users/zsh.git"); err != nil {
 		return err
 	}
 

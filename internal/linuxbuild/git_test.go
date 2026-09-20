@@ -38,6 +38,7 @@ NO_PYTHON = YesPlease
 NO_EXPAT = YesPlease
 NO_NSEC = YesPlease
 NO_REGEX = YesPlease
+NO_RUST = YesPlease
 CFLAGS = -Os -DNDEBUG
 LDFLAGS = -static -Wl,--allow-multiple-definition
 `

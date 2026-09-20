@@ -60,6 +60,14 @@ name=zsh/other        link=no     load=no
 	}
 }
 
+func TestZshMissingVersion(t *testing.T) {
+	var r recorder
+	err := Zsh(r.exec, r.output, nil, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "ZSH_VERSION") {
+		t.Fatalf("got %v, want missing ZSH_VERSION", err)
+	}
+}
+
 func TestZsh(t *testing.T) {
 	chdirTemp(t)
 	if err := os.MkdirAll("zsh", 0755); err != nil {
@@ -74,12 +82,13 @@ name=zsh/other link=no load=no
 	}
 
 	var r recorder
-	if err := Zsh(r.exec, r.output, nil, io.Discard); err != nil {
+	env := map[string]string{"ZSH_VERSION": "5.9.2"}
+	if err := Zsh(r.exec, r.output, env, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 
 	r.hasSeq(t,
-		"git clone --depth 1 https://github.com/zsh-users/zsh.git",
+		"git clone --depth 1 --branch zsh-5.9.2 https://github.com/zsh-users/zsh.git",
 		"zsh: ./Util/preconfig",
 		"zsh: ./configure --prefix=/opt/zsh --enable-static --disable-dynamic --enable-multibyte --with-tcsetpgrp LDFLAGS=-static CFLAGS=-Os -DNDEBUG",
 		"zsh: make "+jobsArg(),
@@ -87,12 +96,6 @@ name=zsh/other link=no load=no
 		"strip /opt/zsh/bin/zsh",
 		"tar czf - -C /opt/zsh .",
 	)
-	for _, c := range r.cmds {
-		if strings.Contains(c, "git clone") && strings.Contains(c, "--branch") {
-			t.Fatalf("zsh clone should be master, not a branch: %s", c)
-		}
-	}
-
 	body, err := os.ReadFile("zsh/config.modules")
 	if err != nil {
 		t.Fatal(err)
