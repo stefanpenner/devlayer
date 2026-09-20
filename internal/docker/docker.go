@@ -7,8 +7,13 @@ import (
 )
 
 // Build runs docker build with the given platform, tag, and context directory.
-func Build(platform, tag, contextDir string) error {
-	cmd := exec.Command("docker", "build", "--platform", platform, "-t", tag, contextDir)
+func Build(platform, tag, contextDir string, buildArgs map[string]string) error {
+	args := []string{"build", "--platform", platform, "-t", tag}
+	for k, v := range buildArgs {
+		args = append(args, "--build-arg", k+"="+v)
+	}
+	args = append(args, contextDir)
+	cmd := exec.Command("docker", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

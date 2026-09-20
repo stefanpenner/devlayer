@@ -45,7 +45,6 @@ filegroup(
     name = "shell_assets",
     srcs = [
         "//third_party/bat_extras",
-        "//third_party/eza:theme",
         "//third_party/fzf:shell",
         "//third_party/zsh_plugins:autosuggestions",
         "//third_party/zsh_plugins:fast_syntax_highlighting",

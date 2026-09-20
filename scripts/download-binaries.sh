@@ -95,6 +95,17 @@ dl_tar "https://github.com/bootandy/dust/releases/download/v${DUST_VERSION}/dust
 dl_tar "https://github.com/junegunn/fzf/releases/download/v${FZF_VERSION}/fzf-${FZF_VERSION}-${OS}_${GOARCH}.tar.gz" fzf
 dl_tar "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_${LAZYGIT_OS}_${ARCH_GENERIC}.tar.gz" lazygit
 
+echo "  gh"
+if [ "$OS" = "darwin" ]; then
+  tmp=$(mktemp -d)
+  curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_${GOARCH}.zip" -o "$tmp/gh.zip"
+  unzip -q "$tmp/gh.zip" -d "$tmp"
+  find "$tmp" -name gh -type f -exec cp {} "$OUT/bin/gh" \;
+  rm -rf "$tmp"
+else
+  dl_tar "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GOARCH}.tar.gz" gh
+fi
+
 # --- age (encryption tool — two binaries) ---
 AGE_URL="https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-${OS}-${GOARCH}.tar.gz"
 dl_tar "$AGE_URL" age

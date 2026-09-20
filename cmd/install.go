@@ -30,9 +30,10 @@ func Install(scriptDir string) error {
 		ext = "zip"
 	}
 
-	bundle := filepath.Join(scriptDir, fmt.Sprintf("devlayer-%s-%s.%s", osName, arch, ext))
-	if _, err := os.Stat(bundle); os.IsNotExist(err) {
-		return fmt.Errorf("no bundle found at %s\nRun: devlayer build --os %s --arch %s", bundle, osName, arch)
+	bundleName := fmt.Sprintf("devlayer-%s-%s.%s", osName, arch, ext)
+	bundle, err := findBundle(bundleName, scriptDir)
+	if err != nil {
+		return fmt.Errorf("%w\nRun: devlayer build --os %s --arch %s", err, osName, arch)
 	}
 
 	prefix := defaultPrefix()
@@ -42,7 +43,6 @@ func Install(scriptDir string) error {
 		return err
 	}
 
-	var err error
 	if ext == "zip" {
 		err = archive.ExtractZip(bundle, prefix)
 	} else {
@@ -103,4 +103,22 @@ func defaultPrefix() string {
 		return filepath.Join(home, "AppData", "Local", "devlayer")
 	}
 	return filepath.Join(home, ".local")
+}
+
+// findBundle looks in cwd first, then extraDir (docker/source context).
+func findBundle(name, extraDir string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
+	}
+	for _, dir := range []string{cwd, extraDir} {
+		if dir == "" {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("no bundle found at %s", name)
 }

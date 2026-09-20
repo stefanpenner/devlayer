@@ -90,14 +90,18 @@ def linux_targets(arch):
     _docker_build("git", arch, image_tag, "scripts/build_git.sh", env = {
         "GIT_VERSION": VERSIONS["GIT"],
     })
-    _docker_build("zsh", arch, image_tag, "scripts/build_zsh.sh")
+    _docker_build("zsh", arch, image_tag, "scripts/build_zsh.sh", env = {
+        "ZSH_VERSION": VERSIONS["ZSH"],
+    })
     _docker_build("htop", arch, image_tag, "scripts/build_htop.sh", env = {
         "HTOP_VERSION": VERSIONS["HTOP"],
     })
     _docker_build("btop", arch, image_tag, "scripts/build_btop.sh", env = {
         "BTOP_VERSION": VERSIONS["BTOP"],
     })
-    _docker_build("nvim", arch, image_tag, "scripts/build_nvim.sh")
+    _docker_build("nvim", arch, image_tag, "scripts/build_nvim.sh", env = {
+        "NVIM_VERSION": VERSIONS["NVIM"],
+    })
     _docker_build("make", arch, image_tag, "scripts/build_make.sh", env = {
         "MAKE_VERSION": VERSIONS["MAKE"],
     })

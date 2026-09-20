@@ -33,3 +33,41 @@ func (v *Versions) Get(key string) string {
 	}
 	return val
 }
+
+// Rewrite replaces KEY=old with KEY=val, preserving comments, blanks, and order.
+// Missing keys are appended as KEY=val\n.
+func Rewrite(content, key, val string) string {
+	prefix := key + "="
+	next := key + "=" + val
+	found := false
+
+	var b strings.Builder
+	start := 0
+	for start < len(content) {
+		n := strings.IndexByte(content[start:], '\n')
+		var line, nl string
+		if n < 0 {
+			line = content[start:]
+			start = len(content)
+		} else {
+			line = content[start : start+n]
+			nl = "\n"
+			start += n + 1
+		}
+		if strings.HasPrefix(line, prefix) {
+			line = next
+			found = true
+		}
+		b.WriteString(line)
+		b.WriteString(nl)
+	}
+
+	if !found {
+		if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+			b.WriteByte('\n')
+		}
+		b.WriteString(next)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}

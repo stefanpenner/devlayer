@@ -14,6 +14,7 @@ type Platform struct {
 	LazygitOS      string // "Linux", "Darwin", or "Windows"
 	NvimOS         string // "linux", "macos", "win64", "win-arm64"
 	JqOS           string // "linux", "macos", or "windows"
+	GhOS           string // "linux", "macOS", or "windows" — cli/cli asset names
 	ZigOS          string // "linux", "macos", or "windows"
 	DockerPlatform string // e.g. "linux/amd64"
 	ExeSuffix      string // "" on unix, ".exe" on windows
@@ -44,6 +45,7 @@ func New(os, arch string) (*Platform, error) {
 		p.LazygitOS = "Linux"
 		p.NvimOS = "linux"
 		p.JqOS = "linux"
+		p.GhOS = "linux"
 		p.ZigOS = "linux"
 		p.BundleExt = "tar.gz"
 	case "darwin":
@@ -52,6 +54,7 @@ func New(os, arch string) (*Platform, error) {
 		p.LazygitOS = "Darwin"
 		p.NvimOS = "macos"
 		p.JqOS = "macos"
+		p.GhOS = "macOS"
 		p.ZigOS = "macos"
 		p.BundleExt = "tar.gz"
 	case "windows":
@@ -59,6 +62,7 @@ func New(os, arch string) (*Platform, error) {
 		p.RustTargetGNU = p.RustTarget
 		p.LazygitOS = "Windows"
 		p.JqOS = "windows"
+		p.GhOS = "windows"
 		p.ZigOS = "windows"
 		p.ExeSuffix = ".exe"
 		p.BundleExt = "zip"

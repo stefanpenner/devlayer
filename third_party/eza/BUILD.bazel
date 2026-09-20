@@ -19,13 +19,9 @@ genrule(
         cp target/release/eza $$OUT
         rm -rf $$TMPDIR
     """.format(ver = VERSIONS["EZA"]),
-    tags = ["no-sandbox", "requires-network"],
-    visibility = ["//visibility:public"],
-)
-
-# eza tokyo-night theme file
-alias(
-    name = "theme",
-    actual = "@eza_theme//file:theme.yml",
+    tags = [
+        "no-sandbox",
+        "requires-network",
+    ],
     visibility = ["//visibility:public"],
 )

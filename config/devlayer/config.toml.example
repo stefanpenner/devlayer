@@ -10,7 +10,6 @@ sync = [
   ".config/ghostty",
   ".config/nvim",
   ".config/opencode",
-  ".tmux.conf",
   ".gitconfig",
 
   # optional SSH layer: config only, never private keys

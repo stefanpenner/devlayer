@@ -387,11 +387,4 @@ filegroup(
         build_file_content = _FILEGROUP_ALL,
     )
 
-    # eza tokyo-night theme
-    http_file(
-        name = "eza_theme",
-        urls = ["https://raw.githubusercontent.com/eza-community/eza-themes/main/themes/tokyonight.yml"],
-        downloaded_file_path = "theme.yml",
-    )
-
 tool_repos = module_extension(implementation = _tool_repos_impl)

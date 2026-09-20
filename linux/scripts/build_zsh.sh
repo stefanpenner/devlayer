@@ -1,12 +1,12 @@
 #!/bin/sh
 # Build zsh as a static binary with essential modules.
-# Uses master branch — zsh-5.9 has termcap conflicts with newer ncurses.
+# Expects ZSH_VERSION env var (zsh-users tag is zsh-$ZSH_VERSION).
 set -euo pipefail
 
 exec 3>&1  # save stdout for final tar output
 exec 1>&2  # redirect all build output to stderr
 
-git clone --depth 1 https://github.com/zsh-users/zsh.git
+git clone --depth 1 --branch "zsh-${ZSH_VERSION}" https://github.com/zsh-users/zsh.git
 cd zsh
 ./Util/preconfig
 ./configure \

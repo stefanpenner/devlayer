@@ -28,7 +28,7 @@
 # Shell assets:
 #   //third_party/bat_extras    — batman shell script
 #   //third_party/fzf:shell     — fzf key-bindings + completion
-#   //third_party/eza:theme     — tokyo-night theme
+#   eza theme is embedded Carbonfox (cmd/assets), not a Bazel fetch
 #   //third_party/zsh_plugins:autosuggestions
 #   //third_party/zsh_plugins:fast_syntax_highlighting
 #   //third_party/zsh_plugins:history_substring_search

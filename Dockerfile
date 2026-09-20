@@ -21,7 +21,7 @@ WORKDIR /build
 # git — static with HTTPS support
 # ============================================================
 FROM base AS git-build
-ARG GIT_VERSION=2.53.0
+ARG GIT_VERSION=2.55.0
 RUN curl -fsSL "https://github.com/git/git/archive/refs/tags/v${GIT_VERSION}.tar.gz" | tar xz && \
     cd git-${GIT_VERSION} && \
     echo "prefix = /opt/git" > config.mak && \
@@ -32,6 +32,7 @@ RUN curl -fsSL "https://github.com/git/git/archive/refs/tags/v${GIT_VERSION}.tar
     echo "NO_EXPAT = YesPlease" >> config.mak && \
     echo "NO_NSEC = YesPlease" >> config.mak && \
     echo "NO_REGEX = YesPlease" >> config.mak && \
+    echo "NO_RUST = YesPlease" >> config.mak && \
     echo "CURL_LDFLAGS = $(pkg-config --static --libs libcurl | sed 's/-ldl//g')" >> config.mak && \
     echo "CFLAGS = -Os -DNDEBUG" >> config.mak && \
     echo "LDFLAGS = -static -Wl,--allow-multiple-definition" >> config.mak && \
@@ -44,8 +45,8 @@ RUN curl -fsSL "https://github.com/git/git/archive/refs/tags/v${GIT_VERSION}.tar
 # zsh — static with essential modules
 # ============================================================
 FROM base AS zsh-build
-# Use latest master — zsh-5.9 has termcap conflicts with newer ncurses
-RUN git clone --depth 1 https://github.com/zsh-users/zsh.git && \
+ARG ZSH_VERSION=5.9.2
+RUN git clone --depth 1 --branch zsh-${ZSH_VERSION} https://github.com/zsh-users/zsh.git && \
     cd zsh && \
     ./Util/preconfig && \
     ./configure \
@@ -68,7 +69,7 @@ RUN git clone --depth 1 https://github.com/zsh-users/zsh.git && \
 # htop — static
 # ============================================================
 FROM base AS htop-build
-ARG HTOP_VERSION=3.4.1
+ARG HTOP_VERSION=3.5.3
 RUN git clone --depth 1 --branch ${HTOP_VERSION} https://github.com/htop-dev/htop.git && \
     cd htop && \
     ./autogen.sh && \
@@ -80,7 +81,7 @@ RUN git clone --depth 1 --branch ${HTOP_VERSION} https://github.com/htop-dev/hto
 # btop — static
 # ============================================================
 FROM base AS btop-build
-ARG BTOP_VERSION=1.4.6
+ARG BTOP_VERSION=1.4.7
 RUN curl -fsSL "https://github.com/aristocratos/btop/archive/refs/tags/v${BTOP_VERSION}.tar.gz" | tar xz && \
     cd btop-${BTOP_VERSION} && \
     cmake -B build \
@@ -96,7 +97,7 @@ RUN curl -fsSL "https://github.com/aristocratos/btop/archive/refs/tags/v${BTOP_V
 # neovim — static
 # ============================================================
 FROM base AS nvim-build
-ARG NVIM_VERSION=0.12.0
+ARG NVIM_VERSION=0.12.5
 RUN git clone --depth 1 --branch v${NVIM_VERSION} https://github.com/neovim/neovim.git && \
     cd neovim && \
     make CMAKE_BUILD_TYPE=Release \

@@ -29,13 +29,11 @@ type buildOptions struct {
 	nvimHead bool // build nvim from HEAD instead of stable/pinned version
 }
 
-// Build builds a devlayer bundle for the given OS and architecture.
-func Build(args []string, vers *versions.Versions, scriptDir string) error {
+func parseBuildOpts(args []string, defaultOS, defaultArch string) (buildOptions, error) {
 	opts := buildOptions{
-		os:   "linux",
-		arch: runtime.GOARCH,
+		os:   defaultOS,
+		arch: defaultArch,
 	}
-	// Normalize Go arch to uname style
 	switch opts.arch {
 	case "amd64":
 		opts.arch = "x86_64"
@@ -58,30 +56,39 @@ func Build(args []string, vers *versions.Versions, scriptDir string) error {
 		case "--nvim-head":
 			opts.nvimHead = true
 		default:
-			return fmt.Errorf("unknown option: %s", args[i])
+			return opts, fmt.Errorf("unknown option: %s", args[i])
 		}
+	}
+	return opts, nil
+}
+
+// Build builds a devlayer bundle for the given OS and architecture.
+// Artifacts are written to outDir (cwd). scriptDir is the docker/source context.
+func Build(args []string, vers *versions.Versions, scriptDir, outDir string) error {
+	opts, err := parseBuildOpts(args, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
 	}
 
 	switch opts.os {
 	case "darwin":
-		if err := buildDarwin(opts, vers, scriptDir); err != nil {
+		if err := buildDarwin(opts, vers, outDir); err != nil {
 			return err
 		}
 	case "windows":
-		if err := buildWindows(opts.arch, vers, scriptDir); err != nil {
+		if err := buildWindows(opts.arch, vers, outDir); err != nil {
 			return err
 		}
 	default:
-		if err := buildLinux(opts.arch, scriptDir); err != nil {
+		if err := buildLinux(opts.arch, scriptDir, outDir, vers); err != nil {
 			return err
 		}
 	}
 
-	// Build dotfiles and nvim plugins (platform-independent)
-	if err := buildDotfiles(scriptDir); err != nil {
+	if err := buildDotfiles(outDir); err != nil {
 		return err
 	}
-	if err := buildNvimPlugins(scriptDir); err != nil {
+	if err := buildNvimPlugins(outDir); err != nil {
 		return err
 	}
 
@@ -265,7 +272,7 @@ func buildWindows(arch string, vers *versions.Versions, scriptDir string) error 
 	return nil
 }
 
-func buildLinux(arch, scriptDir string) error {
+func buildLinux(arch, scriptDir, outDir string, vers *versions.Versions) error {
 	fmt.Printf("==> Building devlayer for linux/%s (Docker)...\n", arch)
 
 	p, err := platform.New("linux", arch)
@@ -273,11 +280,19 @@ func buildLinux(arch, scriptDir string) error {
 		return err
 	}
 
-	if err := docker.Build(p.DockerPlatform, "devlayer", scriptDir); err != nil {
+	args := map[string]string{
+		"GIT_VERSION":  vers.Get("GIT_VERSION"),
+		"ZSH_VERSION":  vers.Get("ZSH_VERSION"),
+		"HTOP_VERSION": vers.Get("HTOP_VERSION"),
+		"BTOP_VERSION": vers.Get("BTOP_VERSION"),
+		"NVIM_VERSION": vers.Get("NVIM_VERSION"),
+		"MAKE_VERSION": vers.Get("MAKE_VERSION"),
+	}
+	if err := docker.Build(p.DockerPlatform, "devlayer", scriptDir, args); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}
 
-	outputFile := filepath.Join(scriptDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
+	outputFile := filepath.Join(outDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
 	if err := docker.RunToFile("devlayer", outputFile); err != nil {
 		return fmt.Errorf("docker run: %w", err)
 	}
@@ -360,11 +375,11 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 // If head is true, builds from the latest HEAD of the main branch;
 // otherwise builds the stable tag (or pinned NVIM_VERSION).
 func buildNvim(outDir string, vers *versions.Versions, head bool) error {
-	label := "stable"
+	branch := "v" + vers.Get("NVIM_VERSION")
 	if head {
-		label = "HEAD"
+		branch = "HEAD"
 	}
-	fmt.Printf("  nvim (building %s from source)\n", label)
+	fmt.Printf("  nvim (building %s from source)\n", branch)
 
 	srcDir, err := os.MkdirTemp("", "devlayer-nvim-*")
 	if err != nil {
@@ -372,12 +387,11 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	// Clone source
 	cloneArgs := []string{"clone", "--depth", "1"}
 	if head {
 		cloneArgs = append(cloneArgs, "https://github.com/neovim/neovim.git")
 	} else {
-		cloneArgs = append(cloneArgs, "--branch", "stable", "https://github.com/neovim/neovim.git")
+		cloneArgs = append(cloneArgs, "--branch", branch, "https://github.com/neovim/neovim.git")
 	}
 	srcRoot := filepath.Join(srcDir, "neovim")
 	cloneArgs = append(cloneArgs, srcRoot)
@@ -674,6 +688,24 @@ func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip
 	} else {
 		if err := download.TarGzBinary(lazygitURL, binDir, lazygitBinary); err != nil {
 			return fmt.Errorf("download lazygit: %w", err)
+		}
+	}
+
+	ghVer := vers.Get("GH_VERSION")
+	ghExt := "tar.gz"
+	if p.OS != "linux" {
+		ghExt = "zip"
+	}
+	ghURL := fmt.Sprintf("https://github.com/cli/cli/releases/download/v%s/gh_%s_%s_%s.%s",
+		ghVer, ghVer, p.GhOS, p.GoArch, ghExt)
+	ghBinary := "gh" + exe
+	if ghExt == "zip" {
+		if err := download.ZipBinary(ghURL, binDir, ghBinary); err != nil {
+			return fmt.Errorf("download gh: %w", err)
+		}
+	} else {
+		if err := download.TarGzBinary(ghURL, binDir, ghBinary); err != nil {
+			return fmt.Errorf("download gh: %w", err)
 		}
 	}
 
@@ -1406,10 +1438,13 @@ func VersionSummary(vers *versions.Versions) string {
 	keys := []struct{ label, key string }{
 		{"fzf", "FZF_VERSION"}, {"fd", "FD_VERSION"}, {"bat", "BAT_VERSION"},
 		{"eza", "EZA_VERSION"}, {"rg", "RG_VERSION"}, {"delta", "DELTA_VERSION"},
-		{"lazygit", "LAZYGIT_VERSION"}, {"jq", "JQ_VERSION"}, {"direnv", "DIRENV_VERSION"},
+		{"lazygit", "LAZYGIT_VERSION"}, {"gh", "GH_VERSION"}, {"jq", "JQ_VERSION"},
+		{"direnv", "DIRENV_VERSION"},
 		{"nvim", "NVIM_VERSION"}, {"go", "GO_VERSION"}, {"git", "GIT_VERSION"},
+		{"git-win", "GIT_WINDOWS_VERSION"}, {"zsh", "ZSH_VERSION"},
 		{"htop", "HTOP_VERSION"}, {"btop", "BTOP_VERSION"}, {"dust", "DUST_VERSION"},
 		{"age", "AGE_VERSION"}, {"zig", "ZIG_VERSION"}, {"make", "MAKE_VERSION"},
+		{"ncurses", "NCURSES_VERSION"}, {"batman", "BAT_EXTRAS_VERSION"},
 	}
 	var b strings.Builder
 	for _, k := range keys {

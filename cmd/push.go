@@ -21,11 +21,20 @@ func Push(host, scriptDir string, vers *versions.Versions) error {
 		return fmt.Errorf("failed to detect remote arch: %w", err)
 	}
 
-	tarball := filepath.Join(scriptDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
-	if _, err := os.Stat(tarball); os.IsNotExist(err) {
+	bundleName := fmt.Sprintf("devlayer-linux-%s.tar.gz", arch)
+	tarball, err := findBundle(bundleName, scriptDir)
+	if err != nil {
 		fmt.Printf("==> No bundle found, building for linux/%s...\n", arch)
-		if err := Build([]string{"--arch", arch}, vers, scriptDir); err != nil {
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return cwdErr
+		}
+		if err := Build([]string{"--os", "linux", "--arch", arch}, vers, scriptDir, cwd); err != nil {
 			return fmt.Errorf("auto-build failed: %w", err)
+		}
+		tarball, err = findBundle(bundleName, scriptDir)
+		if err != nil {
+			return err
 		}
 	}
 
