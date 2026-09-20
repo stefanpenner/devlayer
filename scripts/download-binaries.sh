@@ -26,7 +26,7 @@ esac
 case "$OS" in
   linux)
     RUST_TARGET="${RUST_ARCH}-unknown-linux-musl"
-    # ripgrep and delta don't ship aarch64 musl builds
+    # delta doesn't ship aarch64 musl builds
     RUST_TARGET_GNU="${RUST_ARCH}-unknown-linux-gnu"
     LAZYGIT_OS=Linux
     NVIM_OS=linux
@@ -42,21 +42,14 @@ case "$OS" in
   *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
 
-# Some Rust projects only publish musl for x86_64
+# Some Rust projects don't publish every musl/darwin target
 rust_target_for() {
   local project=$1
   case "$project" in
-    ripgrep|delta)
+    delta)
+      # delta still has no aarch64 musl build on Linux
       if [ "$OS" = "linux" ] && [ "$RUST_ARCH" = "aarch64" ]; then
         echo "$RUST_TARGET_GNU"
-      else
-        echo "$RUST_TARGET"
-      fi
-      ;;
-    dust)
-      # dust doesn't ship aarch64-apple-darwin; use x86_64 via Rosetta
-      if [ "$OS" = "darwin" ] && [ "$RUST_ARCH" = "aarch64" ]; then
-        echo "x86_64-apple-darwin"
       else
         echo "$RUST_TARGET"
       fi

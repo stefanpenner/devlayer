@@ -93,19 +93,19 @@ func (p *Platform) SkipTool(name string) bool {
 	return false
 }
 
-// RustTargetFor returns the appropriate rust target triple for a project.
-// ripgrep and delta don't ship aarch64 musl builds on Linux.
+// RustTargetFor returns the rust target triple for a project's release assets.
 func (p *Platform) RustTargetFor(project string) string {
 	switch project {
-	case "ripgrep", "delta":
+	case "delta":
+		// delta still has no aarch64 musl build on Linux
 		if p.OS == "linux" && p.RustArch == "aarch64" {
 			return p.RustTargetGNU
 		}
 		return p.RustTarget
-	case "dust":
-		// dust doesn't ship aarch64-apple-darwin; use x86_64 via Rosetta
-		if p.OS == "darwin" && p.RustArch == "aarch64" {
-			return "x86_64-apple-darwin"
+	case "eza":
+		// eza only ships a windows-gnu build (no msvc)
+		if p.OS == "windows" {
+			return p.RustArch + "-pc-windows-gnu"
 		}
 		return p.RustTarget
 	default:
@@ -161,4 +161,3 @@ func (p *Platform) GoArchiveExt() string {
 	}
 	return "tar.gz"
 }
-

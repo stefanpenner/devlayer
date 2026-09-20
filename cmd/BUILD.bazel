@@ -6,12 +6,14 @@ go_library(
         "autoupdate.go",
         "build.go",
         "clean.go",
+        "eza_theme.go",
         "install.go",
         "ls.go",
         "push.go",
         "status.go",
         "upgrade.go",
     ],
+    embedsrcs = ["assets/eza-carbonfox.yml"],
     importpath = "github.com/stefanpenner/devlayer/cmd",
     visibility = ["//visibility:public"],
     deps = [
@@ -31,6 +33,15 @@ go_library(
 
 go_test(
     name = "cmd_test",
-    srcs = ["wrapper_test.go"],
+    srcs = [
+        "btop_env_test.go",
+        "eza_env_test.go",
+        "eza_theme_test.go",
+        "htop_env_test.go",
+        "make_path_test.go",
+        "nvim_env_test.go",
+        "touch_tree_test.go",
+        "wrapper_test.go",
+    ],
     embed = [":cmd"],
 )

@@ -18,55 +18,15 @@ jobs:
       - name: Check for newer versions
         id: check
         run: |
-          source versions.env
-          UPDATES=""
-
-          latest() {
-            local repo=$1
-            gh api "repos/${repo}/releases/latest" --jq '.tag_name' 2>/dev/null | sed 's/^v//'
-          }
-
-          latest_jq() {
-            gh api "repos/jqlang/jq/releases/latest" --jq '.tag_name' 2>/dev/null | sed 's/^jq-//'
-          }
-
-          check_update() {
-            local name=$1 current=$2 latest=$3
-            if [ -n "$latest" ] && [ "$current" != "$latest" ]; then
-              UPDATES="${UPDATES}${name}: ${current} → ${latest}\n"
-              sed -i "s/^${name}_VERSION=.*/${name}_VERSION=${latest}/" versions.env
-            fi
-          }
-
-          check_update FZF "$FZF_VERSION" "$(latest junegunn/fzf)"
-          check_update FD "$FD_VERSION" "$(latest sharkdp/fd)"
-          check_update BAT "$BAT_VERSION" "$(latest sharkdp/bat)"
-          check_update EZA "$EZA_VERSION" "$(latest eza-community/eza)"
-          check_update RG "$RG_VERSION" "$(latest BurntSushi/ripgrep)"
-          check_update DELTA "$DELTA_VERSION" "$(latest dandavison/delta)"
-          check_update LAZYGIT "$LAZYGIT_VERSION" "$(latest jesseduffield/lazygit)"
-          check_update JQ "$JQ_VERSION" "$(latest_jq)"
-          check_update DIRENV "$DIRENV_VERSION" "$(latest direnv/direnv)"
-          check_update NVIM "$NVIM_VERSION" "$(latest neovim/neovim)"
-          check_update GIT "$GIT_VERSION" "$(latest git/git)"
-          check_update HTOP "$HTOP_VERSION" "$(latest htop-dev/htop)"
-
-          if [ -n "$UPDATES" ]; then
-            echo "has_updates=true" >> "$GITHUB_OUTPUT"
-            printf '%b' "$UPDATES" > /tmp/updates.txt
-            echo "==> Updates found:"
-            cat /tmp/updates.txt
-            # versions.env is the single source of truth — Bazel reads it directly
-          else
-            echo "has_updates=false" >> "$GITHUB_OUTPUT"
-            echo "==> All tools are up to date"
-          fi
+          UPDATES_FILE=/tmp/updates.txt bash scripts/check-updates.sh
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Create PR
         if: steps.check.outputs.has_updates == 'true'
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           BRANCH="auto/update-versions-$(date +%Y%m%d)"
           git checkout -b "$BRANCH"
           git add versions.env
