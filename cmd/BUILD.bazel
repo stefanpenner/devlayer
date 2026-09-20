@@ -47,6 +47,7 @@ go_test(
         "htop_env_test.go",
         "init_test.go",
         "install_test.go",
+        "ls_test.go",
         "make_path_test.go",
         "nvim_env_test.go",
         "touch_tree_test.go",
