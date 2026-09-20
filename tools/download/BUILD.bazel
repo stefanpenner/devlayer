@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "download_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/download",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/binaries",
+        "//internal/platform",
+        "//internal/versions",
+    ],
+)
+
+go_binary(
+    name = "download",
+    embed = [":download_lib"],
+    visibility = ["//visibility:public"],
+)

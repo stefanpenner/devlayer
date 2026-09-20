@@ -1,8 +1,9 @@
 # Linux bundle build — replaces monolithic Dockerfile with per-tool Bazel targets.
 #
-# Each source-compiled tool has its own genrule that compiles in a Docker
-# container. Tools are built independently and cached by Bazel, so changing
-# one tool only rebuilds that tool.
+# Each source-compiled tool has its own genrule: Docker runs the linuxbuild
+# CLI (linux ELF). assemble then fetches prebuilts and packs the bundle.
+# Tools are built independently and cached by Bazel, so changing one tool
+# only rebuilds that tool.
 #
 # Usage:
 #   bazel build //linux:bundle_x86_64     # Build x86_64 bundle

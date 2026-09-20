@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "binaries",
+    srcs = [
+        "fetch.go",
+        "probe.go",
+        "urls.go",
+    ],
+    importpath = "github.com/stefanpenner/devlayer/internal/binaries",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/download",
+        "//internal/platform",
+        "//internal/versions",
+    ],
+)
+
+go_test(
+    name = "binaries_test",
+    srcs = [
+        "binaries_test.go",
+        "probe_test.go",
+    ],
+    embed = [":binaries"],
+    deps = [
+        "//internal/platform",
+        "//internal/versions",
+    ],
+)

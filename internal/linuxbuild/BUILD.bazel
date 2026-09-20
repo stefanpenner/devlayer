@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "linuxbuild",
+    srcs = [
+        "btop.go",
+        "git.go",
+        "htop.go",
+        "linuxbuild.go",
+        "make.go",
+        "nvim.go",
+        "zsh.go",
+    ],
+    importpath = "github.com/stefanpenner/devlayer/internal/linuxbuild",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "linuxbuild_test",
+    srcs = [
+        "btop_test.go",
+        "git_test.go",
+        "htop_test.go",
+        "linuxbuild_test.go",
+        "make_test.go",
+        "nvim_test.go",
+        "zsh_test.go",
+    ],
+    embed = [":linuxbuild"],
+)

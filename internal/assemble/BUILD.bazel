@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "assemble",
+    srcs = ["assemble.go"],
+    importpath = "github.com/stefanpenner/devlayer/internal/assemble",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/archive",
+        "//internal/platform",
+        "//internal/versions",
+    ],
+)
+
+go_test(
+    name = "assemble_test",
+    srcs = ["assemble_test.go"],
+    embed = [":assemble"],
+    deps = [
+        "//internal/archive",
+        "//internal/platform",
+        "//internal/versions",
+    ],
+)

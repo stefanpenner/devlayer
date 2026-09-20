@@ -84,6 +84,7 @@ devlayer init                     # Write ~/.config/devlayer/config.toml
 devlayer doctor                   # Check the local install
 devlayer ls                       # List installed tools, dotfiles, and plugins
 devlayer clean                    # Remove build artifacts
+devlayer check-updates            # Fetch latest tool versions; rewrite versions.env
 devlayer version                  # Print devlayer version
 devlayer versions                 # Print bundled tool versions
 ```
@@ -313,7 +314,7 @@ git commit -am "bump fd to 10.5.0"
 gh release create v0.2.0
 ```
 
-A weekly GHA workflow also checks for new upstream versions and opens PRs automatically.
+A Sunday GHA job bumps `versions.env`, tests, probes download URLs, and squash-merges.
 
 ## Supply chain security
 
@@ -321,7 +322,7 @@ A weekly GHA workflow also checks for new upstream versions and opens PRs automa
 - SLSA build provenance via `actions/attest-build-provenance`
 - SHA256 checksums for every release artifact
 - Dependabot keeps GHA actions updated
-- Weekly automated checks for new tool versions (opens PRs)
+- Sunday auto-bump of pinned tool versions (test + URL probe + squash-merge)
 - All tool versions pinned in [`versions.env`](versions.env)
 
 ## Building from source
@@ -330,7 +331,9 @@ A weekly GHA workflow also checks for new upstream versions and opens PRs automa
 bazel build //:devlayer                # Build the devlayer CLI
 bazel build //third_party/btop         # Build btop from source
 bazel build //third_party/make:gnumake # Build GNU make from source
-bazel test //cmd/... //internal/...    # Run Go tests
+bazel test //cmd/... //internal/... //tools/...  # Run Go tests
+bazel run //tools/checkupdates -- --dry-run
+bazel build //linux:bundle_x86_64      # Linux bundle (linuxbuild + assemble)
 ```
 
 Requires [Bazel](https://bazel.build/) (or [Bazelisk](https://github.com/bazelbuild/bazelisk)). The build uses `hermetic_cc_toolchain` (zig-based) for reproducible C/C++ compilation and `rules_foreign_cc` for cmake/autotools projects.

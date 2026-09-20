@@ -6,7 +6,7 @@ import (
 )
 
 func TestEzaBuildEnvDarwinUsesCargoAndSystemPath(t *testing.T) {
-	got := ezaBuildEnv(nil, "darwin", "/Users/stef/.cargo/bin/cargo", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
+	got := ezaBuildEnv(nil, "darwin", `/Users/stef/.cargo/bin/cargo`, "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 
 	want := map[string]bool{
 		"CC=/usr/bin/clang":    false,

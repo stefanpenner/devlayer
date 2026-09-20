@@ -15,9 +15,6 @@ var versionsEnv string
 //go:embed Dockerfile
 var dockerfile string
 
-//go:embed scripts/download-binaries.sh
-var downloadScript string
-
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
@@ -34,6 +31,7 @@ Commands:
   ls                              List installed tools, dotfiles, and nvim plugins
   clean                           Remove build artifacts and Docker image
   upgrade                         Download and install the latest release
+  check-updates [--dry-run]       Fetch latest tool versions; rewrite versions.env
   version                         Print devlayer version
   versions                        Print bundled tool versions
 
@@ -55,6 +53,10 @@ Examples:
 }
 
 func main() {
+	if d := os.Getenv("BUILD_WORKING_DIRECTORY"); d != "" {
+		_ = os.Chdir(d)
+	}
+
 	if len(os.Args) < 2 {
 		usage()
 		return
@@ -62,7 +64,7 @@ func main() {
 
 	vers := versions.Parse(versionsEnv)
 
-	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv, downloadScript)
+	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -73,7 +75,7 @@ func main() {
 
 	// Auto-update before running the command (skip for upgrade/version).
 	switch os.Args[1] {
-	case "upgrade", "version", "versions", "init", "doctor":
+	case "upgrade", "version", "versions", "init", "doctor", "check-updates":
 		// no auto-update
 	default:
 		cmd.AutoUpdate(Version)
@@ -115,6 +117,8 @@ func main() {
 		err = cmd.Clean(scriptDir)
 	case "upgrade":
 		err = cmd.Upgrade(Version)
+	case "check-updates":
+		err = cmd.CheckUpdates(os.Args[2:])
 	case "version":
 		fmt.Println(Version)
 	case "versions":

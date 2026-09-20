@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "assemble_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/assemble",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/assemble",
+        "//internal/binaries",
+        "//internal/versions",
+    ],
+)
+
+go_binary(
+    name = "assemble",
+    embed = [":assemble_lib"],
+    visibility = ["//visibility:public"],
+)

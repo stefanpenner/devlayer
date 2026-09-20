@@ -51,7 +51,7 @@ jobs:
       # platforms — slow, redundant with the bundle jobs, and impossible on a
       # bare Windows runner.
       - name: Run tests
-        run: bazel test //cmd/... //internal/...
+        run: bazel test //cmd/... //internal/... //tools/...
 
       - name: Smoke test
         shell: bash

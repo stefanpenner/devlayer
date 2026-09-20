@@ -1,4 +1,5 @@
 #!/bin/bash
+# Bootstrap installer (curl|bash). Kept as shell because no Go binary exists yet.
 # Devlayer installer — downloads and extracts the hermetic tool bundle.
 #
 # Usage:

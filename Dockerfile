@@ -122,15 +122,27 @@ RUN curl -fsSL "https://ftp.gnu.org/gnu/make/make-${MAKE_VERSION}.tar.gz" | tar 
 # ============================================================
 FROM ubuntu:24.04 AS assembler
 
+ARG GO_VERSION=1.23.3
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates unzip file xz-utils \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+      | tar xz -C /usr/local
+ENV PATH=/usr/local/go/bin:$PATH
 
-COPY versions.env /tmp/versions.env
-COPY scripts/download-binaries.sh /tmp/scripts/download-binaries.sh
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY internal/download internal/download
+COPY internal/platform internal/platform
+COPY internal/versions internal/versions
+COPY internal/binaries internal/binaries
+COPY tools/download tools/download
+COPY versions.env versions.env
 
 # Download pre-built binaries (skip nvim — we built it from source)
-RUN SKIP_NVIM=1 bash /tmp/scripts/download-binaries.sh /staging linux
+RUN mkdir -p /staging \
+    && go run ./tools/download --out /staging --os linux --skip nvim --versions versions.env
 
 # Add compiled static binaries
 COPY --from=git-build /opt/git /staging/git/

@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "autoupdate.go",
         "build.go",
+        "checkupdates.go",
         "clean.go",
         "doctor.go",
         "eza_theme.go",
@@ -20,6 +21,8 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//internal/archive",
+        "//internal/binaries",
+        "//internal/checkupdates",
         "//internal/config",
         "//internal/docker",
         "//internal/download",

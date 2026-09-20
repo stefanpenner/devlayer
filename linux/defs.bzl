@@ -25,26 +25,35 @@ def _base_image(arch):
 
     return tag
 
-def _docker_build(name, arch, image_tag, script_file, env = {}):
-    """Create a genrule that compiles a tool inside Docker and outputs a tarball.
+def _linuxbuild(arch):
+    goarch = "amd64" if arch == "x86_64" else "arm64"
+    return "//tools/linuxbuild:linuxbuild_linux_" + goarch
 
-    The build script is piped via stdin to docker run. Versions are passed
-    as environment variables to avoid any file mounting.
-    """
+def _docker_build(name, arch, image_tag, env = {}):
+    """Compile a tool inside Docker via the linuxbuild CLI; stdout is the tarball."""
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
     docker_platform = "linux/" + docker_arch
-
     env_flags = " ".join(["-e {}={}".format(k, v) for k, v in env.items()])
+    tool = _linuxbuild(arch)
 
     native.genrule(
         name = name + "_" + arch,
-        srcs = [":base_image_" + arch, script_file],
+        srcs = [":base_image_" + arch],
+        tools = [tool],
         outs = ["{}_{}.tar.gz".format(name, arch)],
-        cmd = "docker run --rm -i --platform {platform} {env} {tag} /bin/sh < $$(realpath $(location {script})) > $@".format(
+        cmd = """
+set -euo pipefail
+toolbin=$$(mktemp)
+cp $$(realpath $(location {tool})) $$toolbin
+chmod +x $$toolbin
+docker run --rm --platform {platform} {env} -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
+rm -f $$toolbin
+""".format(
             platform = docker_platform,
             env = env_flags,
+            tool = tool,
             tag = image_tag,
-            script = script_file,
+            name = name,
         ),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
@@ -61,23 +70,21 @@ def _bundle(arch):
             ":btop_" + arch,
             ":nvim_" + arch,
             ":make_" + arch,
-            "assemble.sh",
             "//:versions.env",
-            "//scripts:download-binaries.sh",
         ],
+        tools = ["//tools/assemble:assemble"],
         outs = ["devlayer-linux-{}.tar.gz".format(arch)],
         cmd = " ".join([
-            "bash $$(realpath $(location assemble.sh))",
-            "$@",
-            arch,
-            "$$(realpath $(location //:versions.env))",
-            "$$(realpath $(location //scripts:download-binaries.sh))",
-            "$$(realpath $(location :git_{arch}))".format(arch = arch),
-            "$$(realpath $(location :zsh_{arch}))".format(arch = arch),
-            "$$(realpath $(location :htop_{arch}))".format(arch = arch),
-            "$$(realpath $(location :btop_{arch}))".format(arch = arch),
-            "$$(realpath $(location :nvim_{arch}))".format(arch = arch),
-            "$$(realpath $(location :make_{arch}))".format(arch = arch),
+            "$(execpath //tools/assemble:assemble)",
+            "--out $@",
+            "--arch " + arch,
+            "--versions $(location //:versions.env)",
+            "--git $(location :git_{arch})".format(arch = arch),
+            "--zsh $(location :zsh_{arch})".format(arch = arch),
+            "--htop $(location :htop_{arch})".format(arch = arch),
+            "--btop $(location :btop_{arch})".format(arch = arch),
+            "--nvim $(location :nvim_{arch})".format(arch = arch),
+            "--make $(location :make_{arch})".format(arch = arch),
         ]),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:public"],
@@ -87,22 +94,18 @@ def linux_targets(arch):
     """Generate all Linux build targets for the given architecture."""
     image_tag = _base_image(arch)
 
-    _docker_build("git", arch, image_tag, "scripts/build_git.sh", env = {
+    _docker_build("git", arch, image_tag, env = {
         "GIT_VERSION": VERSIONS["GIT"],
     })
-    _docker_build("zsh", arch, image_tag, "scripts/build_zsh.sh", env = {
-        "ZSH_VERSION": VERSIONS["ZSH"],
-    })
-    _docker_build("htop", arch, image_tag, "scripts/build_htop.sh", env = {
+    _docker_build("zsh", arch, image_tag)
+    _docker_build("htop", arch, image_tag, env = {
         "HTOP_VERSION": VERSIONS["HTOP"],
     })
-    _docker_build("btop", arch, image_tag, "scripts/build_btop.sh", env = {
+    _docker_build("btop", arch, image_tag, env = {
         "BTOP_VERSION": VERSIONS["BTOP"],
     })
-    _docker_build("nvim", arch, image_tag, "scripts/build_nvim.sh", env = {
-        "NVIM_VERSION": VERSIONS["NVIM"],
-    })
-    _docker_build("make", arch, image_tag, "scripts/build_make.sh", env = {
+    _docker_build("nvim", arch, image_tag)
+    _docker_build("make", arch, image_tag, env = {
         "MAKE_VERSION": VERSIONS["MAKE"],
     })
 
