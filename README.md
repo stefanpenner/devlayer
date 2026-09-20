@@ -314,7 +314,7 @@ git commit -am "bump fd to 10.5.0"
 gh release create v0.2.0
 ```
 
-A Sunday GHA job bumps `versions.env`, tests, probes download URLs, and squash-merges.
+A NAS Sunday `workflow_dispatch` bumps `versions.env`, tests, probes download URLs, and squash-merges. GitHub has no cron (it disables scheduled workflows after 60 days; bot merges do not count).
 
 ## Supply chain security
 
@@ -322,7 +322,7 @@ A Sunday GHA job bumps `versions.env`, tests, probes download URLs, and squash-m
 - SLSA build provenance via `actions/attest-build-provenance`
 - SHA256 checksums for every release artifact
 - Dependabot keeps GHA actions updated
-- Sunday auto-bump of pinned tool versions (test + URL probe + squash-merge)
+- NAS Sunday dispatch: bump pins, test, probe URLs, squash-merge
 - All tool versions pinned in [`versions.env`](versions.env)
 
 ## Building from source
