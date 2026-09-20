@@ -35,14 +35,16 @@ func Btop(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := copyFile(bin, "/tmp/btop"); err != nil {
+	tmp := os.TempDir()
+	dest := filepath.Join(tmp, "btop")
+	if err := copyFile(bin, dest); err != nil {
 		return err
 	}
 
-	if err := x("", "strip", "/tmp/btop"); err != nil {
+	if err := x("", "strip", dest); err != nil {
 		return err
 	}
-	return x("", "tar", "czf", "-", "-C", "/tmp", "btop")
+	return x("", "tar", "czf", "-", "-C", tmp, "btop")
 }
 
 // FindNamed returns the first regular file named name under root.

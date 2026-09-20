@@ -55,7 +55,8 @@ func TestBtop(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(binDir, "btop"), []byte("fake-btop"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Remove("/tmp/btop") })
+	dest := filepath.Join(os.TempDir(), "btop")
+	t.Cleanup(func() { _ = os.Remove(dest) })
 
 	var r recorder
 	if err := Btop(r.exec, r.output, map[string]string{"BTOP_VERSION": ver}, io.Discard); err != nil {
@@ -69,15 +70,15 @@ func TestBtop(t *testing.T) {
 		"tar",
 		dir+": cmake -B build -DCMAKE_BUILD_TYPE=Release -DBTOP_STATIC=ON -DBTOP_GPU=OFF -DBTOP_LTO=ON",
 		dir+": cmake --build build "+jobsArg(),
-		"strip /tmp/btop",
-		"tar czf - -C /tmp btop",
+		"strip "+dest,
+		"tar czf - -C "+os.TempDir()+" btop",
 	)
 
-	got, err := os.ReadFile("/tmp/btop")
+	got, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got) != "fake-btop" {
-		t.Fatalf("/tmp/btop = %q", got)
+		t.Fatalf("btop staging = %q", got)
 	}
 }

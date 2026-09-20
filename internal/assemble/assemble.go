@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -267,7 +268,7 @@ func writeChecksums(staging string) error {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		if info.Mode()&0111 == 0 {
+		if !checksumFile(info) {
 			return nil
 		}
 		files = append(files, path)
@@ -290,6 +291,14 @@ func writeChecksums(staging string) error {
 		fmt.Fprintf(&b, "%s  %s\n", sum, rel)
 	}
 	return os.WriteFile(filepath.Join(staging, "SHA256SUMS"), []byte(b.String()), 0644)
+}
+
+func checksumFile(info os.FileInfo) bool {
+	if info.Mode()&0111 != 0 {
+		return true
+	}
+	// Windows has no exec bit; hash regular files so tests and stray hosts still get SHA256SUMS.
+	return runtime.GOOS == "windows"
 }
 
 func sha256File(path string) (string, error) {
