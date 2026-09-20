@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "nexttag",
+    srcs = ["nexttag.go"],
+    importpath = "github.com/stefanpenner/devlayer/internal/nexttag",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "nexttag_test",
+    srcs = ["nexttag_test.go"],
+    embed = [":nexttag"],
+)

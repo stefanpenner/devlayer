@@ -4,10 +4,8 @@ on:
   push:
     branches: [master]
   pull_request:
-  release:
-    types: [created]
 
-# Cancel superseded PR runs; never cancel release runs.
+# Cancel superseded PR runs; never cancel a master publish in flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -107,14 +105,6 @@ jobs:
           name: cli-${{ matrix.name }}
           path: devlayer-${{ matrix.name }}${{ matrix.binary == 'devlayer.exe' && '.exe' || '' }}
 
-      - name: Upload to release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            devlayer-${{ matrix.name }}${{ matrix.binary == 'devlayer.exe' && '.exe' || '' }}
-
   # Build Linux tool bundles (Bazel + Docker)
   linux:
     needs: cli
@@ -192,19 +182,12 @@ jobs:
       - name: Generate checksum
         run: sha256sum devlayer-linux-${{ matrix.arch }}.tar.gz > devlayer-linux-${{ matrix.arch }}.tar.gz.sha256
 
-      - name: Attest build provenance
-        if: github.event_name == 'release' && github.event.repository.visibility == 'public'
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v2.1.0
+      - name: Upload bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          subject-path: devlayer-linux-${{ matrix.arch }}.tar.gz
-
-      - name: Upload to release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            devlayer-linux-${{ matrix.arch }}.tar.gz \
+          name: bundle-linux-${{ matrix.arch }}
+          path: |
+            devlayer-linux-${{ matrix.arch }}.tar.gz
             devlayer-linux-${{ matrix.arch }}.tar.gz.sha256
 
   # Build Darwin tool bundle
@@ -287,19 +270,12 @@ jobs:
       - name: Generate checksum
         run: shasum -a 256 devlayer-darwin-${{ matrix.arch }}.tar.gz > devlayer-darwin-${{ matrix.arch }}.tar.gz.sha256
 
-      - name: Attest build provenance
-        if: github.event_name == 'release' && github.event.repository.visibility == 'public'
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v2.1.0
+      - name: Upload bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          subject-path: devlayer-darwin-${{ matrix.arch }}.tar.gz
-
-      - name: Upload to release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            devlayer-darwin-${{ matrix.arch }}.tar.gz \
+          name: bundle-darwin-${{ matrix.arch }}
+          path: |
+            devlayer-darwin-${{ matrix.arch }}.tar.gz
             devlayer-darwin-${{ matrix.arch }}.tar.gz.sha256
 
   # Build Windows tool bundle
@@ -354,33 +330,130 @@ jobs:
           $hash = (Get-FileHash -Path devlayer-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
           "$hash  devlayer-windows-x86_64.zip" | Out-File -FilePath devlayer-windows-x86_64.zip.sha256 -Encoding ascii -NoNewline
 
-      - name: Attest build provenance
-        if: github.event_name == 'release' && github.event.repository.visibility == 'public'
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v2.1.0
+      - name: Upload bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          subject-path: devlayer-windows-x86_64.zip
-
-      - name: Upload to release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            devlayer-windows-x86_64.zip \
+          name: bundle-windows-x86_64
+          path: |
+            devlayer-windows-x86_64.zip
             devlayer-windows-x86_64.zip.sha256
 
-  # Upload install scripts (release only)
-  upload-installer:
-    if: github.event_name == 'release'
+  # After master is green: tag, stamp CLIs, attach notes + assets.
+  # GitHub release body is the changelog `devlayer upgrade` prints.
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [test, cli, linux, darwin, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
-      - name: Upload install scripts
+      - name: Cache Bazel
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: bazel-publish-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-publish-
+
+      - name: Next tag
+        id: ver
+        run: |
+          git fetch --tags --force
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/bazel" \
+            https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64
+          chmod +x "$HOME/bin/bazel"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          TAG=$("$HOME/bin/bazel" run //tools/nexttag)
+          LAST=$(git describe --tags --abbrev=0)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "last=$LAST" >> "$GITHUB_OUTPUT"
+          SKIP=false
+          if [ "$TAG" = "$LAST" ]; then
+            SKIP=true
+          elif gh release view "$TAG" >/dev/null 2>&1; then
+            SKIP=true
+          fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+          echo "next $TAG (last $LAST) skip=$SKIP"
+
+      - name: Download bundles
+        if: steps.ver.outputs.skip != 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: bundle-*
+          merge-multiple: true
+
+      - name: Stamp CLIs and inject
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y zip
+          TAG="${{ steps.ver.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+
+          stamp_cli() {
+            local config="$1" dest="$2"
+            bazel build //:devlayer --config="$config"
+            local bin
+            bin=$(bazel cquery --output=files //:devlayer --config="$config" | tail -1)
+            cp "$bin" "$dest"
+            chmod +x "$dest"
+          }
+          stamp_cli go-linux-amd64  devlayer-linux-x86_64
+          stamp_cli go-linux-arm64  devlayer-linux-aarch64
+          stamp_cli go-darwin-arm64 devlayer-darwin-arm64
+          stamp_cli go-windows-amd64 devlayer-windows-x86_64.exe
+
+          inject_tar() {
+            local tar="$1" cli="$2"
+            local tmp
+            tmp=$(mktemp -d)
+            tar xzf "$tar" -C "$tmp"
+            mkdir -p "$tmp/bin"
+            cp "$cli" "$tmp/bin/devlayer"
+            chmod +x "$tmp/bin/devlayer"
+            tar czf "$tar" -C "$tmp" .
+            rm -rf "$tmp"
+            sha256sum "$tar" > "$tar.sha256"
+          }
+          inject_tar devlayer-linux-x86_64.tar.gz  devlayer-linux-x86_64
+          inject_tar devlayer-linux-aarch64.tar.gz devlayer-linux-aarch64
+          inject_tar devlayer-darwin-arm64.tar.gz  devlayer-darwin-arm64
+
+          tmp=$(mktemp -d)
+          unzip -qo devlayer-windows-x86_64.zip -d "$tmp"
+          mkdir -p "$tmp/bin"
+          cp devlayer-windows-x86_64.exe "$tmp/bin/devlayer.exe"
+          rm -f devlayer-windows-x86_64.zip
+          (cd "$tmp" && zip -qr "$GITHUB_WORKSPACE/devlayer-windows-x86_64.zip" .)
+          rm -rf "$tmp"
+          sha256sum devlayer-windows-x86_64.zip > devlayer-windows-x86_64.zip.sha256
+
+      - name: Create GitHub release
+        if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            --generate-notes \
+            --title "${{ steps.ver.outputs.tag }}" \
+            devlayer-linux-x86_64 \
+            devlayer-linux-aarch64 \
+            devlayer-darwin-arm64 \
+            devlayer-windows-x86_64.exe \
+            devlayer-linux-x86_64.tar.gz \
+            devlayer-linux-x86_64.tar.gz.sha256 \
+            devlayer-linux-aarch64.tar.gz \
+            devlayer-linux-aarch64.tar.gz.sha256 \
+            devlayer-darwin-arm64.tar.gz \
+            devlayer-darwin-arm64.tar.gz.sha256 \
+            devlayer-windows-x86_64.zip \
+            devlayer-windows-x86_64.zip.sha256 \
             scripts/install.sh \
             scripts/install.ps1

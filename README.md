@@ -316,6 +316,8 @@ gh release create v0.2.0
 
 A NAS Sunday `workflow_dispatch` bumps `versions.env`, tests, probes download URLs, and squash-merges. GitHub has no cron (it disables scheduled workflows after 60 days; bot merges do not count).
 
+After master CI is green, a `publish` job cuts the next GitHub release (`feat` → minor, else patch), with generated notes and CLI/bundle assets. `devlayer upgrade` installs that.
+
 ## Supply chain security
 
 - All GHA actions pinned by commit SHA
