@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
+	"github.com/stefanpenner/devlayer/internal/binaries"
 	"github.com/stefanpenner/devlayer/internal/config"
 	"github.com/stefanpenner/devlayer/internal/docker"
 	"github.com/stefanpenner/devlayer/internal/download"
@@ -29,13 +31,11 @@ type buildOptions struct {
 	nvimHead bool // build nvim from HEAD instead of stable/pinned version
 }
 
-// Build builds a devlayer bundle for the given OS and architecture.
-func Build(args []string, vers *versions.Versions, scriptDir string) error {
+func parseBuildOpts(args []string, defaultOS, defaultArch string) (buildOptions, error) {
 	opts := buildOptions{
-		os:   "linux",
-		arch: runtime.GOARCH,
+		os:   defaultOS,
+		arch: defaultArch,
 	}
-	// Normalize Go arch to uname style
 	switch opts.arch {
 	case "amd64":
 		opts.arch = "x86_64"
@@ -58,30 +58,39 @@ func Build(args []string, vers *versions.Versions, scriptDir string) error {
 		case "--nvim-head":
 			opts.nvimHead = true
 		default:
-			return fmt.Errorf("unknown option: %s", args[i])
+			return opts, fmt.Errorf("unknown option: %s", args[i])
 		}
+	}
+	return opts, nil
+}
+
+// Build builds a devlayer bundle for the given OS and architecture.
+// Artifacts are written to outDir (cwd). scriptDir is the docker/source context.
+func Build(args []string, vers *versions.Versions, scriptDir, outDir string) error {
+	opts, err := parseBuildOpts(args, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
 	}
 
 	switch opts.os {
 	case "darwin":
-		if err := buildDarwin(opts, vers, scriptDir); err != nil {
+		if err := buildDarwin(opts, vers, outDir); err != nil {
 			return err
 		}
 	case "windows":
-		if err := buildWindows(opts.arch, vers, scriptDir); err != nil {
+		if err := buildWindows(opts.arch, vers, outDir); err != nil {
 			return err
 		}
 	default:
-		if err := buildLinux(opts.arch, scriptDir); err != nil {
+		if err := buildLinux(opts.arch, scriptDir, outDir, vers); err != nil {
 			return err
 		}
 	}
 
-	// Build dotfiles and nvim plugins (platform-independent)
-	if err := buildDotfiles(scriptDir); err != nil {
+	if err := buildDotfiles(outDir); err != nil {
 		return err
 	}
-	if err := buildNvimPlugins(scriptDir); err != nil {
+	if err := buildNvimPlugins(outDir); err != nil {
 		return err
 	}
 
@@ -265,19 +274,61 @@ func buildWindows(arch string, vers *versions.Versions, scriptDir string) error 
 	return nil
 }
 
-func buildLinux(arch, scriptDir string) error {
+func buildLinux(arch, scriptDir, outDir string, vers *versions.Versions) error {
+	if _, err := exec.LookPath("bazel"); err == nil {
+		if _, err := os.Stat(filepath.Join(scriptDir, "MODULE.bazel")); err == nil {
+			return bazelLinuxBundle(arch, scriptDir, outDir)
+		}
+	}
+	return dockerLinuxBundle(arch, scriptDir, outDir, vers)
+}
+
+func bazelLinuxBundle(arch, scriptDir, outDir string) error {
+	fmt.Printf("==> Building devlayer for linux/%s (bazel)...\n", arch)
+
+	cmd := exec.Command("bazel", "build", "//linux:bundle_"+arch)
+	cmd.Dir = scriptDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("bazel build //linux:bundle_%s: %w", arch, err)
+	}
+
+	src := filepath.Join(scriptDir, "bazel-bin", "linux", fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
+	dst := filepath.Join(outDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
+	if err := copyFile(src, dst); err != nil {
+		return err
+	}
+	docker.PrintSize(dst)
+	fmt.Println("==> Build complete.")
+	return nil
+}
+
+func dockerLinuxBundle(arch, scriptDir, outDir string, vers *versions.Versions) error {
 	fmt.Printf("==> Building devlayer for linux/%s (Docker)...\n", arch)
+
+	if _, err := os.Stat(filepath.Join(scriptDir, "internal", "binaries")); err != nil {
+		return fmt.Errorf("linux docker build needs a source checkout (internal/binaries missing); try bazel build //linux:bundle_%s", arch)
+	}
 
 	p, err := platform.New("linux", arch)
 	if err != nil {
 		return err
 	}
 
-	if err := docker.Build(p.DockerPlatform, "devlayer", scriptDir); err != nil {
+	args := map[string]string{
+		"GIT_VERSION":  vers.Get("GIT_VERSION"),
+		"ZSH_VERSION":  vers.Get("ZSH_VERSION"),
+		"HTOP_VERSION": vers.Get("HTOP_VERSION"),
+		"BTOP_VERSION": vers.Get("BTOP_VERSION"),
+		"NVIM_VERSION": vers.Get("NVIM_VERSION"),
+		"MAKE_VERSION": vers.Get("MAKE_VERSION"),
+	}
+	if err := docker.Build(p.DockerPlatform, "devlayer", scriptDir, args); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}
 
-	outputFile := filepath.Join(scriptDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
+	outputFile := filepath.Join(outDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
 	if err := docker.RunToFile("devlayer", outputFile); err != nil {
 		return fmt.Errorf("docker run: %w", err)
 	}
@@ -360,11 +411,11 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 // If head is true, builds from the latest HEAD of the main branch;
 // otherwise builds the stable tag (or pinned NVIM_VERSION).
 func buildNvim(outDir string, vers *versions.Versions, head bool) error {
-	label := "stable"
+	branch := "v" + vers.Get("NVIM_VERSION")
 	if head {
-		label = "HEAD"
+		branch = "HEAD"
 	}
-	fmt.Printf("  nvim (building %s from source)\n", label)
+	fmt.Printf("  nvim (building %s from source)\n", branch)
 
 	srcDir, err := os.MkdirTemp("", "devlayer-nvim-*")
 	if err != nil {
@@ -372,12 +423,11 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	// Clone source
 	cloneArgs := []string{"clone", "--depth", "1"}
 	if head {
 		cloneArgs = append(cloneArgs, "https://github.com/neovim/neovim.git")
 	} else {
-		cloneArgs = append(cloneArgs, "--branch", "stable", "https://github.com/neovim/neovim.git")
+		cloneArgs = append(cloneArgs, "--branch", branch, "https://github.com/neovim/neovim.git")
 	}
 	srcRoot := filepath.Join(srcDir, "neovim")
 	cloneArgs = append(cloneArgs, srcRoot)
@@ -499,7 +549,8 @@ func ezaBuildEnv(base []string, goos, cargoPath, clang, clangxx, sdk string) []s
 		return base
 	}
 	env := darwinXcodeEnv(base, goos, clang, clangxx, sdk)
-	cargoDir := filepath.Dir(cargoPath)
+	// Darwin PATH even when this test/binary runs on Windows.
+	cargoDir := path.Dir(filepath.ToSlash(cargoPath))
 	if cargoDir == "" || cargoDir == "." {
 		return withEnv(env, "PATH", systemPath)
 	}
@@ -578,314 +629,10 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 }
 
 func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip map[string]bool) error {
-	binDir := filepath.Join(out, "bin")
-	exe := p.ExeSuffix
-
-	// Rust tools
-	rustTools := []struct {
-		name, repo, prefix string
-		useTargetFor       bool
-	}{
-		{"fd", "sharkdp/fd", "fd-v%s-%s", false},
-		{"bat", "sharkdp/bat", "bat-v%s-%s", false},
-		{"rg", "BurntSushi/ripgrep", "ripgrep-%s-%s", true},
-		{"delta", "dandavison/delta", "delta-%s-%s", true},
-		{"dust", "bootandy/dust", "dust-v%s-%s", true},
+	if err := binaries.Fetch(out, p, vers, skip); err != nil {
+		return err
 	}
-
-	versionKeys := map[string]string{
-		"fd": "FD_VERSION", "bat": "BAT_VERSION",
-		"rg": "RG_VERSION", "delta": "DELTA_VERSION", "dust": "DUST_VERSION",
-	}
-
-	archiveExt := p.RustArchiveExt()
-
-	for _, t := range rustTools {
-		if p.SkipTool(t.name) {
-			continue
-		}
-		ver := vers.Get(versionKeys[t.name])
-		target := p.RustTarget
-		if t.useTargetFor {
-			target = p.RustTargetFor(t.name)
-		}
-		archiveName := fmt.Sprintf(t.prefix, ver, target)
-		vPrefix := ver
-		if t.name == "fd" || t.name == "bat" || t.name == "dust" {
-			vPrefix = "v" + ver
-		}
-		url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s.%s", t.repo, vPrefix, archiveName, archiveExt)
-		if t.name == "rg" || t.name == "delta" {
-			url = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s.%s", t.repo, ver, archiveName, archiveExt)
-		}
-		binaryName := t.name + exe
-		if archiveExt == "zip" {
-			if err := download.ZipBinary(url, binDir, binaryName); err != nil {
-				return fmt.Errorf("download %s: %w", t.name, err)
-			}
-		} else {
-			if err := download.TarGzBinary(url, binDir, binaryName); err != nil {
-				return fmt.Errorf("download %s: %w", t.name, err)
-			}
-		}
-	}
-
-	// eza (ls replacement) — built from source on macOS/Linux, download on Windows
-	if !skip["eza"] && p.IsWindows() {
-		ezaVer := vers.Get("EZA_VERSION")
-		ezaTarget := p.RustTargetFor("eza")
-		ezaURL := fmt.Sprintf("https://github.com/eza-community/eza/releases/download/v%s/eza.exe_%s.zip",
-			ezaVer, ezaTarget)
-		if err := download.ZipBinary(ezaURL, binDir, "eza.exe"); err != nil {
-			return fmt.Errorf("download eza: %w", err)
-		}
-	}
-
-	// eza Carbonfox theme
-	if err := installEzaTheme(out); err != nil {
-		return fmt.Errorf("eza theme: %w", err)
-	}
-
-	// Go tools
-	fzfVer := vers.Get("FZF_VERSION")
-	fzfExt := p.FzfArchiveExt()
-	fzfURL := fmt.Sprintf("https://github.com/junegunn/fzf/releases/download/v%s/fzf-%s-%s_%s.%s",
-		fzfVer, fzfVer, p.OS, p.GoArch, fzfExt)
-	fzfBinary := "fzf" + exe
-	if fzfExt == "zip" {
-		if err := download.ZipBinary(fzfURL, binDir, fzfBinary); err != nil {
-			return fmt.Errorf("download fzf: %w", err)
-		}
-	} else {
-		if err := download.TarGzBinary(fzfURL, binDir, fzfBinary); err != nil {
-			return fmt.Errorf("download fzf: %w", err)
-		}
-	}
-
-	lazygitVer := vers.Get("LAZYGIT_VERSION")
-	lazygitExt := p.LazygitArchiveExt()
-	lazygitURL := fmt.Sprintf("https://github.com/jesseduffield/lazygit/releases/download/v%s/lazygit_%s_%s_%s.%s",
-		lazygitVer, lazygitVer, p.LazygitOS, p.ArchGeneric, lazygitExt)
-	lazygitBinary := "lazygit" + exe
-	if lazygitExt == "zip" {
-		if err := download.ZipBinary(lazygitURL, binDir, lazygitBinary); err != nil {
-			return fmt.Errorf("download lazygit: %w", err)
-		}
-	} else {
-		if err := download.TarGzBinary(lazygitURL, binDir, lazygitBinary); err != nil {
-			return fmt.Errorf("download lazygit: %w", err)
-		}
-	}
-
-	// age (encryption tool — two binaries: age, age-keygen)
-	ageVer := vers.Get("AGE_VERSION")
-	ageExt := "tar.gz"
-	if p.IsWindows() {
-		ageExt = "zip"
-	}
-	ageURL := fmt.Sprintf("https://github.com/FiloSottile/age/releases/download/v%s/age-v%s-%s-%s.%s",
-		ageVer, ageVer, p.OS, p.GoArch, ageExt)
-	for _, ageBin := range []string{"age", "age-keygen"} {
-		binaryName := ageBin + exe
-		if ageExt == "zip" {
-			if err := download.ZipBinary(ageURL, binDir, binaryName); err != nil {
-				return fmt.Errorf("download %s: %w", ageBin, err)
-			}
-		} else {
-			if err := download.TarGzBinary(ageURL, binDir, binaryName); err != nil {
-				return fmt.Errorf("download %s: %w", ageBin, err)
-			}
-		}
-	}
-
-	// Single-binary tools
-	direnvVer := vers.Get("DIRENV_VERSION")
-	direnvURL := fmt.Sprintf("https://github.com/direnv/direnv/releases/download/v%s/direnv.%s-%s",
-		direnvVer, p.OS, p.GoArch)
-	direnvDest := "direnv" + exe
-	if err := download.File(direnvURL, filepath.Join(binDir, direnvDest)); err != nil {
-		return fmt.Errorf("download direnv: %w", err)
-	}
-
-	jqVer := vers.Get("JQ_VERSION")
-	jqBinary := "jq" + exe
-	var jqURL string
-	if p.IsWindows() {
-		jqURL = fmt.Sprintf("https://github.com/jqlang/jq/releases/download/jq-%s/jq-windows-%s.exe",
-			jqVer, p.GoArch)
-	} else {
-		jqURL = fmt.Sprintf("https://github.com/jqlang/jq/releases/download/jq-%s/jq-%s-%s",
-			jqVer, p.JqOS, p.GoArch)
-	}
-	if err := download.File(jqURL, filepath.Join(binDir, jqBinary)); err != nil {
-		return fmt.Errorf("download jq: %w", err)
-	}
-
-	// bat-extras (batman is a shell script — skip on Windows)
-	if !p.SkipTool("batman") {
-		batExtrasVer := vers.Get("BAT_EXTRAS_VERSION")
-		batExtrasURL := fmt.Sprintf("https://github.com/eth-p/bat-extras/releases/download/v%s/bat-extras-%s.zip",
-			batExtrasVer, batExtrasVer)
-		if err := download.ZipFiles(batExtrasURL, map[string]string{
-			fmt.Sprintf("bat-extras-%s/bin/batman", batExtrasVer): filepath.Join(binDir, "batman"),
-		}); err != nil {
-			// Try alternate zip layout
-			if err2 := download.ZipFiles(batExtrasURL, map[string]string{
-				"bin/batman": filepath.Join(binDir, "batman"),
-			}); err2 != nil {
-				return fmt.Errorf("download batman: %w", err)
-			}
-		}
-		fmt.Println("  batman")
-	}
-
-	// Neovim (skip if building from source)
-	if !skip["nvim"] {
-		nvimVer := vers.Get("NVIM_VERSION")
-		nvimArchiveName := p.NvimArchiveName(nvimVer)
-		nvimExt := p.NvimArchiveExt()
-		nvimURL := fmt.Sprintf("https://github.com/neovim/neovim/releases/download/v%s/%s.%s",
-			nvimVer, nvimArchiveName, nvimExt)
-		fmt.Println("  nvim")
-		nvimDir := filepath.Join(out, "nvim")
-		if nvimExt == "zip" {
-			if err := download.ZipFull(nvimURL, nvimDir, 1); err != nil {
-				return fmt.Errorf("download nvim: %w", err)
-			}
-		} else {
-			if err := download.TarGzFull(nvimURL, nvimDir, 1); err != nil {
-				return fmt.Errorf("download nvim: %w", err)
-			}
-		}
-	}
-
-	// Go SDK
-	goVer := vers.Get("GO_VERSION")
-	goExt := p.GoArchiveExt()
-	goURL := fmt.Sprintf("https://go.dev/dl/go%s.%s-%s.%s", goVer, p.OS, p.GoArch, goExt)
-	fmt.Println("  go")
-	if goExt == "zip" {
-		if err := download.ZipFull(goURL, out, 0); err != nil {
-			return fmt.Errorf("download go: %w", err)
-		}
-	} else {
-		if err := download.TarGzFull(goURL, out, 0); err != nil {
-			return fmt.Errorf("download go: %w", err)
-		}
-	}
-
-	// Zig (C/C++ compiler)
-	zigVer := vers.Get("ZIG_VERSION")
-	zigArch := p.RustArch // zig uses x86_64/aarch64
-	zigExt := "tar.xz"
-	if p.IsWindows() {
-		zigExt = "zip"
-	}
-	zigURL := fmt.Sprintf("https://ziglang.org/download/%s/zig-%s-%s-%s.%s",
-		zigVer, zigArch, p.ZigOS, zigVer, zigExt)
-	fmt.Println("  zig")
-	zigDir := filepath.Join(out, "zig")
-	if zigExt == "zip" {
-		if err := download.ZipFull(zigURL, zigDir, 1); err != nil {
-			return fmt.Errorf("download zig: %w", err)
-		}
-	} else {
-		if err := download.TarXzFull(zigURL, zigDir, 1); err != nil {
-			return fmt.Errorf("download zig: %w", err)
-		}
-	}
-
-	// Git for Windows (MinGit portable)
-	if p.IsWindows() {
-		gitWinVer := vers.Get("GIT_WINDOWS_VERSION")
-		gitArch := "64-bit"
-		if p.GoArch == "arm64" {
-			gitArch = "arm64"
-		}
-		// Version 2.53.0.2 → tag v2.53.0.windows.2
-		parts := strings.Split(gitWinVer, ".")
-		winPatch := parts[len(parts)-1]
-		gitBase := strings.Join(parts[:len(parts)-1], ".")
-		gitURL := fmt.Sprintf("https://github.com/git-for-windows/git/releases/download/v%s.windows.%s/MinGit-%s-%s.zip",
-			gitBase, winPatch, gitWinVer, gitArch)
-		fmt.Println("  git (MinGit)")
-		gitDir := filepath.Join(out, "git")
-		if err := download.ZipFull(gitURL, gitDir, 0); err != nil {
-			return fmt.Errorf("download git: %w", err)
-		}
-	}
-
-	// fzf shell integration (not useful on Windows)
-	if !p.IsWindows() {
-		fmt.Println("  fzf shell integration")
-		fzfShellDir := filepath.Join(out, "share", "fzf")
-		if err := os.MkdirAll(fzfShellDir, 0755); err != nil {
-			return err
-		}
-		fzfSrcURL := fmt.Sprintf("https://github.com/junegunn/fzf/archive/refs/tags/v%s.tar.gz", fzfVer)
-		fzfTmp, err := os.MkdirTemp("", "devlayer-fzf-*")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(fzfTmp)
-		if err := download.TarGzFull(fzfSrcURL, fzfTmp, 0); err != nil {
-			return fmt.Errorf("download fzf shell: %w", err)
-		}
-		// Find and copy shell files
-		entries, err := os.ReadDir(fzfTmp)
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			if e.IsDir() {
-				shellDir := filepath.Join(fzfTmp, e.Name(), "shell")
-				if _, err := os.Stat(shellDir); err == nil {
-					for _, name := range []string{"key-bindings.zsh", "completion.zsh"} {
-						src := filepath.Join(shellDir, name)
-						if _, err := os.Stat(src); err == nil {
-							copyFile(src, filepath.Join(fzfShellDir, name))
-						}
-					}
-					break
-				}
-			}
-		}
-	}
-
-	// Zsh plugins (not useful on Windows)
-	if !p.IsWindows() {
-		shareDir := filepath.Join(out, "share")
-		plugins := []struct {
-			name, repo, versionKey string
-		}{
-			{"zsh-autosuggestions", "zsh-users/zsh-autosuggestions", "ZSH_AUTOSUGGESTIONS_VERSION"},
-			{"zsh-fast-syntax-highlighting", "zdharma-continuum/fast-syntax-highlighting", "FAST_SYNTAX_HIGHLIGHTING_VERSION"},
-			{"zsh-history-substring-search", "zsh-users/zsh-history-substring-search", "ZSH_HISTORY_SUBSTRING_SEARCH_VERSION"},
-			{"powerlevel10k", "romkatv/powerlevel10k", "POWERLEVEL10K_VERSION"},
-		}
-		for _, plug := range plugins {
-			ver := vers.Get(plug.versionKey)
-			url := fmt.Sprintf("https://github.com/%s/archive/refs/tags/%s.tar.gz", plug.repo, ver)
-			fmt.Printf("  %s\n", plug.name)
-			destDir := filepath.Join(shareDir, plug.name)
-			if err := download.TarGzToDir(url, destDir); err != nil {
-				return fmt.Errorf("download %s: %w", plug.name, err)
-			}
-		}
-	}
-
-	// chmod +x all binaries
-	entries2, _ := os.ReadDir(binDir)
-	for _, e := range entries2 {
-		os.Chmod(filepath.Join(binDir, e.Name()), 0755)
-	}
-
-	fmt.Printf("==> Done: %d binaries + nvim + go", len(entries2))
-	if !p.IsWindows() {
-		fmt.Print(" + plugins")
-	}
-	fmt.Println()
-	return nil
+	return installEzaTheme(out)
 }
 
 // buildEza compiles eza from source using cargo.
@@ -1305,7 +1052,11 @@ func copyFile(src, dst string) error {
 // FindScriptDir returns the directory containing the devlayer source files.
 // It checks for the repo checkout first (Dockerfile exists), then falls back
 // to a temp dir with embedded files.
-func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv, embeddedDownloadScript string) (string, bool, error) {
+func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv string) (string, bool, error) {
+	if d := os.Getenv("BUILD_WORKING_DIRECTORY"); d != "" {
+		return d, false, nil
+	}
+
 	// Check if we're in a repo checkout
 	exe, err := os.Executable()
 	if err == nil {
@@ -1335,14 +1086,6 @@ func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv, embeddedDownloadScri
 	if err := os.WriteFile(filepath.Join(tmp, "versions.env"), []byte(embeddedVersionsEnv), 0644); err != nil {
 		return "", true, err
 	}
-	scriptsDir := filepath.Join(tmp, "scripts")
-	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
-		return "", true, err
-	}
-	if err := os.WriteFile(filepath.Join(scriptsDir, "download-binaries.sh"), []byte(embeddedDownloadScript), 0755); err != nil {
-		return "", true, err
-	}
-
 	return tmp, true, nil
 }
 
@@ -1406,10 +1149,13 @@ func VersionSummary(vers *versions.Versions) string {
 	keys := []struct{ label, key string }{
 		{"fzf", "FZF_VERSION"}, {"fd", "FD_VERSION"}, {"bat", "BAT_VERSION"},
 		{"eza", "EZA_VERSION"}, {"rg", "RG_VERSION"}, {"delta", "DELTA_VERSION"},
-		{"lazygit", "LAZYGIT_VERSION"}, {"jq", "JQ_VERSION"}, {"direnv", "DIRENV_VERSION"},
+		{"lazygit", "LAZYGIT_VERSION"}, {"gh", "GH_VERSION"}, {"jq", "JQ_VERSION"},
+		{"direnv", "DIRENV_VERSION"},
 		{"nvim", "NVIM_VERSION"}, {"go", "GO_VERSION"}, {"git", "GIT_VERSION"},
+		{"git-win", "GIT_WINDOWS_VERSION"}, {"zsh", "ZSH_VERSION"},
 		{"htop", "HTOP_VERSION"}, {"btop", "BTOP_VERSION"}, {"dust", "DUST_VERSION"},
 		{"age", "AGE_VERSION"}, {"zig", "ZIG_VERSION"}, {"make", "MAKE_VERSION"},
+		{"ncurses", "NCURSES_VERSION"}, {"batman", "BAT_EXTRAS_VERSION"},
 	}
 	var b strings.Builder
 	for _, k := range keys {

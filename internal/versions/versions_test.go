@@ -113,3 +113,32 @@ BAT_EXTRAS_VERSION=2025.03.10
 		}
 	}
 }
+
+func TestRewritePreservesCommentsAndOrder(t *testing.T) {
+	in := `# header
+FOO=1
+
+BAR=2
+# trailer
+BAZ=3
+`
+	got := Rewrite(in, "BAR", "9")
+	want := `# header
+FOO=1
+
+BAR=9
+# trailer
+BAZ=3
+`
+	if got != want {
+		t.Fatalf("Rewrite preserved layout badly:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRewriteMissingKeyAppends(t *testing.T) {
+	got := Rewrite("FOO=1\n", "BAR", "2")
+	want := "FOO=1\nBAR=2\n"
+	if got != want {
+		t.Fatalf("Rewrite append: got %q, want %q", got, want)
+	}
+}

@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "checkupdates",
+    srcs = [
+        "checkupdates.go",
+        "fetch.go",
+        "net.go",
+        "parse.go",
+    ],
+    importpath = "github.com/stefanpenner/devlayer/internal/checkupdates",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/versions"],
+)
+
+go_test(
+    name = "checkupdates_test",
+    srcs = [
+        "checkupdates_test.go",
+        "fetch_test.go",
+        "net_test.go",
+        "parse_test.go",
+    ],
+    embed = [":checkupdates"],
+    deps = ["//internal/versions"],
+)

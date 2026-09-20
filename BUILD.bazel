@@ -20,7 +20,6 @@ go_library(
     embedsrcs = [
         "versions.env",
         "Dockerfile",
-        "//scripts:download-binaries.sh",
     ],
     importpath = "github.com/stefanpenner/devlayer",
     visibility = ["//visibility:private"],

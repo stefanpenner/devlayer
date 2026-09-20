@@ -1,4 +1,5 @@
 #!/bin/bash
+# Bootstrap installer (curl|bash). Kept as shell because no Go binary exists yet.
 # Devlayer installer — downloads and extracts the hermetic tool bundle.
 #
 # Usage:
@@ -70,9 +71,19 @@ tar xzf "${TMP}/${ASSET}" -C "${INSTALL_DIR}"
 echo ""
 echo "devlayer installed to ${INSTALL_DIR}"
 echo ""
-echo "Add to your shell profile:"
-echo '  export PATH="$HOME/.local/bin:$PATH"'
-echo ""
-echo "Then install your dotfiles:"
-echo "  git clone https://github.com/stefanpenner/dotfiles.git ~/src/stefanpenner/dotfiles"
-echo "  ~/src/stefanpenner/dotfiles/sync.sh"
+
+BIN_DIR="${INSTALL_DIR}/bin"
+PROFILE="${HOME}/.profile"
+if ! grep -qs 'devlayer' "${PROFILE}" 2>/dev/null; then
+  echo "  adding ${BIN_DIR} to ${PROFILE}"
+  {
+    echo ""
+    echo "# devlayer"
+    echo "export PATH=\"${BIN_DIR}:\$PATH\""
+  } >> "${PROFILE}"
+fi
+export PATH="${BIN_DIR}:${PATH}"
+
+echo "Open a new shell (or: source ${PROFILE})"
+echo "Then:  devlayer init    # writes ~/.config/devlayer/config.toml"
+echo "       devlayer doctor"

@@ -16,48 +16,49 @@ func TestNew(t *testing.T) {
 		wantBundle  string
 		wantNvimOS  string
 		wantJqOS    string
+		wantGhOS    string
 	}{
 		{
 			name: "linux amd64", os: "linux", arch: "x86_64",
 			wantRust: "x86_64-unknown-linux-musl", wantGoArch: "amd64",
 			wantGeneric: "x86_64", wantExe: "", wantBundle: "tar.gz",
-			wantNvimOS: "linux", wantJqOS: "linux",
+			wantNvimOS: "linux", wantJqOS: "linux", wantGhOS: "linux",
 		},
 		{
 			name: "linux arm64", os: "linux", arch: "aarch64",
 			wantRust: "aarch64-unknown-linux-musl", wantGoArch: "arm64",
 			wantGeneric: "arm64", wantExe: "", wantBundle: "tar.gz",
-			wantNvimOS: "linux", wantJqOS: "linux",
+			wantNvimOS: "linux", wantJqOS: "linux", wantGhOS: "linux",
 		},
 		{
 			name: "linux go-style arch", os: "linux", arch: "amd64",
 			wantRust: "x86_64-unknown-linux-musl", wantGoArch: "amd64",
 			wantGeneric: "x86_64", wantExe: "", wantBundle: "tar.gz",
-			wantNvimOS: "linux", wantJqOS: "linux",
+			wantNvimOS: "linux", wantJqOS: "linux", wantGhOS: "linux",
 		},
 		{
 			name: "darwin arm64", os: "darwin", arch: "arm64",
 			wantRust: "aarch64-apple-darwin", wantGoArch: "arm64",
 			wantGeneric: "arm64", wantExe: "", wantBundle: "tar.gz",
-			wantNvimOS: "macos", wantJqOS: "macos",
+			wantNvimOS: "macos", wantJqOS: "macos", wantGhOS: "macOS",
 		},
 		{
 			name: "darwin x86_64", os: "darwin", arch: "x86_64",
 			wantRust: "x86_64-apple-darwin", wantGoArch: "amd64",
 			wantGeneric: "x86_64", wantExe: "", wantBundle: "tar.gz",
-			wantNvimOS: "macos", wantJqOS: "macos",
+			wantNvimOS: "macos", wantJqOS: "macos", wantGhOS: "macOS",
 		},
 		{
 			name: "windows amd64", os: "windows", arch: "x86_64",
 			wantRust: "x86_64-pc-windows-msvc", wantGoArch: "amd64",
 			wantGeneric: "x86_64", wantExe: ".exe", wantBundle: "zip",
-			wantNvimOS: "win64", wantJqOS: "windows",
+			wantNvimOS: "win64", wantJqOS: "windows", wantGhOS: "windows",
 		},
 		{
 			name: "windows arm64", os: "windows", arch: "arm64",
 			wantRust: "aarch64-pc-windows-msvc", wantGoArch: "arm64",
 			wantGeneric: "arm64", wantExe: ".exe", wantBundle: "zip",
-			wantNvimOS: "win-arm64", wantJqOS: "windows",
+			wantNvimOS: "win-arm64", wantJqOS: "windows", wantGhOS: "windows",
 		},
 		{
 			name: "unsupported os", os: "freebsd", arch: "x86_64",
@@ -103,6 +104,9 @@ func TestNew(t *testing.T) {
 			if p.JqOS != tt.wantJqOS {
 				t.Errorf("JqOS = %q, want %q", p.JqOS, tt.wantJqOS)
 			}
+			if p.GhOS != tt.wantGhOS {
+				t.Errorf("GhOS = %q, want %q", p.GhOS, tt.wantGhOS)
+			}
 		})
 	}
 }
@@ -116,15 +120,19 @@ func TestRustTargetFor(t *testing.T) {
 		want    string
 	}{
 		{"ripgrep linux x86_64", "linux", "x86_64", "ripgrep", "x86_64-unknown-linux-musl"},
-		{"ripgrep linux aarch64", "linux", "aarch64", "ripgrep", "aarch64-unknown-linux-gnu"},
+		{"ripgrep linux aarch64", "linux", "aarch64", "ripgrep", "aarch64-unknown-linux-musl"},
 		{"delta linux aarch64", "linux", "aarch64", "delta", "aarch64-unknown-linux-gnu"},
 		{"fd linux aarch64", "linux", "aarch64", "fd", "aarch64-unknown-linux-musl"},
 		{"ripgrep darwin arm64", "darwin", "arm64", "ripgrep", "aarch64-apple-darwin"},
 		{"ripgrep windows x86_64", "windows", "x86_64", "ripgrep", "x86_64-pc-windows-msvc"},
-		{"dust darwin arm64", "darwin", "arm64", "dust", "x86_64-apple-darwin"},
+		{"dust darwin arm64", "darwin", "arm64", "dust", "aarch64-apple-darwin"},
 		{"dust darwin x86_64", "darwin", "x86_64", "dust", "x86_64-apple-darwin"},
 		{"dust linux x86_64", "linux", "x86_64", "dust", "x86_64-unknown-linux-musl"},
 		{"dust linux aarch64", "linux", "aarch64", "dust", "aarch64-unknown-linux-musl"},
+		{"eza windows x86_64", "windows", "x86_64", "eza", "x86_64-pc-windows-gnu"},
+		{"eza windows arm64", "windows", "arm64", "eza", "aarch64-pc-windows-gnu"},
+		{"eza linux x86_64", "linux", "x86_64", "eza", "x86_64-unknown-linux-musl"},
+		{"eza darwin arm64", "darwin", "arm64", "eza", "aarch64-apple-darwin"},
 	}
 
 	for _, tt := range tests {

@@ -15,9 +15,6 @@ var versionsEnv string
 //go:embed Dockerfile
 var dockerfile string
 
-//go:embed scripts/download-binaries.sh
-var downloadScript string
-
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
@@ -27,16 +24,19 @@ func usage() {
 Commands:
   build [--os OS] [--arch ARCH]   Build bundle + dotfiles + nvim plugins
   push <host>                     Deploy everything to remote host via SSH
-  status <host>                   Show installed tool versions on host
+  status [host]                   Show installed tool versions (local or SSH)
   install                         Install bundle locally (DEVLAYER_PREFIX, default ~/.local)
+  init [--force]                  Write ~/.config/devlayer/config.toml
+  doctor                          Check the local install
   ls                              List installed tools, dotfiles, and nvim plugins
   clean                           Remove build artifacts and Docker image
   upgrade                         Download and install the latest release
+  check-updates [--dry-run]       Fetch latest tool versions; rewrite versions.env
   version                         Print devlayer version
   versions                        Print bundled tool versions
 
 Options:
-  OS: linux, darwin, or windows (default: linux for Docker builds)
+  OS: linux, darwin, or windows (default: this machine)
   ARCH defaults to current machine architecture
   DEVLAYER_PREFIX env var controls install location
     (default: ~/.local on unix, %LOCALAPPDATA%\devlayer on Windows)
@@ -53,6 +53,10 @@ Examples:
 }
 
 func main() {
+	if d := os.Getenv("BUILD_WORKING_DIRECTORY"); d != "" {
+		_ = os.Chdir(d)
+	}
+
 	if len(os.Args) < 2 {
 		usage()
 		return
@@ -60,7 +64,7 @@ func main() {
 
 	vers := versions.Parse(versionsEnv)
 
-	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv, downloadScript)
+	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -71,7 +75,7 @@ func main() {
 
 	// Auto-update before running the command (skip for upgrade/version).
 	switch os.Args[1] {
-	case "upgrade", "version", "versions":
+	case "upgrade", "version", "versions", "init", "doctor", "check-updates":
 		// no auto-update
 	default:
 		cmd.AutoUpdate(Version)
@@ -79,7 +83,20 @@ func main() {
 
 	switch os.Args[1] {
 	case "build":
-		err = cmd.Build(os.Args[2:], vers, scriptDir)
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			err = cwdErr
+			break
+		}
+		err = cmd.Build(os.Args[2:], vers, scriptDir, cwd)
+	case "init":
+		force := false
+		if len(os.Args) > 2 && os.Args[2] == "--force" {
+			force = true
+		}
+		err = cmd.Init(force)
+	case "doctor":
+		err = cmd.Doctor()
 	case "push":
 		host := ""
 		if len(os.Args) > 2 {
@@ -100,6 +117,8 @@ func main() {
 		err = cmd.Clean(scriptDir)
 	case "upgrade":
 		err = cmd.Upgrade(Version)
+	case "check-updates":
+		err = cmd.CheckUpdates(os.Args[2:])
 	case "version":
 		fmt.Println(Version)
 	case "versions":

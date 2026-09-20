@@ -6,8 +6,8 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // Plugin represents one entry from nvim-pack-lock.json.
@@ -58,9 +58,16 @@ func LocalPluginDir() string {
 	return filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt")
 }
 
-// SyncPlugins copies locally-installed plugins (at their lockfile pinned
-// commits) into destDir, stripping .git directories to save space.
+// pluginFetcher clones a missing plugin at its lockfile rev into dest.
+type pluginFetcher func(p Plugin, dest string) error
+
+// SyncPlugins copies locally-installed plugins into destDir, fetching any
+// that are missing from the lockfile src at the pinned rev.
 func SyncPlugins(lockfilePath, localPluginDir, destDir string) error {
+	return syncPlugins(lockfilePath, localPluginDir, destDir, gitFetchPlugin)
+}
+
+func syncPlugins(lockfilePath, localPluginDir, destDir string, fetch pluginFetcher) error {
 	plugins, err := ParseLockfile(lockfilePath)
 	if err != nil {
 		return err
@@ -70,25 +77,44 @@ func SyncPlugins(lockfilePath, localPluginDir, destDir string) error {
 		return err
 	}
 
-	var skipped []string
 	for _, p := range plugins {
+		dst := filepath.Join(destDir, p.Name)
 		srcDir := filepath.Join(localPluginDir, p.Name)
-		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
-			skipped = append(skipped, p.Name)
+		if _, err := os.Stat(srcDir); err == nil {
+			if err := copyDirNoGit(srcDir, dst); err != nil {
+				return fmt.Errorf("copy plugin %s: %w", p.Name, err)
+			}
 			continue
 		}
-
-		dst := filepath.Join(destDir, p.Name)
-		if err := copyDirNoGit(srcDir, dst); err != nil {
-			return fmt.Errorf("copy plugin %s: %w", p.Name, err)
+		if fetch == nil {
+			return fmt.Errorf("plugin %s not found locally and no fetcher", p.Name)
+		}
+		fmt.Printf("  fetch %s @ %s\n", p.Name, p.Rev)
+		if err := fetch(p, dst); err != nil {
+			return fmt.Errorf("plugin %s: %w", p.Name, err)
 		}
 	}
-
-	if len(skipped) > 0 {
-		fmt.Printf("  skipped %d plugins not found locally: %s\n", len(skipped), strings.Join(skipped, ", "))
-	}
-
 	return nil
+}
+
+func gitFetchPlugin(p Plugin, dest string) error {
+	if p.Src == "" {
+		return fmt.Errorf("empty src")
+	}
+	clone := exec.Command("git", "clone", "--filter=blob:none", p.Src, dest)
+	clone.Stdout = os.Stderr
+	clone.Stderr = os.Stderr
+	if err := clone.Run(); err != nil {
+		return fmt.Errorf("clone %s: %w", p.Src, err)
+	}
+	co := exec.Command("git", "-C", dest, "checkout", "--detach", p.Rev)
+	co.Stdout = os.Stderr
+	co.Stderr = os.Stderr
+	if err := co.Run(); err != nil {
+		os.RemoveAll(dest)
+		return fmt.Errorf("checkout %s: %w", p.Rev, err)
+	}
+	return os.RemoveAll(filepath.Join(dest, ".git"))
 }
 
 // copyDirNoGit recursively copies src to dst, skipping .git directories.

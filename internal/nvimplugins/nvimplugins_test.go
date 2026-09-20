@@ -1,6 +1,7 @@
 package nvimplugins
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,25 +56,68 @@ func TestSyncPlugins(t *testing.T) {
 	os.WriteFile(filepath.Join(pluginDir, "init.lua"), []byte("-- plugin"), 0644)
 	os.WriteFile(filepath.Join(pluginDir, ".git", "config"), []byte("gitconfig"), 0644)
 
-	// Sync
 	destDir := filepath.Join(dir, "dest")
-	err := SyncPlugins(lockfile, localPlugins, destDir)
-	if err != nil {
-		t.Fatalf("SyncPlugins: %v", err)
+	err := syncPlugins(lockfile, localPlugins, destDir, func(p Plugin, dest string) error {
+		if p.Name == "myplugin" {
+			t.Fatalf("fetch should not run for local plugin %s", p.Name)
+		}
+		return fmt.Errorf("offline")
+	})
+	if err == nil {
+		t.Fatal("expected error when missing plugin cannot be fetched")
 	}
+}
 
-	// Verify plugin was copied
+func TestSyncPluginsCopiesLocal(t *testing.T) {
+	dir := t.TempDir()
+	lockfile := filepath.Join(dir, "nvim-pack-lock.json")
+	os.WriteFile(lockfile, []byte(`{
+  "plugins": {
+    "myplugin": { "rev": "aaa", "src": "https://github.com/test/myplugin" }
+  }
+}`), 0644)
+
+	localPlugins := filepath.Join(dir, "local-plugins")
+	pluginDir := filepath.Join(localPlugins, "myplugin")
+	os.MkdirAll(filepath.Join(pluginDir, ".git"), 0755)
+	os.WriteFile(filepath.Join(pluginDir, "init.lua"), []byte("-- plugin"), 0644)
+	os.WriteFile(filepath.Join(pluginDir, ".git", "config"), []byte("gitconfig"), 0644)
+
+	destDir := filepath.Join(dir, "dest")
+	if err := syncPlugins(lockfile, localPlugins, destDir, nil); err != nil {
+		t.Fatalf("syncPlugins: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(destDir, "myplugin", "init.lua")); err != nil {
 		t.Error("init.lua not copied")
 	}
-
-	// Verify .git was excluded
 	if _, err := os.Stat(filepath.Join(destDir, "myplugin", ".git")); !os.IsNotExist(err) {
 		t.Error(".git directory should be excluded")
 	}
+}
 
-	// missing plugin should be skipped (no error)
-	if _, err := os.Stat(filepath.Join(destDir, "missing")); !os.IsNotExist(err) {
-		t.Error("missing plugin should not exist in dest")
+func TestSyncPluginsFetchesMissing(t *testing.T) {
+	dir := t.TempDir()
+	lockfile := filepath.Join(dir, "nvim-pack-lock.json")
+	os.WriteFile(lockfile, []byte(`{
+  "plugins": {
+    "remote": { "rev": "abc", "src": "https://github.com/test/remote" }
+  }
+}`), 0644)
+
+	destDir := filepath.Join(dir, "dest")
+	err := syncPlugins(lockfile, filepath.Join(dir, "empty"), destDir, func(p Plugin, dest string) error {
+		if p.Name != "remote" || p.Rev != "abc" {
+			t.Fatalf("unexpected plugin %+v", p)
+		}
+		if err := os.MkdirAll(dest, 0755); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dest, "init.lua"), []byte("-- fetched"), 0644)
+	})
+	if err != nil {
+		t.Fatalf("syncPlugins: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "remote", "init.lua")); err != nil {
+		t.Error("fetched plugin missing")
 	}
 }

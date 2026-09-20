@@ -113,7 +113,6 @@ use_repo(
     "zig_darwin_arm64",
     # Shell assets
     "bat_extras",
-    "eza_theme",
     "fast_syntax_highlighting",
     "fzf_shell",
     "powerlevel10k",

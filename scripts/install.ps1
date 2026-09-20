@@ -1,3 +1,4 @@
+# Bootstrap installer (irm|iex). Kept as PowerShell because no Go binary exists yet.
 # Devlayer installer for Windows
 # Usage: irm https://raw.githubusercontent.com/stefanpenner/devlayer/master/scripts/install.ps1 | iex
 

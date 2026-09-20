@@ -70,8 +70,9 @@ The sweet spot is:
 ## Common commands
 
 ```bash
-devlayer build                    # Build linux bundle (Docker)
-devlayer build --os darwin        # Build macOS bundle
+devlayer build                    # Build for this machine
+devlayer build --os linux         # Linux bundle (Docker)
+devlayer build --os darwin        # macOS bundle
 devlayer build --os darwin --nvim-head  # Build with nvim from HEAD
 devlayer build --os windows       # Build Windows bundle
 devlayer push nas                 # Deploy to remote host via SSH
@@ -79,8 +80,11 @@ devlayer status                   # Check installed versions locally
 devlayer status nas               # Check installed versions on host
 devlayer upgrade                  # Download and install latest release
 devlayer install                  # Install bundle locally
+devlayer init                     # Write ~/.config/devlayer/config.toml
+devlayer doctor                   # Check the local install
 devlayer ls                       # List installed tools, dotfiles, and plugins
 devlayer clean                    # Remove build artifacts
+devlayer check-updates            # Fetch latest tool versions; rewrite versions.env
 devlayer version                  # Print devlayer version
 devlayer versions                 # Print bundled tool versions
 ```
@@ -92,7 +96,7 @@ devlayer versions                 # Print bundled tool versions
 curl -fsSL https://raw.githubusercontent.com/stefanpenner/devlayer/master/scripts/install.sh | bash
 
 # 2. Create your sync config
-mkdir -p ~/.config/devlayer
+devlayer init
 $EDITOR ~/.config/devlayer/config.toml
 
 # 3. Build and install locally
@@ -121,6 +125,7 @@ devlayer status
 | jq | yes | yes | yes |
 | direnv | yes | yes | yes |
 | lazygit | yes | yes | yes |
+| gh | yes | yes | yes |
 | htop | yes | yes | — |
 | btop | yes | yes | — |
 | dust | yes | yes | yes |
@@ -136,7 +141,7 @@ Also bundles zsh plugins (autosuggestions, fast-syntax-highlighting, history-sub
 
 On **Linux**, all binaries are statically linked against musl libc — they run on any Linux distribution with no shared library dependencies.
 
-On **macOS**, nvim, htop, and btop are compiled from source for best portability. Rust and Go tools are downloaded as pre-built releases (already statically linked). All macOS binaries are **best-effort hermetic** — they link against `libSystem.dylib` (always present) but have no other external dependencies. Apple does not support fully static linking, so this is the best achievable.
+On **macOS**, nvim, htop, and btop are compiled from source (`devlayer build --os darwin` needs Xcode CLI tools, cmake, and cargo). Rust and Go tools are downloaded as pre-built releases (already statically linked). All macOS binaries are **best-effort hermetic** — they link against `libSystem.dylib` (always present) but have no other external dependencies. Apple does not support fully static linking, so this is the best achievable.
 
 On **Windows**, binaries are downloaded from upstream releases. Git uses [MinGit](https://github.com/git-for-windows/git) — a portable, self-contained distribution. They don't require package managers but depend on system DLLs.
 
@@ -226,7 +231,6 @@ sync = [
   ".config/ghostty",
   ".config/nvim",
   ".config/opencode",
-  ".tmux.conf",
   ".gitconfig",
 
   # optional SSH layer: config only, never keys
@@ -263,7 +267,7 @@ This keeps SSH as a **layer on top of the base stack**, instead of mixing secret
 
 ## Dotfiles & nvim plugins
 
-If you use LazyVim (or any lazy.nvim setup), devlayer reads your `lazy-lock.json` and bundles all locally-installed plugins. On push, nvim starts fully loaded — no first-launch download.
+If you use nvim 0.12 `vim.pack`, devlayer reads `nvim-pack-lock.json` and copies (or fetches) plugins at the pinned revs. On push, nvim starts fully loaded — no first-launch download.
 
 ```bash
 devlayer build --os linux         # Builds tools + dotfiles + nvim plugins
@@ -274,7 +278,7 @@ Four layers, one command:
 1. **Tools** → `$DEVLAYER_PREFIX/` (binaries)
 2. **Runtime** → wrappers, themes, shared support files
 3. **Dotfiles** → `$HOME/` (your config files)
-4. **Nvim plugins** → `~/.local/share/nvim/lazy/` (pre-downloaded)
+4. **Nvim plugins** → `~/.local/share/nvim/site/pack/core/opt/` (pre-downloaded)
 
 ## Configuration
 
@@ -310,7 +314,7 @@ git commit -am "bump fd to 10.5.0"
 gh release create v0.2.0
 ```
 
-A weekly GHA workflow also checks for new upstream versions and opens PRs automatically.
+A Sunday GHA job bumps `versions.env`, tests, probes download URLs, and squash-merges.
 
 ## Supply chain security
 
@@ -318,7 +322,7 @@ A weekly GHA workflow also checks for new upstream versions and opens PRs automa
 - SLSA build provenance via `actions/attest-build-provenance`
 - SHA256 checksums for every release artifact
 - Dependabot keeps GHA actions updated
-- Weekly automated checks for new tool versions (opens PRs)
+- Sunday auto-bump of pinned tool versions (test + URL probe + squash-merge)
 - All tool versions pinned in [`versions.env`](versions.env)
 
 ## Building from source
@@ -327,7 +331,9 @@ A weekly GHA workflow also checks for new upstream versions and opens PRs automa
 bazel build //:devlayer                # Build the devlayer CLI
 bazel build //third_party/btop         # Build btop from source
 bazel build //third_party/make:gnumake # Build GNU make from source
-bazel test //...                       # Run all tests
+bazel test //cmd/... //internal/... //tools/...  # Run Go tests
+bazel run //tools/checkupdates -- --dry-run
+bazel build //linux:bundle_x86_64      # Linux bundle (linuxbuild + assemble)
 ```
 
 Requires [Bazel](https://bazel.build/) (or [Bazelisk](https://github.com/bazelbuild/bazelisk)). The build uses `hermetic_cc_toolchain` (zig-based) for reproducible C/C++ compilation and `rules_foreign_cc` for cmake/autotools projects.

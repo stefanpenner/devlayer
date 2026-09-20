@@ -13,7 +13,7 @@ import (
 const statusScript = `
     _dp="${DEVLAYER_PREFIX:-$HOME/.local}"
     export PATH="$_dp/bin:$_dp/git/bin:$_dp/zsh/bin:$_dp/go/bin:$PATH"
-    for cmd in zsh git nvim go zig make fzf fd bat rg eza delta jq direnv lazygit htop devlayer; do
+    for cmd in zsh git nvim go zig make fzf fd bat rg eza delta jq direnv lazygit gh htop devlayer; do
       if command -v "$cmd" > /dev/null 2>&1; then
         case "$cmd" in
           zsh)     ver=$(zsh --version 2>&1) ;;
@@ -70,6 +70,7 @@ func statusNative() error {
 		{"jq", []string{"--version"}},
 		{"direnv", []string{"--version"}},
 		{"lazygit", []string{"--version"}},
+		{"gh", []string{"--version"}},
 		{"devlayer", []string{"version"}},
 	}
 

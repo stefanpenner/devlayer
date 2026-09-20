@@ -76,7 +76,11 @@ def _tool_repos_impl(module_ctx):
 
     http_archive(
         name = "zsh_src",
-        urls = ["https://www.zsh.org/pub/zsh-{}.tar.xz".format(v["ZSH"])],
+        # zsh.org keeps the current release in /pub and moves older ones to /pub/old.
+        urls = [
+            "https://www.zsh.org/pub/zsh-{}.tar.xz".format(v["ZSH"]),
+            "https://www.zsh.org/pub/old/zsh-{}.tar.xz".format(v["ZSH"]),
+        ],
         strip_prefix = "zsh-{}".format(v["ZSH"]),
         build_file_content = _ALL_SRCS,
     )
@@ -119,10 +123,10 @@ def _tool_repos_impl(module_ctx):
             build_file_content = _exports(["bat"]),
         )
 
-    # ripgrep — linux arm64 uses gnu (no musl build)
+    # ripgrep — all three platforms ship musl/darwin builds
     for plat, target in [
         ("linux_amd64", "x86_64-unknown-linux-musl"),
-        ("linux_arm64", "aarch64-unknown-linux-gnu"),
+        ("linux_arm64", "aarch64-unknown-linux-musl"),
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "ripgrep-{ver}-{t}".format(ver = v["RG"], t = target)
@@ -153,11 +157,11 @@ def _tool_repos_impl(module_ctx):
             build_file_content = _exports(["delta"]),
         )
 
-    # dust — darwin arm64 uses x86_64 (no native arm64 build)
+    # dust
     for plat, target in [
         ("linux_amd64", "x86_64-unknown-linux-musl"),
         ("linux_arm64", "aarch64-unknown-linux-musl"),
-        ("darwin_arm64", "x86_64-apple-darwin"),
+        ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "dust-v{ver}-{t}".format(ver = v["DUST"], t = target)
         http_archive(
@@ -381,13 +385,6 @@ filegroup(
         )],
         strip_prefix = "powerlevel10k-{}".format(v["POWERLEVEL10K"].lstrip("v")),
         build_file_content = _FILEGROUP_ALL,
-    )
-
-    # eza tokyo-night theme
-    http_file(
-        name = "eza_theme",
-        urls = ["https://raw.githubusercontent.com/eza-community/eza-themes/main/themes/tokyonight.yml"],
-        downloaded_file_path = "theme.yml",
     )
 
 tool_repos = module_extension(implementation = _tool_repos_impl)

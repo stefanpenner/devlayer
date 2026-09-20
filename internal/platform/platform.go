@@ -14,6 +14,7 @@ type Platform struct {
 	LazygitOS      string // "Linux", "Darwin", or "Windows"
 	NvimOS         string // "linux", "macos", "win64", "win-arm64"
 	JqOS           string // "linux", "macos", or "windows"
+	GhOS           string // "linux", "macOS", or "windows" — cli/cli asset names
 	ZigOS          string // "linux", "macos", or "windows"
 	DockerPlatform string // e.g. "linux/amd64"
 	ExeSuffix      string // "" on unix, ".exe" on windows
@@ -44,6 +45,7 @@ func New(os, arch string) (*Platform, error) {
 		p.LazygitOS = "Linux"
 		p.NvimOS = "linux"
 		p.JqOS = "linux"
+		p.GhOS = "linux"
 		p.ZigOS = "linux"
 		p.BundleExt = "tar.gz"
 	case "darwin":
@@ -52,6 +54,7 @@ func New(os, arch string) (*Platform, error) {
 		p.LazygitOS = "Darwin"
 		p.NvimOS = "macos"
 		p.JqOS = "macos"
+		p.GhOS = "macOS"
 		p.ZigOS = "macos"
 		p.BundleExt = "tar.gz"
 	case "windows":
@@ -59,6 +62,7 @@ func New(os, arch string) (*Platform, error) {
 		p.RustTargetGNU = p.RustTarget
 		p.LazygitOS = "Windows"
 		p.JqOS = "windows"
+		p.GhOS = "windows"
 		p.ZigOS = "windows"
 		p.ExeSuffix = ".exe"
 		p.BundleExt = "zip"
@@ -93,19 +97,19 @@ func (p *Platform) SkipTool(name string) bool {
 	return false
 }
 
-// RustTargetFor returns the appropriate rust target triple for a project.
-// ripgrep and delta don't ship aarch64 musl builds on Linux.
+// RustTargetFor returns the rust target triple for a project's release assets.
 func (p *Platform) RustTargetFor(project string) string {
 	switch project {
-	case "ripgrep", "delta":
+	case "delta":
+		// delta still has no aarch64 musl build on Linux
 		if p.OS == "linux" && p.RustArch == "aarch64" {
 			return p.RustTargetGNU
 		}
 		return p.RustTarget
-	case "dust":
-		// dust doesn't ship aarch64-apple-darwin; use x86_64 via Rosetta
-		if p.OS == "darwin" && p.RustArch == "aarch64" {
-			return "x86_64-apple-darwin"
+	case "eza":
+		// eza only ships a windows-gnu build (no msvc)
+		if p.OS == "windows" {
+			return p.RustArch + "-pc-windows-gnu"
 		}
 		return p.RustTarget
 	default:
@@ -161,4 +165,3 @@ func (p *Platform) GoArchiveExt() string {
 	}
 	return "tar.gz"
 }
-
