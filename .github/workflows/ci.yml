@@ -396,6 +396,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
+          git push origin "refs/tags/$TAG"
 
           stamp_cli() {
             local config="$1" dest="$2"
