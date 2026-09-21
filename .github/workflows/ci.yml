@@ -18,6 +18,7 @@ permissions:
 jobs:
   # Build + test with Bazel on all platforms
   test:
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -342,7 +343,9 @@ jobs:
   # GitHub release body is the changelog `devlayer upgrade` prints.
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [test, cli, linux, darwin, windows]
+    # Bundles already ran tests on the PR. Don't let a hung Windows bazel test
+    # block the GitHub release (it has sat 30+ min on this run).
+    needs: [cli, linux, darwin, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
