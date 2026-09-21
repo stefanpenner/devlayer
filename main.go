@@ -30,7 +30,7 @@ Commands:
   doctor                          Check the local install
   ls                              List installed tools, dotfiles, and nvim plugins
   clean                           Remove build artifacts and Docker image
-  upgrade                         Download and install the latest release
+  upgrade                         Show notes (if any) and install the latest release
   check-updates [--dry-run]       Fetch latest tool versions; rewrite versions.env
   version                         Print devlayer version
   versions                        Print bundled tool versions
