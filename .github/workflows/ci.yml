@@ -203,25 +203,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache Bazel
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: bazel-darwin-bundle-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-darwin-bundle-
-
       - name: Install build dependencies
         run: brew install cmake ninja autoconf automake libtool
 
-      - name: Build devlayer CLI with Bazel
-        run: bazel build //:devlayer
+      - name: Download CLI artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-darwin-${{ matrix.arch }}
 
       - name: Build Darwin bundle
         run: |
-          # Use the Bazel-built CLI to assemble the full bundle
-          ./bazel-bin/devlayer_/devlayer build --os darwin --arch ${{ matrix.arch }}
+          chmod +x devlayer-darwin-${{ matrix.arch }}
+          ./devlayer-darwin-${{ matrix.arch }} build --os darwin --arch ${{ matrix.arch }}
           ls -lh devlayer-darwin-${{ matrix.arch }}.tar.gz
 
       - name: Verify bundle
@@ -278,21 +271,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache Bazel
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Download CLI artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: bazel-windows-bundle-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-windows-bundle-
-
-      - name: Build devlayer CLI with Bazel
-        run: bazel build //:devlayer
+          name: cli-windows-x86_64
 
       - name: Build Windows bundle
         run: |
-          .\bazel-bin\devlayer_\devlayer.exe build --os windows --arch x86_64
+          .\devlayer-windows-x86_64.exe build --os windows --arch x86_64
           Get-ChildItem devlayer-windows-x86_64.zip
 
       - name: Verify bundle
