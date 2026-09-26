@@ -5,6 +5,7 @@ exports_files(
     [
         "versions.env",
         "Dockerfile",
+        ".bazelrc",
     ],
     visibility = ["//visibility:public"],
 )

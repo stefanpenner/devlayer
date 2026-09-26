@@ -7,9 +7,15 @@ build --incompatible_strict_action_env
 # Pure Go — no CGo needed
 build --@rules_go//go/config:pure
 
-# Version stamping for go_binary x_defs
+# Version stamping for go_binary x_defs.
+# Windows uses a cmd script: Bazel runs workspace_status_command via
+# cmd.exe, and the POSIX script's `git describe --dirty` never returns
+# (run 35561178234). Platform config expands in place, so it must follow
+# the shell default or the .sh line wins.
 build --stamp
 build --workspace_status_command=tools/workspace_status.sh
+build:windows --workspace_status_command=tools/workspace_status.cmd
+build --enable_platform_specific_config
 
 # Platform configs for cross-compilation
 build:linux-x86_64 --platforms=@zig_sdk//platform:linux_amd64
