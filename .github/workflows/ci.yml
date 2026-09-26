@@ -218,14 +218,6 @@ jobs:
       - name: Build devlayer CLI with Bazel
         run: bazel build //:devlayer
 
-      - name: Build source tools with Bazel
-        run: |
-          bazel build \
-            //third_party/btop \
-            //third_party/make:gnumake \
-            //third_party/zsh \
-            --config=source-build
-
       - name: Build Darwin bundle
         run: |
           # Use the Bazel-built CLI to assemble the full bundle
