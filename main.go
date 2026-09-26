@@ -15,6 +15,9 @@ var versionsEnv string
 //go:embed Dockerfile
 var dockerfile string
 
+//go:embed config/nvim/nvim-pack-lock.json
+var nvimPackLock string
+
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
@@ -64,7 +67,7 @@ func main() {
 
 	vers := versions.Parse(versionsEnv)
 
-	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv)
+	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv, nvimPackLock)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

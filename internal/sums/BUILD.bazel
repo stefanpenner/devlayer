@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+exports_files(
+    ["checksums.sha256"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "sums",
+    srcs = ["sums.go"],
+    embedsrcs = ["checksums.sha256"],
+    importpath = "github.com/stefanpenner/devlayer/internal/sums",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "sums_test",
+    srcs = ["sums_test.go"],
+    embed = [":sums"],
+)

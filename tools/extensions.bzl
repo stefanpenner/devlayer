@@ -1,4 +1,8 @@
-"""Module extension for fetching all third-party tool sources and pre-built binaries."""
+"""Module extension for fetching all third-party tool sources and pre-built binaries.
+
+Every archive URL must have a sha256 in //internal/sums:checksums.sha256.
+No pin → the extension fails closed.
+"""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("@versions//:versions.bzl", "VERSIONS")
@@ -26,14 +30,57 @@ def _exports(names):
         ", ".join(['"%s"' % n for n in names]),
     )
 
+def _parse_sums(text):
+    sums = {}
+    for raw in text.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("  ")
+        if len(parts) != 2:
+            fail("bad checksum line: " + line)
+        sha = parts[0].strip()
+        url = parts[1].strip()
+        if len(sha) != 64:
+            fail("bad sha256 for " + url)
+        if url in sums:
+            fail("duplicate pin for " + url)
+        sums[url] = sha
+    return sums
+
+def _read_sums(module_ctx):
+    label = Label("//internal/sums:checksums.sha256")
+    module_ctx.watch(label)
+    return _parse_sums(module_ctx.read(label))
+
+def _pin(sums, urls):
+    # Pin is the first URL. Later URLs are byte-identical fallbacks (Bazel
+    # checks this sha256 against whichever mirror answers).
+    if not urls:
+        fail("empty url list")
+    url = urls[0]
+    got = sums.get(url)
+    if not got:
+        fail("no sha256 pin for " + url)
+    return got
+
+def _http_archive(sums, **kwargs):
+    kwargs["sha256"] = _pin(sums, kwargs["urls"])
+    http_archive(**kwargs)
+
+def _http_file(sums, **kwargs):
+    kwargs["sha256"] = _pin(sums, kwargs["urls"])
+    http_file(**kwargs)
+
 def _tool_repos_impl(module_ctx):
+    sums = _read_sums(module_ctx)
     v = VERSIONS
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Source builds (compiled via rules_foreign_cc)
     # ═══════════════════════════════════════════════════════════════════════════
 
-    http_archive(
+    _http_archive(sums, 
         name = "btop_src",
         urls = ["https://github.com/aristocratos/btop/archive/refs/tags/v{}.tar.gz".format(v["BTOP"])],
         strip_prefix = "btop-{}".format(v["BTOP"]),
@@ -46,37 +93,38 @@ def _tool_repos_impl(module_ctx):
         ],
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "htop_src",
         urls = ["https://github.com/htop-dev/htop/archive/refs/tags/{}.tar.gz".format(v["HTOP"])],
         strip_prefix = "htop-{}".format(v["HTOP"]),
         build_file_content = _ALL_SRCS,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "make_src",
         urls = ["https://ftp.gnu.org/gnu/make/make-{}.tar.gz".format(v["MAKE"])],
         strip_prefix = "make-{}".format(v["MAKE"]),
         build_file_content = _ALL_SRCS,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "ncurses_src",
         urls = ["https://ftp.gnu.org/gnu/ncurses/ncurses-{}.tar.gz".format(v["NCURSES"])],
         strip_prefix = "ncurses-{}".format(v["NCURSES"]),
         build_file_content = _ALL_SRCS,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "git_src",
         urls = ["https://mirrors.edge.kernel.org/pub/software/scm/git/git-{}.tar.xz".format(v["GIT"])],
         strip_prefix = "git-{}".format(v["GIT"]),
         build_file_content = _ALL_SRCS,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "zsh_src",
-        # zsh.org keeps the current release in /pub and moves older ones to /pub/old.
+        # Current tarball is /pub. /pub/old is the same bytes after zsh.org moves it.
+        # The pin is the /pub URL. /old 404s until that move.
         urls = [
             "https://www.zsh.org/pub/zsh-{}.tar.xz".format(v["ZSH"]),
             "https://www.zsh.org/pub/old/zsh-{}.tar.xz".format(v["ZSH"]),
@@ -96,7 +144,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "fd-v{ver}-{t}".format(ver = v["FD"], t = target)
-        http_archive(
+        _http_archive(sums, 
             name = "fd_" + plat,
             urls = ["https://github.com/sharkdp/fd/releases/download/v{ver}/{name}.tar.gz".format(
                 ver = v["FD"],
@@ -113,7 +161,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "bat-v{ver}-{t}".format(ver = v["BAT"], t = target)
-        http_archive(
+        _http_archive(sums, 
             name = "bat_" + plat,
             urls = ["https://github.com/sharkdp/bat/releases/download/v{ver}/{name}.tar.gz".format(
                 ver = v["BAT"],
@@ -130,7 +178,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "ripgrep-{ver}-{t}".format(ver = v["RG"], t = target)
-        http_archive(
+        _http_archive(sums, 
             name = "rg_" + plat,
             urls = ["https://github.com/BurntSushi/ripgrep/releases/download/{ver}/{name}.tar.gz".format(
                 ver = v["RG"],
@@ -147,7 +195,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "delta-{ver}-{t}".format(ver = v["DELTA"], t = target)
-        http_archive(
+        _http_archive(sums, 
             name = "delta_" + plat,
             urls = ["https://github.com/dandavison/delta/releases/download/{ver}/{name}.tar.gz".format(
                 ver = v["DELTA"],
@@ -164,7 +212,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64-apple-darwin"),
     ]:
         name = "dust-v{ver}-{t}".format(ver = v["DUST"], t = target)
-        http_archive(
+        _http_archive(sums, 
             name = "dust_" + plat,
             urls = ["https://github.com/bootandy/dust/releases/download/v{ver}/{name}.tar.gz".format(
                 ver = v["DUST"],
@@ -187,7 +235,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "linux_arm64"),
         ("darwin_arm64", "darwin_arm64"),
     ]:
-        http_archive(
+        _http_archive(sums, 
             name = "fzf_" + plat,
             urls = ["https://github.com/junegunn/fzf/releases/download/v{ver}/fzf-{ver}-{oa}.tar.gz".format(
                 ver = v["FZF"],
@@ -202,7 +250,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "Linux", "arm64"),
         ("darwin_arm64", "Darwin", "arm64"),
     ]:
-        http_archive(
+        _http_archive(sums, 
             name = "lazygit_" + plat,
             urls = ["https://github.com/jesseduffield/lazygit/releases/download/v{ver}/lazygit_{ver}_{os}_{arch}.tar.gz".format(
                 ver = v["LAZYGIT"],
@@ -218,7 +266,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "linux", "arm64"),
         ("darwin_arm64", "darwin", "arm64"),
     ]:
-        http_archive(
+        _http_archive(sums, 
             name = "age_" + plat,
             urls = ["https://github.com/FiloSottile/age/releases/download/v{ver}/age-v{ver}-{os}-{arch}.tar.gz".format(
                 ver = v["AGE"],
@@ -239,7 +287,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "linux-arm64"),
         ("darwin_arm64", "darwin-arm64"),
     ]:
-        http_file(
+        _http_file(sums, 
             name = "direnv_" + plat,
             urls = ["https://github.com/direnv/direnv/releases/download/v{ver}/direnv.{oa}".format(
                 ver = v["DIRENV"],
@@ -255,7 +303,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "linux", "arm64"),
         ("darwin_arm64", "macos", "arm64"),
     ]:
-        http_file(
+        _http_file(sums, 
             name = "jq_" + plat,
             urls = ["https://github.com/jqlang/jq/releases/download/jq-{ver}/jq-{os}-{arch}".format(
                 ver = v["JQ"],
@@ -276,7 +324,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "macos", "arm64"),
     ]:
         archive = "nvim-{os}-{arch}".format(os = nvim_os, arch = arch)
-        http_archive(
+        _http_archive(sums, 
             name = "nvim_" + plat,
             urls = ["https://github.com/neovim/neovim/releases/download/v{ver}/{archive}.tar.gz".format(
                 ver = v["NVIM"],
@@ -292,7 +340,7 @@ def _tool_repos_impl(module_ctx):
         ("linux_arm64", "linux", "arm64"),
         ("darwin_arm64", "darwin", "arm64"),
     ]:
-        http_archive(
+        _http_archive(sums, 
             name = "go_sdk_" + plat,
             urls = ["https://go.dev/dl/go{ver}.{os}-{arch}.tar.gz".format(
                 ver = v["GO"],
@@ -310,7 +358,7 @@ def _tool_repos_impl(module_ctx):
         ("darwin_arm64", "aarch64", "macos"),
     ]:
         prefix = "zig-{arch}-{os}-{ver}".format(arch = arch, os = zig_os, ver = v["ZIG"])
-        http_archive(
+        _http_archive(sums, 
             name = "zig_" + plat,
             urls = ["https://ziglang.org/download/{ver}/{prefix}.tar.xz".format(
                 ver = v["ZIG"],
@@ -325,7 +373,7 @@ def _tool_repos_impl(module_ctx):
     # ═══════════════════════════════════════════════════════════════════════════
 
     # bat-extras (batman shell script)
-    http_archive(
+    _http_archive(sums, 
         name = "bat_extras",
         urls = ["https://github.com/eth-p/bat-extras/releases/download/v{ver}/bat-extras-{ver}.zip".format(
             ver = v["BAT_EXTRAS"],
@@ -334,7 +382,7 @@ def _tool_repos_impl(module_ctx):
     )
 
     # fzf shell integration (key-bindings.zsh, completion.zsh)
-    http_archive(
+    _http_archive(sums, 
         name = "fzf_shell",
         urls = ["https://github.com/junegunn/fzf/archive/refs/tags/v{}.tar.gz".format(v["FZF"])],
         strip_prefix = "fzf-{}".format(v["FZF"]),
@@ -351,7 +399,7 @@ filegroup(
     )
 
     # Zsh plugins
-    http_archive(
+    _http_archive(sums, 
         name = "zsh_autosuggestions",
         urls = ["https://github.com/zsh-users/zsh-autosuggestions/archive/refs/tags/{}.tar.gz".format(
             v["ZSH_AUTOSUGGESTIONS"],
@@ -360,7 +408,7 @@ filegroup(
         build_file_content = _FILEGROUP_ALL,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "fast_syntax_highlighting",
         urls = ["https://github.com/zdharma-continuum/fast-syntax-highlighting/archive/refs/tags/{}.tar.gz".format(
             v["FAST_SYNTAX_HIGHLIGHTING"],
@@ -369,7 +417,7 @@ filegroup(
         build_file_content = _FILEGROUP_ALL,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "zsh_history_substring_search",
         urls = ["https://github.com/zsh-users/zsh-history-substring-search/archive/refs/tags/{}.tar.gz".format(
             v["ZSH_HISTORY_SUBSTRING_SEARCH"],
@@ -378,7 +426,7 @@ filegroup(
         build_file_content = _FILEGROUP_ALL,
     )
 
-    http_archive(
+    _http_archive(sums, 
         name = "powerlevel10k",
         urls = ["https://github.com/romkatv/powerlevel10k/archive/refs/tags/{}.tar.gz".format(
             v["POWERLEVEL10K"],

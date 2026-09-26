@@ -33,12 +33,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure Bazel caches
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh configure
+
       - name: Cache Bazel
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # ~/.cache/bazel is not the Bazel 9 output root on macOS or Windows.
+          # Paths are set in bazel-ci-cache.sh (repository, disk, bazelisk).
           path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
+            ~/.cache/devlayer/bazel-repository
+            ~/.cache/devlayer/bazel-disk
+            ~/.cache/devlayer/bazelisk
           key: bazel-${{ matrix.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-${{ matrix.os }}-
 
@@ -63,6 +70,20 @@ jobs:
             ./bazel-bin/devlayer_/devlayer versions
           fi
 
+      - name: Shut down Bazel
+        if: runner.os != 'Windows'
+        run: bazel shutdown || true
+
+      - name: Shut down Bazel
+        if: runner.os == 'Windows'
+        shell: pwsh
+        continue-on-error: true
+        run: bazel shutdown
+
+      - name: Cap Bazel disk cache
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh prune
+
 
   # Build devlayer CLI binaries for all platforms (cross-compiled via Bazel)
   cli:
@@ -85,12 +106,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure Bazel caches
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh configure
+
       - name: Cache Bazel
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # ~/.cache/bazel is not the Bazel 9 output root on macOS or Windows.
+          # Paths are set in bazel-ci-cache.sh (repository, disk, bazelisk).
           path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
+            ~/.cache/devlayer/bazel-repository
+            ~/.cache/devlayer/bazel-disk
+            ~/.cache/devlayer/bazelisk
           key: bazel-cli-${{ matrix.name }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-cli-${{ matrix.name }}-
 
@@ -105,6 +133,13 @@ jobs:
         with:
           name: cli-${{ matrix.name }}
           path: devlayer-${{ matrix.name }}${{ matrix.binary == 'devlayer.exe' && '.exe' || '' }}
+
+      - name: Shut down Bazel
+        run: bazel shutdown || true
+
+      - name: Cap Bazel disk cache
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh prune
 
   # Build Linux tool bundles (Bazel + Docker)
   linux:
@@ -123,12 +158,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Configure Bazel caches
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh configure
+
       - name: Cache Bazel
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # ~/.cache/bazel is not the Bazel 9 output root on macOS or Windows.
+          # Paths are set in bazel-ci-cache.sh (repository, disk, bazelisk).
           path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
+            ~/.cache/devlayer/bazel-repository
+            ~/.cache/devlayer/bazel-disk
+            ~/.cache/devlayer/bazelisk
           key: bazel-linux-bundle-${{ matrix.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-linux-bundle-${{ matrix.arch }}-
 
@@ -191,6 +233,13 @@ jobs:
             devlayer-linux-${{ matrix.arch }}.tar.gz
             devlayer-linux-${{ matrix.arch }}.tar.gz.sha256
 
+      - name: Shut down Bazel
+        run: bazel shutdown || true
+
+      - name: Cap Bazel disk cache
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh prune
+
   # Build Darwin tool bundle
   darwin:
     needs: cli
@@ -203,25 +252,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache Bazel
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: bazel-darwin-bundle-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-darwin-bundle-
-
       - name: Install build dependencies
         run: brew install cmake ninja autoconf automake libtool
 
-      - name: Build devlayer CLI with Bazel
-        run: bazel build //:devlayer
+      - name: Download CLI artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-darwin-${{ matrix.arch }}
 
       - name: Build Darwin bundle
         run: |
-          # Use the Bazel-built CLI to assemble the full bundle
-          ./bazel-bin/devlayer_/devlayer build --os darwin --arch ${{ matrix.arch }}
+          chmod +x devlayer-darwin-${{ matrix.arch }}
+          ./devlayer-darwin-${{ matrix.arch }} build --os darwin --arch ${{ matrix.arch }}
           ls -lh devlayer-darwin-${{ matrix.arch }}.tar.gz
 
       - name: Verify bundle
@@ -278,28 +320,30 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Cache Bazel
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Download CLI artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: bazel-windows-bundle-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-windows-bundle-
-
-      - name: Build devlayer CLI with Bazel
-        run: bazel build //:devlayer
+          name: cli-windows-x86_64
 
       - name: Build Windows bundle
         run: |
-          .\bazel-bin\devlayer_\devlayer.exe build --os windows --arch x86_64
+          .\devlayer-windows-x86_64.exe build --os windows --arch x86_64
           Get-ChildItem devlayer-windows-x86_64.zip
 
       - name: Verify bundle
         shell: bash
         run: |
+          # Only the members asserted below. A full unzip writes every bundled
+          # .exe, and Windows Defender real-time scan then dominates this step.
           mkdir -p /tmp/devlayer-verify
-          unzip -qo devlayer-windows-*.zip -d /tmp/devlayer-verify
+          unzip -qo devlayer-windows-*.zip \
+            'bin/git.cmd' \
+            'bin/nvim.cmd' \
+            'bin/go.cmd' \
+            'bin/gofmt.cmd' \
+            'git/cmd/git.exe' \
+            -d /tmp/devlayer-verify \
+            || { echo "FAIL: zip corrupt or required member missing"; exit 1; }
 
           echo "==> Verifying .cmd wrappers..."
           for f in git nvim go gofmt; do
@@ -342,12 +386,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Bazel caches
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh configure
+
       - name: Cache Bazel
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
+          # ~/.cache/bazel is not the Bazel 9 output root on macOS or Windows.
+          # Paths are set in bazel-ci-cache.sh (repository, disk, bazelisk).
           path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
+            ~/.cache/devlayer/bazel-repository
+            ~/.cache/devlayer/bazel-disk
+            ~/.cache/devlayer/bazelisk
           key: bazel-publish-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-publish-
 
@@ -451,3 +502,10 @@ jobs:
             devlayer-windows-x86_64.zip.sha256 \
             scripts/install.sh \
             scripts/install.ps1
+
+      - name: Shut down Bazel
+        run: bazel shutdown || true
+
+      - name: Cap Bazel disk cache
+        shell: bash
+        run: bash .github/workflows/bazel-ci-cache.sh prune

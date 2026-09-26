@@ -39,3 +39,7 @@ build:source-build --spawn_strategy=local
 # Sensible defaults
 build --verbose_failures
 test --test_output=errors
+
+# CI writes this before Bazel (see .github/workflows/bazel-ci-cache.sh).
+# Absent on developer machines, so local builds keep the default output root.
+try-import %workspace%/.bazelrc.ci

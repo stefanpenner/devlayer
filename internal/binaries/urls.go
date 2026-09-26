@@ -1,10 +1,11 @@
 // Package binaries resolves pinned tool URLs and fetches them into a layout.
 //
-// resolve platform → list URLs → fetch into out → chmod bin
+// resolve platform → list URLs → verify sha256 → fetch into out → chmod bin
 package binaries
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/stefanpenner/devlayer/internal/platform"
@@ -162,4 +163,55 @@ func fzfShellURL(ver string) string {
 
 func pluginURL(repo, ver string) string {
 	return fmt.Sprintf("https://github.com/%s/archive/refs/tags/%s.tar.gz", repo, ver)
+}
+
+// SourceArchiveURLs are the source tarballs Bazel http_archive fetches.
+// These are not in URLs (URLs is the prebuilt set).
+func SourceArchiveURLs(vers *versions.Versions) map[string]string {
+	btop := vers.Get("BTOP_VERSION")
+	htop := vers.Get("HTOP_VERSION")
+	makeVer := vers.Get("MAKE_VERSION")
+	ncurses := vers.Get("NCURSES_VERSION")
+	git := vers.Get("GIT_VERSION")
+	zsh := vers.Get("ZSH_VERSION")
+	return map[string]string{
+		"btop":    fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
+		"htop":    fmt.Sprintf("https://github.com/htop-dev/htop/archive/refs/tags/%s.tar.gz", htop),
+		"make":    fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", makeVer),
+		"ncurses": fmt.Sprintf("https://ftp.gnu.org/gnu/ncurses/ncurses-%s.tar.gz", ncurses),
+		"git":     fmt.Sprintf("https://mirrors.edge.kernel.org/pub/software/scm/git/git-%s.tar.xz", git),
+		"zsh":     fmt.Sprintf("https://www.zsh.org/pub/zsh-%s.tar.xz", zsh),
+	}
+}
+
+// AllURLs is every archive URL the prebuilt fetch and the source archives request.
+// internal/sums/checksums.sha256 must pin each one.
+func AllURLs(vers *versions.Versions) ([]string, error) {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(u string) {
+		if _, ok := seen[u]; ok {
+			return
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+	}
+	for _, tgt := range DefaultProbeTargets() {
+		p, err := platform.New(tgt.OS, tgt.Arch)
+		if err != nil {
+			return nil, err
+		}
+		urls, err := URLs(p, vers, nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range urls {
+			add(u)
+		}
+	}
+	for _, u := range SourceArchiveURLs(vers) {
+		add(u)
+	}
+	sort.Strings(out)
+	return out, nil
 }

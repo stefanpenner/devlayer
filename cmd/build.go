@@ -21,6 +21,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/download"
 	"github.com/stefanpenner/devlayer/internal/nvimplugins"
 	"github.com/stefanpenner/devlayer/internal/platform"
+	"github.com/stefanpenner/devlayer/internal/sums"
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
@@ -340,7 +341,6 @@ func dockerLinuxBundle(arch, scriptDir, outDir string, vers *versions.Versions) 
 
 // buildBtop builds btop from source using cmake.
 func buildBtop(binDir string, vers *versions.Versions) error {
-	ver := vers.Get("BTOP_VERSION")
 	fmt.Println("  btop (building from source)")
 
 	srcDir, err := os.MkdirTemp("", "devlayer-btop-*")
@@ -349,9 +349,12 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	// Download source tarball
-	url := fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", ver)
-	if err := download.TarGzFull(url, srcDir, 0); err != nil {
+	url := binaries.SourceArchiveURLs(vers)["btop"]
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
 		return fmt.Errorf("download btop source: %w", err)
 	}
 
@@ -680,7 +683,6 @@ func buildEza(binDir string, vers *versions.Versions) error {
 
 // buildMake compiles GNU make from source.
 func buildMake(binDir string, vers *versions.Versions) error {
-	ver := vers.Get("MAKE_VERSION")
 	fmt.Println("  make (building from source)")
 
 	srcDir, err := os.MkdirTemp("", "devlayer-make-*")
@@ -689,8 +691,12 @@ func buildMake(binDir string, vers *versions.Versions) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	url := fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", ver)
-	if err := download.TarGzFull(url, srcDir, 0); err != nil {
+	url := binaries.SourceArchiveURLs(vers)["make"]
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
 		return fmt.Errorf("download make source: %w", err)
 	}
 
@@ -871,11 +877,11 @@ func buildDotfiles(scriptDir string) error {
 
 // buildNvimPlugins packages nvim plugins, treesitter parsers, and Mason LSP
 // servers into a single tarball for deployment.
-// Skipped silently if nvim-pack-lock.json doesn't exist.
+// Plugins come from the repo lockfile at their pinned revs. A missing lock fails.
 func buildNvimPlugins(scriptDir string) error {
-	lockfile := nvimplugins.LockfilePath()
-	if _, err := os.Stat(lockfile); os.IsNotExist(err) {
-		return nil
+	lockfile := nvimplugins.RepoLockfile(scriptDir)
+	if _, err := os.Stat(lockfile); err != nil {
+		return fmt.Errorf("nvim pack lock: %w", err)
 	}
 
 	fmt.Println("==> Packaging nvim plugins...")
@@ -891,12 +897,13 @@ func buildNvimPlugins(scriptDir string) error {
 
 	// 1. Plugins from lockfile
 	pluginDir := filepath.Join(staging, "site", "pack", "core", "opt")
-	if err := nvimplugins.SyncPlugins(lockfile, nvimplugins.LocalPluginDir(), pluginDir); err != nil {
+	if err := nvimplugins.SyncPlugins(lockfile, pluginDir); err != nil {
 		return fmt.Errorf("sync nvim plugins: %w", err)
 	}
 	entries, _ := os.ReadDir(pluginDir)
 	fmt.Printf("  %d plugins\n", len(entries))
 
+	// Parsers and Mason are host-built, not lockfile pins. Absent on a clean machine.
 	// 2. Treesitter parsers (.so files) and queries
 	parserSrc := filepath.Join(nvimData, "site", "parser")
 	if _, err := os.Stat(parserSrc); err == nil {
@@ -1052,7 +1059,7 @@ func copyFile(src, dst string) error {
 // FindScriptDir returns the directory containing the devlayer source files.
 // It checks for the repo checkout first (Dockerfile exists), then falls back
 // to a temp dir with embedded files.
-func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv string) (string, bool, error) {
+func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv, nvimPackLock string) (string, bool, error) {
 	if d := os.Getenv("BUILD_WORKING_DIRECTORY"); d != "" {
 		return d, false, nil
 	}
@@ -1084,6 +1091,13 @@ func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv string) (string, bool
 		return "", true, err
 	}
 	if err := os.WriteFile(filepath.Join(tmp, "versions.env"), []byte(embeddedVersionsEnv), 0644); err != nil {
+		return "", true, err
+	}
+	lockPath := nvimplugins.RepoLockfile(tmp)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
+		return "", true, err
+	}
+	if err := os.WriteFile(lockPath, []byte(nvimPackLock), 0644); err != nil {
 		return "", true, err
 	}
 	return tmp, true, nil

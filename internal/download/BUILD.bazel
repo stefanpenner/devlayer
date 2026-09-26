@@ -1,8 +1,15 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "download",
     srcs = ["download.go"],
     importpath = "github.com/stefanpenner/devlayer/internal/download",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/sums"],
+)
+
+go_test(
+    name = "download_test",
+    srcs = ["download_test.go"],
+    embed = [":download"],
 )
