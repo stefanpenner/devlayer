@@ -267,7 +267,7 @@ This keeps SSH as a **layer on top of the base stack**, instead of mixing secret
 
 ## Dotfiles & nvim plugins
 
-If you use nvim 0.12 `vim.pack`, devlayer reads `nvim-pack-lock.json` and copies (or fetches) plugins at the pinned revs. On push, nvim starts fully loaded — no first-launch download.
+If you use nvim 0.12 `vim.pack`, devlayer fetches each plugin in `config/nvim/nvim-pack-lock.json` at its pinned commit. It does not copy the builder's `vim.pack` tree. On push, nvim starts fully loaded — no first-launch download.
 
 ```bash
 devlayer build --os linux         # Builds tools + dotfiles + nvim plugins
@@ -322,6 +322,7 @@ After master CI is green, a `publish` job cuts the next GitHub release (`feat` �
 
 - All GHA actions pinned by commit SHA
 - SLSA build provenance via `actions/attest-build-provenance`
+- Incoming tool archives are sha256-pinned in [`internal/sums/checksums.sha256`](internal/sums/checksums.sha256). No pin, no download (Bazel `http_archive` and the Go fetcher).
 - SHA256 checksums for every release artifact
 - Dependabot keeps GHA actions updated
 - NAS Sunday dispatch: bump pins, test, probe URLs, squash-merge

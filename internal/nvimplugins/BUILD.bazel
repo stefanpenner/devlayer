@@ -5,6 +5,7 @@ go_library(
     srcs = ["nvimplugins.go"],
     importpath = "github.com/stefanpenner/devlayer/internal/nvimplugins",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/download"],
 )
 
 go_test(

@@ -12,6 +12,7 @@ go_library(
     deps = [
         "//internal/download",
         "//internal/platform",
+        "//internal/sums",
         "//internal/versions",
     ],
 )
@@ -20,11 +21,14 @@ go_test(
     name = "binaries_test",
     srcs = [
         "binaries_test.go",
+        "pins_test.go",
         "probe_test.go",
     ],
+    data = ["//:versions.env"],
     embed = [":binaries"],
     deps = [
         "//internal/platform",
+        "//internal/sums",
         "//internal/versions",
     ],
 )

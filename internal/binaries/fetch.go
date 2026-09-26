@@ -8,6 +8,7 @@ import (
 
 	"github.com/stefanpenner/devlayer/internal/download"
 	"github.com/stefanpenner/devlayer/internal/platform"
+	"github.com/stefanpenner/devlayer/internal/sums"
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
@@ -83,7 +84,11 @@ func fetchRust(binDir string, p *platform.Platform, urls map[string]string) erro
 	}
 
 	if url, ok := urls["eza"]; ok {
-		if err := download.ZipBinary(url, binDir, "eza.exe"); err != nil {
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
+		if err := download.ZipBinary(url, binDir, "eza.exe", sum); err != nil {
 			return fmt.Errorf("download eza: %w", err)
 		}
 	}
@@ -124,15 +129,23 @@ func fetchAge(binDir string, p *platform.Platform, urls map[string]string) error
 
 func fetchSingles(binDir string, p *platform.Platform, urls map[string]string) error {
 	if url, ok := urls["direnv"]; ok {
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
 		dest := filepath.Join(binDir, "direnv"+p.ExeSuffix)
-		if err := download.File(url, dest); err != nil {
+		if err := download.File(url, dest, sum); err != nil {
 			return fmt.Errorf("download direnv: %w", err)
 		}
 	}
 
 	if url, ok := urls["jq"]; ok {
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
 		dest := filepath.Join(binDir, "jq"+p.ExeSuffix)
-		if err := download.File(url, dest); err != nil {
+		if err := download.File(url, dest, sum); err != nil {
 			return fmt.Errorf("download jq: %w", err)
 		}
 	}
@@ -146,13 +159,17 @@ func fetchBatman(binDir string, vers *versions.Versions, urls map[string]string)
 	}
 
 	ver := vers.Get("BAT_EXTRAS_VERSION")
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
 	dest := filepath.Join(binDir, "batman")
 	primary := "bat-extras-" + ver + "/bin/batman"
-	if err := download.ZipFiles(url, map[string]string{primary: dest}); err != nil {
+	if err := download.ZipFiles(url, map[string]string{primary: dest}, sum); err != nil {
 		return fmt.Errorf("download batman: %w", err)
 	}
 	if _, err := os.Stat(dest); err != nil {
-		if err := download.ZipFiles(url, map[string]string{"bin/batman": dest}); err != nil {
+		if err := download.ZipFiles(url, map[string]string{"bin/batman": dest}, sum); err != nil {
 			return fmt.Errorf("download batman: %w", err)
 		}
 	}
@@ -211,7 +228,11 @@ func fetchMinGit(out string, urls map[string]string) error {
 	}
 
 	fmt.Println("  git (MinGit)")
-	if err := download.ZipFull(url, filepath.Join(out, "git"), 0); err != nil {
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.ZipFull(url, filepath.Join(out, "git"), 0, sum); err != nil {
 		return fmt.Errorf("download git: %w", err)
 	}
 	return nil
@@ -235,7 +256,11 @@ func fetchFzfShell(out string, urls map[string]string) error {
 	}
 	defer os.RemoveAll(tmp)
 
-	if err := download.TarGzFull(url, tmp, 0); err != nil {
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.TarGzFull(url, tmp, 0, sum); err != nil {
 		return fmt.Errorf("download fzf shell: %w", err)
 	}
 
@@ -277,7 +302,11 @@ func fetchZshPlugins(out string, urls map[string]string) error {
 			continue
 		}
 		fmt.Printf("  %s\n", name)
-		if err := download.TarGzToDir(url, filepath.Join(out, "share", name)); err != nil {
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
+		if err := download.TarGzToDir(url, filepath.Join(out, "share", name), sum); err != nil {
 			return fmt.Errorf("download %s: %w", name, err)
 		}
 	}
@@ -285,20 +314,28 @@ func fetchZshPlugins(out string, urls map[string]string) error {
 }
 
 func extractBin(url, dir, name, ext string) error {
-	if ext == "zip" {
-		return download.ZipBinary(url, dir, name)
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
 	}
-	return download.TarGzBinary(url, dir, name)
+	if ext == "zip" {
+		return download.ZipBinary(url, dir, name, sum)
+	}
+	return download.TarGzBinary(url, dir, name, sum)
 }
 
 func extractFull(url, dir string, strip int, ext string) error {
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
 	switch ext {
 	case "zip":
-		return download.ZipFull(url, dir, strip)
+		return download.ZipFull(url, dir, strip, sum)
 	case "tar.xz":
-		return download.TarXzFull(url, dir, strip)
+		return download.TarXzFull(url, dir, strip, sum)
 	default:
-		return download.TarGzFull(url, dir, strip)
+		return download.TarGzFull(url, dir, strip, sum)
 	}
 }
 

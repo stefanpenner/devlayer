@@ -21,6 +21,7 @@ go_library(
     embedsrcs = [
         "versions.env",
         "Dockerfile",
+        "config/nvim/nvim-pack-lock.json",
     ],
     importpath = "github.com/stefanpenner/devlayer",
     visibility = ["//visibility:private"],
