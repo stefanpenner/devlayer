@@ -1,5 +1,13 @@
 # Build tooling: config_settings for platform-aware target selection.
 
+exports_files(
+    [
+        "workspace_status.sh",
+        "workspace_status.cmd",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "linux_amd64",
     constraint_values = [

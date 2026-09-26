@@ -335,9 +335,7 @@ jobs:
   # GitHub release body is the changelog `devlayer upgrade` prints.
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    # Bundles already ran tests on the PR. Don't let a hung Windows bazel test
-    # block the GitHub release (it has sat 30+ min on this run).
-    needs: [cli, linux, darwin, windows]
+    needs: [cli, linux, darwin, windows, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

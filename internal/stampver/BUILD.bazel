@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+genrule(
+    name = "ci_copy",
+    srcs = ["//.github/workflows:ci.yml"],
+    outs = ["ci.yml"],
+    cmd = "cp $< $@",
+    cmd_bat = "copy /Y $< $@",
+)
+
+go_test(
+    name = "stampver_test",
+    srcs = ["script_test.go"],
+    data = [
+        ":ci_copy",
+        "//:.bazelrc",
+        "//tools:workspace_status.cmd",
+        "//tools:workspace_status.sh",
+    ],
+    env_inherit = ["PATH"],
+)

@@ -1,0 +1,4 @@
+exports_files(
+    ["ci.yml"],
+    visibility = ["//visibility:public"],
+)
