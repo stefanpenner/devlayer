@@ -284,8 +284,17 @@ jobs:
       - name: Verify bundle
         shell: bash
         run: |
+          # Only the members asserted below. A full unzip writes every bundled
+          # .exe, and Windows Defender real-time scan then dominates this step.
           mkdir -p /tmp/devlayer-verify
-          unzip -qo devlayer-windows-*.zip -d /tmp/devlayer-verify
+          unzip -qo devlayer-windows-*.zip \
+            'bin/git.cmd' \
+            'bin/nvim.cmd' \
+            'bin/go.cmd' \
+            'bin/gofmt.cmd' \
+            'git/cmd/git.exe' \
+            -d /tmp/devlayer-verify \
+            || { echo "FAIL: zip corrupt or required member missing"; exit 1; }
 
           echo "==> Verifying .cmd wrappers..."
           for f in git nvim go gofmt; do
