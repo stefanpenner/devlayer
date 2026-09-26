@@ -123,6 +123,11 @@ func codeOnly(text string) string {
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
+	// Windows Bazel often ships runfiles as a manifest only. Dotfiles are
+	// then absent from TEST_SRCDIR, so WalkDir never sees .bazelrc.
+	if root, ok := rootFromManifest(); ok {
+		return root
+	}
 	if src := os.Getenv("TEST_SRCDIR"); src != "" {
 		var found string
 		err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
@@ -140,7 +145,7 @@ func repoRoot(t *testing.T) string {
 			return nil
 		})
 		if found == "" {
-			t.Fatalf(".bazelrc not in TEST_SRCDIR %s: %v", src, err)
+			t.Fatalf(".bazelrc not in TEST_SRCDIR %s (manifest %q): %v", src, os.Getenv("RUNFILES_MANIFEST_FILE"), err)
 		}
 		return found
 	}
@@ -159,6 +164,35 @@ func repoRoot(t *testing.T) string {
 		}
 		dir = parent
 	}
+}
+
+func rootFromManifest() (string, bool) {
+	manifest := os.Getenv("RUNFILES_MANIFEST_FILE")
+	if manifest == "" {
+		return "", false
+	}
+	b, err := os.ReadFile(manifest)
+	if err != nil {
+		return "", false
+	}
+	ws := os.Getenv("TEST_WORKSPACE")
+	if ws == "" {
+		ws = "_main"
+	}
+	want := ws + "/.bazelrc"
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimRight(line, "\r")
+		rel, abs, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+		rel = strings.ReplaceAll(rel, "\\", "/")
+		if rel != want {
+			continue
+		}
+		return filepath.Dir(strings.TrimSpace(abs)), true
+	}
+	return "", false
 }
 
 func readRepo(t *testing.T, root, rel string) string {
