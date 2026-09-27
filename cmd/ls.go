@@ -162,6 +162,7 @@ func Ls() error {
 	}
 	fmt.Println()
 	lsDotfiles()
+	lsPrivate()
 	fmt.Println()
 	lsNvimPlugins()
 
@@ -220,6 +221,24 @@ func lsDotfiles() {
 
 	l := list.New(items...).Enumerator(list.Dash)
 	fmt.Println(l)
+}
+
+func lsPrivate() {
+	fmt.Println(heading.Render("Private layer"))
+	cfg, err := config.LoadPrivate()
+	if err != nil {
+		fmt.Printf("  %s\n", dimText.Render(err.Error()))
+		return
+	}
+	if cfg == nil {
+		fmt.Println(dimText.Render("  (none configured)"))
+		return
+	}
+	marker := checkMark.String()
+	if _, err := os.Stat(cfg.Path); os.IsNotExist(err) {
+		marker = crossMark.String() + " " + dimText.Render("missing")
+	}
+	fmt.Printf("  %s %s\n", cfg.Path, marker)
 }
 
 // lsNvimPlugins lists installed nvim plugins from the vim.pack directory.

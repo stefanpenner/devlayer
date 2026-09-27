@@ -66,6 +66,19 @@ The sweet spot is:
 2. keep the **runtime layer** opinionated
 3. keep the **dotfile layer** explicit
 4. keep the **SSH layer** config-only
+5. keep a **private layer** off this repo, and opt in per machine
+
+## Private layer
+
+House tools do not belong in this repository. On a machine that should have them, write `~/.config/devlayer/private.toml`:
+
+```toml
+[private]
+repo = "git@github.com:you/private.git"
+path = "~/.ai-private"
+```
+
+`devlayer build` clones or fast-forwards that checkout and writes `devlayer-private.tar.gz`. The tarball omits `.git`. `devlayer install` and `devlayer push` extract it under `$HOME`, then run `$HOME/.ai-private/install.sh` when that file exists. No `private.toml` means no private layer. Do not commit `private.toml` or the private tarball.
 
 ## Common commands
 
