@@ -42,3 +42,44 @@ sync = [
 		t.Errorf("expected .config/nvim, got %s", cfg.Dotfiles.Sync[0])
 	}
 }
+
+func TestLoadPrivateMissing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg, err := LoadPrivate()
+	if err != nil {
+		t.Fatalf("LoadPrivate: %v", err)
+	}
+	if cfg != nil {
+		t.Fatalf("expected no private config, got %+v", cfg)
+	}
+}
+
+func TestLoadPrivate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", "/home/tester")
+
+	cfgDir := filepath.Join(dir, "devlayer")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+[private]
+repo = "git@github.com:example/ai-private.git"
+path = "~/.ai-private"
+`
+	if err := os.WriteFile(filepath.Join(cfgDir, "private.toml"), []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadPrivate()
+	if err != nil {
+		t.Fatalf("LoadPrivate: %v", err)
+	}
+	if cfg.Repo != "git@github.com:example/ai-private.git" {
+		t.Errorf("repo = %q", cfg.Repo)
+	}
+	if cfg.Path != "/home/tester/.ai-private" {
+		t.Errorf("path = %q", cfg.Path)
+	}
+}

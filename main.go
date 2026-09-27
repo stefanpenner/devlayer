@@ -25,7 +25,7 @@ func usage() {
 	fmt.Print(`Usage: devlayer <command> [options]
 
 Commands:
-  build [--os OS] [--arch ARCH]   Build bundle + dotfiles + nvim plugins
+  build [--os OS] [--arch ARCH]   Build bundle + dotfiles + private layer + nvim plugins
   push <host>                     Deploy everything to remote host via SSH
   status [host]                   Show installed tool versions (local or SSH)
   install                         Install bundle locally (DEVLAYER_PREFIX, default ~/.local)

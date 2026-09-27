@@ -27,6 +27,8 @@ sync = [
   ".ssh/config",
   ".ssh/config.d",
 ]
+# House tools: a local ~/.config/devlayer/private.toml with [private] repo and path.
+# build skips that layer when the file is absent. Do not commit the file.
 `
 
 // Init writes ~/.config/devlayer/config.toml from the default template.

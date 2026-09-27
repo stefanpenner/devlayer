@@ -91,6 +91,9 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 	if err := buildDotfiles(outDir); err != nil {
 		return err
 	}
+	if err := buildPrivate(outDir); err != nil {
+		return err
+	}
 	if err := buildNvimPlugins(outDir); err != nil {
 		return err
 	}
