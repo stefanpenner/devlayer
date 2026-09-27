@@ -277,6 +277,22 @@ def _tool_repos_impl(module_ctx):
             build_file_content = _exports(["age", "age-keygen"]),
         )
 
+    # shh — binary at tar root
+    for plat, os_name, goarch in [
+        ("linux_amd64", "linux", "amd64"),
+        ("linux_arm64", "linux", "arm64"),
+        ("darwin_arm64", "darwin", "arm64"),
+    ]:
+        _http_archive(sums, 
+            name = "shh_" + plat,
+            urls = ["https://github.com/stefanpenner/shh/releases/download/v{ver}/shh_{os}_{arch}.tar.gz".format(
+                ver = v["SHH"],
+                os = os_name,
+                arch = goarch,
+            )],
+            build_file_content = _exports(["shh"]),
+        )
+
     # ═══════════════════════════════════════════════════════════════════════════
     # Single-binary tools (http_file)
     # ═══════════════════════════════════════════════════════════════════════════
