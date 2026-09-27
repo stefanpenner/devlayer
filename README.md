@@ -130,6 +130,7 @@ devlayer status
 | btop | yes | yes | — |
 | dust | yes | yes | yes |
 | age | yes | yes | yes |
+| shh | yes | yes | yes |
 | zig (cc/c++) | yes | yes | yes |
 | make | yes | yes | — |
 | batman | yes | yes | — |

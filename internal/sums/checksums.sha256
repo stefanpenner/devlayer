@@ -53,6 +53,10 @@ b67e1836c468e42e411984b56e52fa7abec08c2bd22c867398e7cc134aac5e12  https://github
 d76c4317f7d5dba69f8a2a15856c90c777e7f0dd4e85f0de8c76de6992c374d4  https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-unknown-linux-musl.tar.gz
 a227701b8551c35a9931d9f6da75503cf86d88e182d71fb849a70864c5d57cd7  https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip
 761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7  https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-unknown-linux-musl.tar.gz
+51081d185089e623fe09d19ab8b510c14c5658ea1bb1817e2da521c4f79478d6  https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_darwin_arm64.tar.gz
+6a37dced2fb47ea10d0cce82aa579572dec4e5795e88752c75a7cfad389d457b  https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_amd64.tar.gz
+0aeff3247d0e906d0a76ced9c560c64d44b05e80e0cbd79c442edb69ef41b425  https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_arm64.tar.gz
+b815a2bda435a588d20c8baf25f1c74947f3633d76bd24dca5928360e6283fa6  https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_windows_amd64.zip
 9e5045510ef86beae658b5fcf58e7b6c76f5b63788498b956d54bc1038faa806  https://github.com/zdharma-continuum/fast-syntax-highlighting/archive/refs/tags/v1.56.tar.gz
 0df7affff21cd87ed298e6a3970ed08a1dd66a6efa676454ee5b091ad503badf  https://github.com/zsh-users/zsh-autosuggestions/archive/refs/tags/v0.7.1.tar.gz
 9b52eca6c894dd98caa5f07160199f3f3179ff017575d5acc9fdc467b1ac70f8  https://github.com/zsh-users/zsh-history-substring-search/archive/refs/tags/v1.1.0.tar.gz

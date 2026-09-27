@@ -27,6 +27,7 @@ GO_VERSION=1.27.1
 GIT_WINDOWS_VERSION=2.55.0.5
 DUST_VERSION=1.2.6
 AGE_VERSION=1.3.2
+SHH_VERSION=0.7.1
 ZIG_VERSION=0.16.0
 ZSH_AUTOSUGGESTIONS_VERSION=v0.7.1
 FAST_SYNTAX_HIGHLIGHTING_VERSION=v1.56
@@ -93,6 +94,7 @@ func TestURLs(t *testing.T) {
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_x86_64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz",
+				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_amd64.tar.gz",
 				"direnv":                       "https://github.com/direnv/direnv/releases/download/v2.37.1/direnv.linux-amd64",
 				"jq":                           "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64",
 				"batman":                       "https://github.com/eth-p/bat-extras/releases/download/v2024.08.24/bat-extras-2024.08.24.zip",
@@ -119,6 +121,7 @@ func TestURLs(t *testing.T) {
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_arm64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-arm64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-arm64.tar.gz",
+				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_arm64.tar.gz",
 				"direnv":                       "https://github.com/direnv/direnv/releases/download/v2.37.1/direnv.linux-arm64",
 				"jq":                           "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-arm64",
 				"batman":                       "https://github.com/eth-p/bat-extras/releases/download/v2024.08.24/bat-extras-2024.08.24.zip",
@@ -145,6 +148,7 @@ func TestURLs(t *testing.T) {
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Darwin_arm64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz",
+				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_darwin_arm64.tar.gz",
 				"direnv":                       "https://github.com/direnv/direnv/releases/download/v2.37.1/direnv.darwin-arm64",
 				"jq":                           "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64",
 				"batman":                       "https://github.com/eth-p/bat-extras/releases/download/v2024.08.24/bat-extras-2024.08.24.zip",
@@ -172,6 +176,7 @@ func TestURLs(t *testing.T) {
 				"lazygit":    "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Windows_x86_64.zip",
 				"age":        "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-windows-amd64.zip",
 				"age-keygen": "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-windows-amd64.zip",
+				"shh":        "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_windows_amd64.zip",
 				"direnv":     "https://github.com/direnv/direnv/releases/download/v2.37.1/direnv.windows-amd64",
 				"jq":         "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
 				"nvim":       "https://github.com/neovim/neovim/releases/download/v0.12.5/nvim-win64.zip",
@@ -256,7 +261,7 @@ func TestURLsJqWindowsVsUnix(t *testing.T) {
 var allTools = []string{
 	"fd", "bat", "rg", "delta", "dust", "eza",
 	"fzf", "lazygit",
-	"age", "age-keygen",
+	"age", "age-keygen", "shh",
 	"direnv", "jq",
 	"batman", "nvim", "go", "zig", "git", "fzf-shell",
 	"zsh-autosuggestions", "zsh-fast-syntax-highlighting",

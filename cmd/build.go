@@ -1058,7 +1058,7 @@ func VersionSummary(vers *versions.Versions) string {
 		{"nvim", "NVIM_VERSION"}, {"go", "GO_VERSION"}, {"git", "GIT_VERSION"},
 		{"git-win", "GIT_WINDOWS_VERSION"}, {"zsh", "ZSH_VERSION"},
 		{"htop", "HTOP_VERSION"}, {"btop", "BTOP_VERSION"}, {"dust", "DUST_VERSION"},
-		{"age", "AGE_VERSION"}, {"zig", "ZIG_VERSION"}, {"make", "MAKE_VERSION"},
+		{"age", "AGE_VERSION"}, {"shh", "SHH_VERSION"}, {"zig", "ZIG_VERSION"}, {"make", "MAKE_VERSION"},
 		{"ncurses", "NCURSES_VERSION"}, {"batman", "BAT_EXTRAS_VERSION"},
 	}
 	var b strings.Builder

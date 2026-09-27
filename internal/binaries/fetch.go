@@ -107,6 +107,12 @@ func fetchGoTools(binDir string, p *platform.Platform, urls map[string]string) e
 			return fmt.Errorf("download lazygit: %w", err)
 		}
 	}
+
+	if url, ok := urls["shh"]; ok {
+		if err := extractBin(url, binDir, "shh"+p.ExeSuffix, p.ArchiveExt()); err != nil {
+			return fmt.Errorf("download shh: %w", err)
+		}
+	}
 	return nil
 }
 

@@ -39,6 +39,7 @@ func URLs(p *platform.Platform, vers *versions.Versions, skip map[string]bool) (
 	age := ageURL(p, vers.Get("AGE_VERSION"))
 	put("age", age)
 	put("age-keygen", age)
+	put("shh", shhURL(p, vers.Get("SHH_VERSION")))
 
 	put("direnv", direnvURL(p, vers.Get("DIRENV_VERSION")))
 	put("jq", jqURL(p, vers.Get("JQ_VERSION")))
@@ -107,6 +108,11 @@ func lazygitURL(p *platform.Platform, ver string) string {
 func ageURL(p *platform.Platform, ver string) string {
 	asset := fmt.Sprintf("age-v%s-%s-%s.%s", ver, p.OS, p.GoArch, p.ArchiveExt())
 	return githubRelease("FiloSottile/age", "v"+ver, asset)
+}
+
+func shhURL(p *platform.Platform, ver string) string {
+	asset := fmt.Sprintf("shh_%s_%s.%s", p.OS, p.GoArch, p.ArchiveExt())
+	return githubRelease("stefanpenner/shh", "v"+ver, asset)
 }
 
 func direnvURL(p *platform.Platform, ver string) string {
