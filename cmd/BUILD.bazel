@@ -40,7 +40,6 @@ go_library(
 go_test(
     name = "cmd_test",
     srcs = [
-        "btop_env_test.go",
         "build_nvim_test.go",
         "build_opts_test.go",
         "doctor_test.go",
@@ -51,7 +50,7 @@ go_test(
         "install_test.go",
         "ls_test.go",
         "make_path_test.go",
-        "nvim_env_test.go",
+        "xcode_env_test.go",
         "touch_tree_test.go",
         "upgrade_test.go",
         "wrapper_test.go",

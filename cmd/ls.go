@@ -48,15 +48,9 @@ type statusRow struct {
 
 // bundledBinaries is the product catalog. ls never dumps $prefix/bin.
 func bundledBinaries(osName string) []string {
-	names := []string{
-		"age", "age-keygen", "bat", "batman", "btop", "cc", "c++",
-		"delta", "devlayer", "direnv", "dust", "eza", "fd", "fzf",
-		"gh", "git", "go", "gofmt", "htop", "jq", "lazygit", "make",
-		"nvim", "rg", "zig", "zsh",
-	}
-	if osName != "windows" {
-		names = append(names, "ls")
-	}
+	names := statusToolNames()
+	names = append(names, bundleOnly(osName)...)
+
 	p, err := platform.New(osName, "x86_64")
 	if err != nil {
 		sort.Strings(names)
@@ -71,6 +65,26 @@ func bundledBinaries(osName string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func statusToolNames() []string {
+	names := make([]string, len(statusCatalog))
+	for i, t := range statusCatalog {
+		names[i] = t.name
+	}
+	return names
+}
+
+// bundleOnly are installed binaries status does not probe.
+func bundleOnly(osName string) []string {
+	names := []string{
+		"age", "age-keygen", "batman", "btop",
+		"cc", "c++", "dust", "gofmt",
+	}
+	if osName != "windows" {
+		names = append(names, "ls")
+	}
+	return names
 }
 
 func toolStatus(binDir string, catalog []string) []statusRow {

@@ -2,8 +2,8 @@ package cmd
 
 import "testing"
 
-func TestBtopBuildEnvDarwinUsesSystemClang(t *testing.T) {
-	got := btopBuildEnv(nil, "darwin", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
+func TestDarwinXcodeEnvUsesSystemClang(t *testing.T) {
+	got := darwinXcodeEnv(nil, "darwin", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 
 	want := map[string]bool{
 		"CC=/usr/bin/clang":    false,
@@ -24,9 +24,9 @@ func TestBtopBuildEnvDarwinUsesSystemClang(t *testing.T) {
 	}
 }
 
-func TestBtopBuildEnvNonDarwinUnchanged(t *testing.T) {
+func TestDarwinXcodeEnvNonDarwinUnchanged(t *testing.T) {
 	base := []string{"A=B"}
-	got := btopBuildEnv(base, "linux", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
+	got := darwinXcodeEnv(base, "linux", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 	if len(got) != 1 || got[0] != "A=B" {
 		t.Fatalf("unexpected env: %v", got)
 	}

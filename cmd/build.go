@@ -98,37 +98,80 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 	return nil
 }
 
-func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir string) error {
-	p, err := platform.New("darwin", opts.arch)
+func buildDarwin(opts buildOptions, vers *versions.Versions, outDir string) error {
+	p, root, binDir, err := stage("darwin", opts.arch)
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(root)
 
-	// Use ArchGeneric for display and filenames (arm64, not aarch64, for darwin)
-	displayArch := p.ArchGeneric
-	fmt.Printf("==> Building devlayer for darwin/%s...\n", displayArch)
+	if err := fetchPrebuilts(root, p, vers, map[string]bool{"nvim": true}); err != nil {
+		return err
+	}
+	if err := compileDarwinTools(root, binDir, vers, opts.nvimHead); err != nil {
+		return err
+	}
+	if err := writeDarwinWrappers(binDir); err != nil {
+		return err
+	}
+	if err := installSelf(binDir, "devlayer"); err != nil {
+		return err
+	}
+	output := filepath.Join(outDir, fmt.Sprintf("devlayer-darwin-%s.tar.gz", p.ArchGeneric))
+	return finishBundle(root, output, p.BundleExt)
+}
 
-	out, err := os.MkdirTemp("", "devlayer-build-*")
+func buildWindows(arch string, vers *versions.Versions, outDir string) error {
+	p, root, binDir, err := stage("windows", arch)
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(out)
+	defer os.RemoveAll(root)
 
-	binDir := filepath.Join(out, "bin")
-	if err := os.MkdirAll(binDir, 0755); err != nil {
+	if err := fetchPrebuilts(root, p, vers, nil); err != nil {
 		return err
 	}
-
-	fmt.Println("==> Downloading binaries (darwin/" + displayArch + ")")
-
-	// Skip nvim download — we build it from source
-	if err := downloadAll(out, p, vers, map[string]bool{"nvim": true}); err != nil {
+	if err := writeWindowsWrappers(binDir); err != nil {
 		return err
 	}
+	name := "devlayer"
+	if runtime.GOOS == "windows" {
+		name = "devlayer.exe"
+	}
+	if err := installSelf(binDir, name); err != nil {
+		return err
+	}
+	output := filepath.Join(outDir, fmt.Sprintf("devlayer-windows-%s.zip", p.ArchGeneric))
+	return finishBundle(root, output, p.BundleExt)
+}
 
-	// Build tools from source for best portability
+func stage(goos, arch string) (p *platform.Platform, root, binDir string, err error) {
+	p, err = platform.New(goos, arch)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	fmt.Printf("==> Building devlayer for %s/%s...\n", goos, p.ArchGeneric)
+	root, err = os.MkdirTemp("", "devlayer-build-*")
+	if err != nil {
+		return nil, "", "", err
+	}
+	binDir = filepath.Join(root, "bin")
+	if err = os.MkdirAll(binDir, 0755); err != nil {
+		os.RemoveAll(root)
+		return nil, "", "", err
+	}
+	return p, root, binDir, nil
+}
+
+func fetchPrebuilts(root string, p *platform.Platform, vers *versions.Versions, skip map[string]bool) error {
+	fmt.Println("==> Downloading binaries (" + p.OS + "/" + p.ArchGeneric + ")")
+	return downloadAll(root, p, vers, skip)
+}
+
+func compileDarwinTools(root, binDir string, vers *versions.Versions, nvimHead bool) error {
 	fmt.Println("==> Building tools from source...")
-	if err := buildNvim(out, vers, opts.nvimHead); err != nil {
+	if err := buildNvim(root, vers, nvimHead); err != nil {
 		return err
 	}
 	if err := buildHtop(binDir, vers); err != nil {
@@ -138,100 +181,41 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir string) e
 		return err
 	}
 
-	// Build eza from source (no pre-built macOS binary)
-	libexecDir := filepath.Join(out, "libexec")
+	libexecDir := filepath.Join(root, "libexec")
 	if err := os.MkdirAll(libexecDir, 0755); err != nil {
 		return fmt.Errorf("mkdir libexec: %w", err)
 	}
 	if err := buildEza(libexecDir, vers); err != nil {
 		return err
 	}
+	return buildMake(binDir, vers)
+}
 
-	// Build make from source
-	if err := buildMake(binDir, vers); err != nil {
-		return err
+func writeDarwinWrappers(binDir string) error {
+	script := `#!/bin/sh
+PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+export EZA_CONFIG_DIR="$PREFIX/share/eza"
+exec "$PREFIX/libexec/eza" "$@"
+`
+	for _, name := range []string{"eza", "ls"} {
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte(script), 0755); err != nil {
+			return fmt.Errorf("wrapper %s: %w", name, err)
+		}
 	}
 
-	// Create wrapper scripts in bin/ for tools with runtime dependencies
 	wrappers := []wrapper{
 		{"nvim", "nvim/bin/nvim", map[string]string{"VIMRUNTIME": "$PREFIX/nvim/share/nvim/runtime"}},
 		{"go", "go/bin/go", map[string]string{"GOROOT": "$PREFIX/go"}},
 		{"gofmt", "go/bin/gofmt", map[string]string{"GOROOT": "$PREFIX/go"}},
 		{"zig", "zig/zig", nil},
 	}
-
-	// Create eza wrapper that sets EZA_CONFIG_DIR for the bundled theme
-	// Real binary lives in libexec/eza to avoid naming conflict with wrapper
-	ezaWrapper := `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
-export EZA_CONFIG_DIR="$PREFIX/share/eza"
-exec "$PREFIX/libexec/eza" "$@"
-`
-	if err := os.WriteFile(filepath.Join(binDir, "eza"), []byte(ezaWrapper), 0755); err != nil {
-		return fmt.Errorf("wrapper eza: %w", err)
-	}
-	// Create ls alias that delegates to eza
-	if err := os.WriteFile(filepath.Join(binDir, "ls"), []byte(ezaWrapper), 0755); err != nil {
-		return fmt.Errorf("wrapper ls: %w", err)
-	}
 	if err := createUnixWrappers(binDir, wrappers); err != nil {
 		return err
 	}
-
-	// Create cc/c++ convenience wrappers that delegate to zig
-	if err := createZigCCWrappers(binDir); err != nil {
-		return err
-	}
-
-	// Copy self into bundle
-	if self, err := os.Executable(); err == nil {
-		fmt.Println("  devlayer")
-		if err := copyFile(self, filepath.Join(binDir, "devlayer")); err != nil {
-			return fmt.Errorf("copy devlayer: %w", err)
-		}
-	}
-
-	// Generate checksums
-	if err := generateChecksums(out); err != nil {
-		return err
-	}
-
-	outputFile := filepath.Join(scriptDir, fmt.Sprintf("devlayer-darwin-%s.tar.gz", displayArch))
-	if err := archive.CreateTarGz(outputFile, out); err != nil {
-		return err
-	}
-
-	docker.PrintSize(outputFile)
-	fmt.Println("==> Build complete.")
-	return nil
+	return createZigCCWrappers(binDir)
 }
 
-func buildWindows(arch string, vers *versions.Versions, scriptDir string) error {
-	p, err := platform.New("windows", arch)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("==> Building devlayer for windows/%s...\n", p.ArchGeneric)
-
-	out, err := os.MkdirTemp("", "devlayer-build-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(out)
-
-	binDir := filepath.Join(out, "bin")
-	if err := os.MkdirAll(binDir, 0755); err != nil {
-		return err
-	}
-
-	fmt.Println("==> Downloading binaries (windows/" + p.ArchGeneric + ")")
-
-	if err := downloadAll(out, p, vers, nil); err != nil {
-		return err
-	}
-
-	// Create .cmd wrapper scripts for Windows
+func writeWindowsWrappers(binDir string) error {
 	wrappers := []wrapper{
 		{"git", `git\cmd\git.exe`, map[string]string{"GIT_EXEC_PATH": `%PREFIX%\git\mingw64\libexec\git-core`}},
 		{"nvim", `nvim\bin\nvim.exe`, map[string]string{"VIMRUNTIME": `%PREFIX%\nvim\share\nvim\runtime`}},
@@ -242,37 +226,46 @@ func buildWindows(arch string, vers *versions.Versions, scriptDir string) error 
 	if err := createWindowsWrappers(binDir, wrappers); err != nil {
 		return err
 	}
+	return createZigCCWrappersWindows(binDir)
+}
 
-	// Create cc/c++ wrappers for Windows
-	if err := createZigCCWrappersWindows(binDir); err != nil {
+func installSelf(binDir, name string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	fmt.Println("  devlayer")
+	if err := copyFile(self, filepath.Join(binDir, name)); err != nil {
+		return fmt.Errorf("copy devlayer: %w", err)
+	}
+	return nil
+}
+
+func finishBundle(root, output, ext string) error {
+	if err := generateChecksums(root); err != nil {
 		return err
 	}
-
-	// Copy self into bundle
-	if self, err := os.Executable(); err == nil {
-		fmt.Println("  devlayer")
-		destName := "devlayer"
-		if runtime.GOOS == "windows" {
-			destName = "devlayer.exe"
-		}
-		if err := copyFile(self, filepath.Join(binDir, destName)); err != nil {
-			return fmt.Errorf("copy devlayer: %w", err)
-		}
+	var err error
+	if ext == "zip" {
+		err = archive.CreateZip(output, root)
+	} else {
+		err = archive.CreateTarGz(output, root)
 	}
-
-	// Generate checksums
-	if err := generateChecksums(out); err != nil {
+	if err != nil {
 		return err
 	}
-
-	outputFile := filepath.Join(scriptDir, fmt.Sprintf("devlayer-windows-%s.zip", p.ArchGeneric))
-	if err := archive.CreateZip(outputFile, out); err != nil {
-		return err
-	}
-
-	docker.PrintSize(outputFile)
+	printSize(output)
 	fmt.Println("==> Build complete.")
 	return nil
+}
+
+func printSize(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	mb := float64(info.Size()) / 1024 / 1024
+	fmt.Printf("  %s (%.0f MB)\n", path, mb)
 }
 
 func buildLinux(arch, scriptDir, outDir string, vers *versions.Versions) error {
@@ -300,7 +293,7 @@ func bazelLinuxBundle(arch, scriptDir, outDir string) error {
 	if err := copyFile(src, dst); err != nil {
 		return err
 	}
-	docker.PrintSize(dst)
+	printSize(dst)
 	fmt.Println("==> Build complete.")
 	return nil
 }
@@ -334,7 +327,7 @@ func dockerLinuxBundle(arch, scriptDir, outDir string, vers *versions.Versions) 
 		return fmt.Errorf("docker run: %w", err)
 	}
 
-	docker.PrintSize(outputFile)
+	printSize(outputFile)
 	fmt.Println("==> Build complete.")
 	return nil
 }
@@ -357,48 +350,24 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
 		return fmt.Errorf("download btop source: %w", err)
 	}
-
-	// Find extracted directory
-	entries, err := os.ReadDir(srcDir)
+	srcRoot, err := tarballRoot(srcDir, "btop-", "btop")
 	if err != nil {
 		return err
 	}
-	var srcRoot string
-	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "btop-") {
-			srcRoot = filepath.Join(srcDir, e.Name())
-			break
-		}
-	}
-	if srcRoot == "" {
-		return fmt.Errorf("btop source directory not found")
-	}
 
 	buildDir := filepath.Join(srcRoot, "build")
-
-	// cmake configure
-	configure := exec.Command("cmake", "-B", buildDir, "-S", srcRoot,
+	env := darwinXcodeEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
+	if err := run("", env, "cmake", "-B", buildDir, "-S", srcRoot,
 		"-DCMAKE_BUILD_TYPE=Release",
 		"-DBTOP_GPU=OFF",
 		"-DBTOP_LTO=ON",
-	)
-	configure.Env = btopBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	configure.Stdout = os.Stdout
-	configure.Stderr = os.Stderr
-	if err := configure.Run(); err != nil {
+	); err != nil {
 		return fmt.Errorf("btop cmake configure: %w", err)
 	}
-
-	// cmake build
-	build := exec.Command("cmake", "--build", buildDir, "--config", "Release")
-	build.Env = btopBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
+	if err := run("", env, "cmake", "--build", buildDir, "--config", "Release"); err != nil {
 		return fmt.Errorf("btop cmake build: %w", err)
 	}
 
-	// Find and copy binary — cmake may place it in build/ or build/bin/
 	btopBin := filepath.Join(buildDir, "btop")
 	if _, err := os.Stat(btopBin); err != nil {
 		btopBin = filepath.Join(buildDir, "bin", "btop")
@@ -406,7 +375,6 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	if err := copyFile(btopBin, filepath.Join(binDir, "btop")); err != nil {
 		return fmt.Errorf("copy btop: %w", err)
 	}
-
 	return nil
 }
 
@@ -434,48 +402,23 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	}
 	srcRoot := filepath.Join(srcDir, "neovim")
 	cloneArgs = append(cloneArgs, srcRoot)
-
-	clone := exec.Command("git", cloneArgs...)
-	clone.Stdout = os.Stdout
-	clone.Stderr = os.Stderr
-	if err := clone.Run(); err != nil {
+	if err := run("", nil, "git", cloneArgs...); err != nil {
 		return fmt.Errorf("nvim git clone: %w", err)
 	}
 
 	installDir := filepath.Join(outDir, "nvim")
-
-	// cmake configure + build + install
-	build := exec.Command("make",
+	env := darwinXcodeEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
+	if err := run(srcRoot, env, "make",
 		"CMAKE_BUILD_TYPE=Release",
 		fmt.Sprintf("CMAKE_INSTALL_PREFIX=%s", installDir),
 		fmt.Sprintf("-j%d", runtime.NumCPU()),
-	)
-	build.Dir = srcRoot
-	build.Env = nvimBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
+	); err != nil {
 		return fmt.Errorf("nvim build: %w", err)
 	}
-
-	install := exec.Command("make", "install")
-	install.Dir = srcRoot
-	install.Env = nvimBuildEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	install.Stdout = os.Stdout
-	install.Stderr = os.Stderr
-	if err := install.Run(); err != nil {
+	if err := run(srcRoot, env, "make", "install"); err != nil {
 		return fmt.Errorf("nvim install: %w", err)
 	}
-
 	return nil
-}
-
-func nvimBuildEnv(base []string, goos, clang, clangxx, sdk string) []string {
-	return darwinXcodeEnv(base, goos, clang, clangxx, sdk)
-}
-
-func btopBuildEnv(base []string, goos, clang, clangxx, sdk string) []string {
-	return darwinXcodeEnv(base, goos, clang, clangxx, sdk)
 }
 
 func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
@@ -490,23 +433,19 @@ func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
 }
 
 func findXcodeTool(name string) string {
-	path, err := exec.LookPath("xcrun")
-	if err != nil {
-		return ""
-	}
-	out, err := exec.Command(path, "--find", name).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return xcrun("--find", name)
 }
 
 func findXcodeSDK() string {
+	return xcrun("--show-sdk-path")
+}
+
+func xcrun(args ...string) string {
 	path, err := exec.LookPath("xcrun")
 	if err != nil {
 		return ""
 	}
-	out, err := exec.Command(path, "--show-sdk-path").Output()
+	out, err := exec.Command(path, args...).Output()
 	if err != nil {
 		return ""
 	}
@@ -521,6 +460,40 @@ func touchTree(root string) error {
 		}
 		return os.Chtimes(path, now, now)
 	})
+}
+
+func settleTree(root, tool string) error {
+	if err := touchTree(root); err != nil {
+		return fmt.Errorf("%s touch tree: %w", tool, err)
+	}
+	time.Sleep(2 * time.Second)
+	return nil
+}
+
+func tarballRoot(dir, prefix, tool string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
+			return filepath.Join(dir, e.Name()), nil
+		}
+	}
+	return "", fmt.Errorf("%s source directory not found", tool)
+}
+
+func run(dir string, env []string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	if env != nil {
+		cmd.Env = env
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func withEnv(env []string, key, value string) []string {
@@ -578,56 +551,28 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	// Clone source at the pinned version
 	srcRoot := filepath.Join(srcDir, "htop")
-	clone := exec.Command("git", "clone", "--depth", "1", "--branch", ver,
-		"https://github.com/htop-dev/htop.git", srcRoot)
-	clone.Stdout = os.Stdout
-	clone.Stderr = os.Stderr
-	if err := clone.Run(); err != nil {
+	if err := run("", nil, "git", "clone", "--depth", "1", "--branch", ver,
+		"https://github.com/htop-dev/htop.git", srcRoot); err != nil {
 		return fmt.Errorf("htop git clone: %w", err)
 	}
 
-	// autogen
-	autogen := exec.Command("./autogen.sh")
-	autogen.Dir = srcRoot
-	autogen.Env = htopBuildEnv(os.Environ())
-	autogen.Stdout = os.Stdout
-	autogen.Stderr = os.Stderr
-	if err := autogen.Run(); err != nil {
+	env := htopBuildEnv(os.Environ())
+	if err := run(srcRoot, env, "./autogen.sh"); err != nil {
 		return fmt.Errorf("htop autogen: %w", err)
 	}
-
-	if err := touchTree(srcRoot); err != nil {
-		return fmt.Errorf("htop touch tree: %w", err)
+	if err := settleTree(srcRoot, "htop"); err != nil {
+		return err
 	}
-	time.Sleep(2 * time.Second)
-
-	// configure
-	configure := exec.Command("./configure", "CFLAGS=-Os -DNDEBUG")
-	configure.Dir = srcRoot
-	configure.Env = htopBuildEnv(os.Environ())
-	configure.Stdout = os.Stdout
-	configure.Stderr = os.Stderr
-	if err := configure.Run(); err != nil {
+	if err := run(srcRoot, env, "./configure", "CFLAGS=-Os -DNDEBUG"); err != nil {
 		return fmt.Errorf("htop configure: %w", err)
 	}
-
-	// build
-	make := exec.Command("make", fmt.Sprintf("-j%d", runtime.NumCPU()))
-	make.Dir = srcRoot
-	make.Env = htopBuildEnv(os.Environ())
-	make.Stdout = os.Stdout
-	make.Stderr = os.Stderr
-	if err := make.Run(); err != nil {
+	if err := run(srcRoot, env, "make", fmt.Sprintf("-j%d", runtime.NumCPU())); err != nil {
 		return fmt.Errorf("htop build: %w", err)
 	}
-
-	// copy binary
 	if err := copyFile(filepath.Join(srcRoot, "htop"), filepath.Join(binDir, "htop")); err != nil {
 		return fmt.Errorf("copy htop: %w", err)
 	}
-
 	return nil
 }
 
@@ -649,35 +594,23 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	// Clone source at the pinned version
 	srcRoot := filepath.Join(srcDir, "eza")
-	clone := exec.Command("git", "clone", "--depth", "1", "--branch", "v"+ver,
-		"https://github.com/eza-community/eza.git", srcRoot)
-	clone.Stdout = os.Stdout
-	clone.Stderr = os.Stderr
-	if err := clone.Run(); err != nil {
+	if err := run("", nil, "git", "clone", "--depth", "1", "--branch", "v"+ver,
+		"https://github.com/eza-community/eza.git", srcRoot); err != nil {
 		return fmt.Errorf("eza git clone: %w", err)
 	}
 
-	// Build with cargo
 	cargoPath, err := exec.LookPath("cargo")
 	if err != nil {
 		return fmt.Errorf("find cargo: %w", err)
 	}
-	build := exec.Command(cargoPath, "build", "--release")
-	build.Dir = srcRoot
-	build.Env = ezaBuildEnv(os.Environ(), runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
+	env := ezaBuildEnv(os.Environ(), runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
+	if err := run(srcRoot, env, cargoPath, "build", "--release"); err != nil {
 		return fmt.Errorf("eza cargo build: %w", err)
 	}
-
-	// Copy binary
 	if err := copyFile(filepath.Join(srcRoot, "target", "release", "eza"), filepath.Join(binDir, "eza")); err != nil {
 		return fmt.Errorf("copy eza: %w", err)
 	}
-
 	return nil
 }
 
@@ -699,106 +632,63 @@ func buildMake(binDir string, vers *versions.Versions) error {
 	if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
 		return fmt.Errorf("download make source: %w", err)
 	}
-
-	// Find extracted directory
-	entries, err := os.ReadDir(srcDir)
+	srcRoot, err := tarballRoot(srcDir, "make-", "make")
 	if err != nil {
 		return err
 	}
-	var srcRoot string
-	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "make-") {
-			srcRoot = filepath.Join(srcDir, e.Name())
-			break
-		}
-	}
-	if srcRoot == "" {
-		return fmt.Errorf("make source directory not found")
+	if err := settleTree(srcRoot, "make"); err != nil {
+		return err
 	}
 
-	if err := touchTree(srcRoot); err != nil {
-		return fmt.Errorf("make touch tree: %w", err)
-	}
-	time.Sleep(2 * time.Second)
-
-	// configure
-	configure := exec.Command("./configure", "CFLAGS=-Os -DNDEBUG")
-	configure.Dir = srcRoot
-	configure.Env = htopBuildEnv(os.Environ())
-	configure.Stdout = os.Stdout
-	configure.Stderr = os.Stderr
-	if err := configure.Run(); err != nil {
+	env := htopBuildEnv(os.Environ())
+	if err := run(srcRoot, env, "./configure", "CFLAGS=-Os -DNDEBUG"); err != nil {
 		return fmt.Errorf("make configure: %w", err)
 	}
-
-	// build
-	build := exec.Command(buildMakeTool(runtime.GOOS), fmt.Sprintf("-j%d", runtime.NumCPU()))
-	build.Dir = srcRoot
-	build.Env = htopBuildEnv(os.Environ())
-	build.Stdout = os.Stdout
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
+	if err := run(srcRoot, env, buildMakeTool(runtime.GOOS), fmt.Sprintf("-j%d", runtime.NumCPU())); err != nil {
 		return fmt.Errorf("make build: %w", err)
 	}
-
-	// copy binary
 	if err := copyFile(filepath.Join(srcRoot, "make"), filepath.Join(binDir, "make")); err != nil {
 		return fmt.Errorf("copy make: %w", err)
 	}
-
 	return nil
 }
 
-// createZigCCWrappers creates cc and c++ wrapper scripts that delegate to zig.
 func createZigCCWrappers(binDir string) error {
-	ccScript := `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
-
-# Normalize target triples for zig compatibility:
-#   arm64 → aarch64    (zig doesn't recognize Apple's "arm64")
-#   strip "apple" vendor (zig doesn't recognize it in --target)
-#   macosx → macos     (zig uses "macos")
-for arg in "$@"; do
-  shift
-  case "$arg" in
-    --target=*) arg=$(echo "$arg" | sed 's/arm64/aarch64/;s/-apple//;s/macosx/macos/') ;;
-  esac
-  set -- "$@" "$arg"
-done
-
-exec "$PREFIX/zig/zig" cc "$@"
-`
-	cxxScript := `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
-
-# Normalize target triples for zig compatibility:
-#   arm64 → aarch64    (zig doesn't recognize Apple's "arm64")
-#   strip "apple" vendor (zig doesn't recognize it in --target)
-#   macosx → macos     (zig uses "macos")
-for arg in "$@"; do
-  shift
-  case "$arg" in
-    --target=*) arg=$(echo "$arg" | sed 's/arm64/aarch64/;s/-apple//;s/macosx/macos/') ;;
-  esac
-  set -- "$@" "$arg"
-done
-
-exec "$PREFIX/zig/zig" c++ "$@"
-`
-	if err := os.WriteFile(filepath.Join(binDir, "cc"), []byte(ccScript), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "cc"), []byte(zigCCUnix("cc")), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(binDir, "c++"), []byte(cxxScript), 0755)
+	return os.WriteFile(filepath.Join(binDir, "c++"), []byte(zigCCUnix("c++")), 0755)
 }
 
-// createZigCCWrappersWindows creates cc.cmd and c++.cmd wrappers for Windows.
+func zigCCUnix(tool string) string {
+	return `#!/bin/sh
+PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Normalize target triples for zig compatibility:
+#   arm64 → aarch64    (zig doesn't recognize Apple's "arm64")
+#   strip "apple" vendor (zig doesn't recognize it in --target)
+#   macosx → macos     (zig uses "macos")
+for arg in "$@"; do
+  shift
+  case "$arg" in
+    --target=*) arg=$(echo "$arg" | sed 's/arm64/aarch64/;s/-apple//;s/macosx/macos/') ;;
+  esac
+  set -- "$@" "$arg"
+done
+
+exec "$PREFIX/zig/zig" ` + tool + ` "$@"
+`
+}
+
 func createZigCCWrappersWindows(binDir string) error {
-	ccScript := "@echo off\r\n\"%~dp0..\\zig\\zig.exe\" cc %*\r\n"
-	cxxScript := "@echo off\r\n\"%~dp0..\\zig\\zig.exe\" c++ %*\r\n"
-	if err := os.WriteFile(filepath.Join(binDir, "cc.cmd"), []byte(ccScript), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "cc.cmd"), []byte(zigCCWindows("cc")), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(binDir, "c++.cmd"), []byte(cxxScript), 0755)
+	return os.WriteFile(filepath.Join(binDir, "c++.cmd"), []byte(zigCCWindows("c++")), 0755)
+}
+
+func zigCCWindows(tool string) string {
+	return "@echo off\r\n\"%~dp0..\\zig\\zig.exe\" " + tool + " %*\r\n"
 }
 
 // buildDotfiles reads the config and creates a dotfiles tarball.
@@ -871,7 +761,7 @@ func buildDotfiles(scriptDir string) error {
 		return err
 	}
 
-	docker.PrintSize(outputFile)
+	printSize(outputFile)
 	return nil
 }
 
@@ -949,7 +839,7 @@ func buildNvimPlugins(scriptDir string) error {
 		return err
 	}
 
-	docker.PrintSize(outputFile)
+	printSize(outputFile)
 	return nil
 }
 

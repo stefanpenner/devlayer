@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 )
@@ -47,14 +46,4 @@ func ImageExists(image string) bool {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run() == nil
-}
-
-// PrintSize prints the size of a file.
-func PrintSize(path string) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return
-	}
-	mb := float64(info.Size()) / 1024 / 1024
-	fmt.Printf("  %s (%.0f MB)\n", path, mb)
 }

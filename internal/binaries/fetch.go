@@ -72,7 +72,7 @@ func Fetch(out string, p *platform.Platform, vers *versions.Versions, skip map[s
 }
 
 func fetchRust(binDir string, p *platform.Platform, urls map[string]string) error {
-	ext := p.RustArchiveExt()
+	ext := p.ArchiveExt()
 	for _, name := range []string{"fd", "bat", "rg", "delta", "dust"} {
 		url, ok := urls[name]
 		if !ok {
@@ -97,13 +97,13 @@ func fetchRust(binDir string, p *platform.Platform, urls map[string]string) erro
 
 func fetchGoTools(binDir string, p *platform.Platform, urls map[string]string) error {
 	if url, ok := urls["fzf"]; ok {
-		if err := extractBin(url, binDir, "fzf"+p.ExeSuffix, p.FzfArchiveExt()); err != nil {
+		if err := extractBin(url, binDir, "fzf"+p.ExeSuffix, p.ArchiveExt()); err != nil {
 			return fmt.Errorf("download fzf: %w", err)
 		}
 	}
 
 	if url, ok := urls["lazygit"]; ok {
-		if err := extractBin(url, binDir, "lazygit"+p.ExeSuffix, p.LazygitArchiveExt()); err != nil {
+		if err := extractBin(url, binDir, "lazygit"+p.ExeSuffix, p.ArchiveExt()); err != nil {
 			return fmt.Errorf("download lazygit: %w", err)
 		}
 	}
@@ -185,7 +185,7 @@ func fetchNvim(out string, p *platform.Platform, urls map[string]string) error {
 	}
 
 	fmt.Println("  nvim")
-	if err := extractFull(url, filepath.Join(out, "nvim"), 1, p.NvimArchiveExt()); err != nil {
+	if err := extractFull(url, filepath.Join(out, "nvim"), 1, p.ArchiveExt()); err != nil {
 		return fmt.Errorf("download nvim: %w", err)
 	}
 	return nil
@@ -198,7 +198,7 @@ func fetchGoSDK(out string, p *platform.Platform, urls map[string]string) error 
 	}
 
 	fmt.Println("  go")
-	if err := extractFull(url, out, 0, p.GoArchiveExt()); err != nil {
+	if err := extractFull(url, out, 0, p.ArchiveExt()); err != nil {
 		return fmt.Errorf("download go: %w", err)
 	}
 	return nil

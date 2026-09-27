@@ -37,52 +37,63 @@ func Doctor() error {
 
 func inspectPrefix(prefix, pathEnv string) []finding {
 	bin := filepath.Join(prefix, "bin")
+	onPath := binOnPath(bin, pathEnv)
+	n := toolCount(bin)
+	cfg := config.Path()
 	out := []finding{
 		{"prefix", dirExists(prefix), prefix},
 		{"bin", dirExists(bin), bin},
+		{"PATH", onPath, pathDetail(bin, onPath)},
+		{"tools", n > 0, fmt.Sprintf("%d files in bin", n)},
+		{"config", fileExists(cfg), cfg},
 	}
 
-	pathOK := false
-	for _, p := range strings.Split(pathEnv, string(os.PathListSeparator)) {
-		if filepath.Clean(p) == filepath.Clean(bin) {
-			pathOK = true
-			break
-		}
+	if nvim := filepath.Join(bin, "nvim"); fileExists(nvim) {
+		out = append(out, finding{"nvim", fileContains(nvim, "VIMRUNTIME"), "wrapper sets VIMRUNTIME"})
 	}
-	detail := "not on PATH — export PATH=\"" + bin + ":$PATH\""
-	if pathOK {
-		detail = bin + " is on PATH"
-	}
-	out = append(out, finding{"PATH", pathOK, detail})
-
-	entries, err := os.ReadDir(bin)
-	n := 0
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() && !strings.HasPrefix(e.Name(), "._") {
-				n++
-			}
-		}
-	}
-	out = append(out, finding{"tools", n > 0, fmt.Sprintf("%d files in bin", n)})
-
-	cfg := config.Path()
-	out = append(out, finding{"config", fileExists(cfg), cfg})
-
-	nvim := filepath.Join(bin, "nvim")
-	if fileExists(nvim) {
-		data, _ := os.ReadFile(nvim)
-		ok := strings.Contains(string(data), "VIMRUNTIME")
-		out = append(out, finding{"nvim", ok, "wrapper sets VIMRUNTIME"})
-	}
-	goBin := filepath.Join(bin, "go")
-	if fileExists(goBin) {
-		data, _ := os.ReadFile(goBin)
-		ok := strings.Contains(string(data), "GOROOT")
-		out = append(out, finding{"go", ok, "wrapper sets GOROOT"})
+	if goBin := filepath.Join(bin, "go"); fileExists(goBin) {
+		out = append(out, finding{"go", fileContains(goBin, "GOROOT"), "wrapper sets GOROOT"})
 	}
 
 	return out
+}
+
+func binOnPath(bin, pathEnv string) bool {
+	for _, p := range strings.Split(pathEnv, string(os.PathListSeparator)) {
+		if filepath.Clean(p) == filepath.Clean(bin) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathDetail(bin string, onPath bool) string {
+	if onPath {
+		return bin + " is on PATH"
+	}
+	return "not on PATH — export PATH=\"" + bin + ":$PATH\""
+}
+
+func toolCount(bin string) int {
+	entries, err := os.ReadDir(bin)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() && !strings.HasPrefix(e.Name(), "._") {
+			n++
+		}
+	}
+	return n
+}
+
+func fileContains(p, needle string) bool {
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), needle)
 }
 
 func dirExists(p string) bool {
