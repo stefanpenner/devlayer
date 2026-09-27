@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
@@ -44,6 +46,18 @@ func TestBuildPrivatePacksCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertPacked(t, filepath.Join(out, privateTarName), "marker.txt", "from-pull")
+	cfg, err := config.LoadPrivate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Path != dest {
+		t.Fatalf("path = %q, want %s", cfg.Path, dest)
+	}
+	// install.sh is a Unix script. Windows runners check out text with CRLF
+	// and cannot exec the shebang.
+	if runtime.GOOS == "windows" {
+		return
+	}
 
 	home := t.TempDir()
 	marker := filepath.Join(home, "ran")
@@ -55,15 +69,8 @@ func TestBuildPrivatePacksCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "ok\n" {
+	if strings.TrimRight(string(got), "\r\n") != "ok" {
 		t.Fatalf("install marker = %q", got)
-	}
-	cfg, err := config.LoadPrivate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Path != dest {
-		t.Fatalf("path = %q, want %s", cfg.Path, dest)
 	}
 }
 
@@ -95,7 +102,7 @@ func assertPacked(t *testing.T, tarPath, name, want string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != want+"\n" && string(got) != want {
+	if strings.TrimRight(string(got), "\r\n") != want {
 		t.Fatalf("%s = %q, want %s", name, got, want)
 	}
 	if _, err := os.Stat(filepath.Join(dest, ".ai-private", ".git")); !os.IsNotExist(err) {
