@@ -80,7 +80,9 @@ func writePrivateTOML(t *testing.T, xdg, repo, path string) {
 }
 
 func quoteTOML(s string) string {
-	return "\"" + s + "\""
+	// Single quotes are literal in TOML. A Windows path has \U, which a
+	// double-quoted string treats as a Unicode escape.
+	return "'" + s + "'"
 }
 
 func assertPacked(t *testing.T, tarPath, name, want string) {

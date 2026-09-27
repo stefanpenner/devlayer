@@ -56,8 +56,11 @@ func TestLoadPrivateMissing(t *testing.T) {
 
 func TestLoadPrivate(t *testing.T) {
 	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("HOME", "/home/tester")
+	// Unix UserHomeDir reads HOME. Windows reads USERPROFILE.
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	cfgDir := filepath.Join(dir, "devlayer")
 	if err := os.MkdirAll(cfgDir, 0755); err != nil {
@@ -79,7 +82,7 @@ path = "~/.ai-private"
 	if cfg.Repo != "git@github.com:example/ai-private.git" {
 		t.Errorf("repo = %q", cfg.Repo)
 	}
-	if cfg.Path != "/home/tester/.ai-private" {
+	if cfg.Path != filepath.Join(home, ".ai-private") {
 		t.Errorf("path = %q", cfg.Path)
 	}
 }
