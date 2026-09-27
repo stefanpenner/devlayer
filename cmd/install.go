@@ -5,35 +5,24 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"os/exec"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
+	"github.com/stefanpenner/devlayer/internal/platform"
 )
 
 // Install extracts a devlayer bundle to the local DEVLAYER_PREFIX.
 func Install(scriptDir string) error {
-	osName := strings.ToLower(runtime.GOOS)
-	arch := runtime.GOARCH
-	switch arch {
-	case "amd64":
-		arch = "x86_64"
-	case "arm64":
-		if osName == "linux" {
-			arch = "aarch64"
-		}
+	p, err := platform.New(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
 	}
-
-	ext := "tar.gz"
-	if osName == "windows" {
-		ext = "zip"
-	}
-
-	bundleName := fmt.Sprintf("devlayer-%s-%s.%s", osName, arch, ext)
+	arch := bundleArch(p)
+	bundleName := fmt.Sprintf("devlayer-%s-%s.%s", p.OS, arch, p.BundleExt)
 	bundle, err := findBundle(bundleName, scriptDir)
 	if err != nil {
-		return fmt.Errorf("%w\nRun: devlayer build --os %s --arch %s", err, osName, arch)
+		return fmt.Errorf("%w\nRun: devlayer build --os %s --arch %s", err, p.OS, arch)
 	}
 
 	prefix := defaultPrefix()
@@ -43,7 +32,7 @@ func Install(scriptDir string) error {
 		return err
 	}
 
-	if ext == "zip" {
+	if p.BundleExt == "zip" {
 		err = archive.ExtractZip(bundle, prefix)
 	} else {
 		err = archive.ExtractTarGz(bundle, prefix)
@@ -88,6 +77,14 @@ func Install(scriptDir string) error {
 
 	fmt.Printf("==> Done. Ensure PATH includes %s%cbin\n", prefix, filepath.Separator)
 	return nil
+}
+
+// Linux bundles use the Rust arch (aarch64). Darwin and Windows use ArchGeneric (arm64).
+func bundleArch(p *platform.Platform) string {
+	if p.OS == "linux" {
+		return p.RustArch
+	}
+	return p.ArchGeneric
 }
 
 // defaultPrefix returns the install location from DEVLAYER_PREFIX or the platform default.

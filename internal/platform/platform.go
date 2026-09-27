@@ -117,25 +117,8 @@ func (p *Platform) RustTargetFor(project string) string {
 	}
 }
 
-// RustArchiveExt returns the archive extension for Rust tool releases.
-// Windows uses .zip, everything else uses .tar.gz.
-func (p *Platform) RustArchiveExt() string {
-	if p.OS == "windows" {
-		return "zip"
-	}
-	return "tar.gz"
-}
-
-// FzfArchiveExt returns the archive extension for fzf releases.
-func (p *Platform) FzfArchiveExt() string {
-	if p.OS == "windows" {
-		return "zip"
-	}
-	return "tar.gz"
-}
-
-// LazygitArchiveExt returns the archive extension for lazygit releases.
-func (p *Platform) LazygitArchiveExt() string {
+// ArchiveExt is zip on Windows and tar.gz elsewhere.
+func (p *Platform) ArchiveExt() string {
 	if p.OS == "windows" {
 		return "zip"
 	}
@@ -148,20 +131,4 @@ func (p *Platform) NvimArchiveName(version string) string {
 		return fmt.Sprintf("nvim-%s", p.NvimOS)
 	}
 	return fmt.Sprintf("nvim-%s-%s", p.NvimOS, p.ArchGeneric)
-}
-
-// NvimArchiveExt returns the archive extension for nvim releases.
-func (p *Platform) NvimArchiveExt() string {
-	if p.OS == "windows" {
-		return "zip"
-	}
-	return "tar.gz"
-}
-
-// GoArchiveExt returns the archive extension for Go SDK releases.
-func (p *Platform) GoArchiveExt() string {
-	if p.OS == "windows" {
-		return "zip"
-	}
-	return "tar.gz"
 }

@@ -16,11 +16,7 @@ const autoUpdateInterval = 24 * time.Hour
 // It prints a notice (and release notes if present). It never installs;
 // run `devlayer upgrade` for that.
 func AutoUpdate(currentVersion string) {
-	if os.Getenv("DEVLAYER_NO_AUTOUPDATE") != "" {
-		return
-	}
-
-	if currentVersion == "dev" {
+	if os.Getenv("DEVLAYER_NO_AUTOUPDATE") != "" || currentVersion == "dev" {
 		return
 	}
 
@@ -29,15 +25,13 @@ func AutoUpdate(currentVersion string) {
 		return
 	}
 
-	// Write the stamp immediately so a failure doesn't cause repeated
-	// attempts on every invocation.
+	// Stamp before the fetch so a network failure does not retry every command.
 	writeStamp(stampFile)
 
 	release, err := getLatestRelease()
 	if err != nil {
-		return // network errors are silently ignored
+		return
 	}
-
 	if sameVersion(release.TagName, currentVersion) {
 		return
 	}
@@ -46,20 +40,22 @@ func AutoUpdate(currentVersion string) {
 }
 
 func autoUpdateStampFile() string {
-	dataHome := os.Getenv("XDG_DATA_HOME")
-	if dataHome == "" {
-		home, _ := os.UserHomeDir()
-		if runtime.GOOS == "windows" {
-			if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
-				dataHome = localAppData
-			} else {
-				dataHome = filepath.Join(home, "AppData", "Local")
-			}
-		} else {
-			dataHome = filepath.Join(home, ".local", "share")
-		}
+	return filepath.Join(dataHome(), "devlayer", "last-update-check")
+}
+
+func dataHome() string {
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return dir
 	}
-	return filepath.Join(dataHome, "devlayer", "last-update-check")
+	if runtime.GOOS == "windows" {
+		if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
+			return dir
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "AppData", "Local")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "share")
 }
 
 func shouldAutoUpdate(stampFile string) bool {

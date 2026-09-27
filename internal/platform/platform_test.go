@@ -200,35 +200,19 @@ func TestIsWindows(t *testing.T) {
 	}
 }
 
-func TestArchiveExtensions(t *testing.T) {
+func TestArchiveExt(t *testing.T) {
 	tests := []struct {
-		os       string
-		wantRust string
-		wantFzf  string
-		wantNvim string
-		wantGo   string
+		os, want string
 	}{
-		{"linux", "tar.gz", "tar.gz", "tar.gz", "tar.gz"},
-		{"darwin", "tar.gz", "tar.gz", "tar.gz", "tar.gz"},
-		{"windows", "zip", "zip", "zip", "zip"},
+		{"linux", "tar.gz"},
+		{"darwin", "tar.gz"},
+		{"windows", "zip"},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.os, func(t *testing.T) {
-			p, _ := New(tt.os, "x86_64")
-			if got := p.RustArchiveExt(); got != tt.wantRust {
-				t.Errorf("RustArchiveExt() = %q, want %q", got, tt.wantRust)
-			}
-			if got := p.FzfArchiveExt(); got != tt.wantFzf {
-				t.Errorf("FzfArchiveExt() = %q, want %q", got, tt.wantFzf)
-			}
-			if got := p.NvimArchiveExt(); got != tt.wantNvim {
-				t.Errorf("NvimArchiveExt() = %q, want %q", got, tt.wantNvim)
-			}
-			if got := p.GoArchiveExt(); got != tt.wantGo {
-				t.Errorf("GoArchiveExt() = %q, want %q", got, tt.wantGo)
-			}
-		})
+		p, _ := New(tt.os, "x86_64")
+		if got := p.ArchiveExt(); got != tt.want {
+			t.Errorf("ArchiveExt(%s) = %q, want %q", tt.os, got, tt.want)
+		}
 	}
 }
 

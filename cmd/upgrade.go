@@ -10,27 +10,18 @@ import (
 	"strings"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
+	"github.com/stefanpenner/devlayer/internal/platform"
 )
 
 // Upgrade downloads the latest release and installs it.
 func Upgrade(currentVersion string) error {
 	prefix := defaultPrefix()
 
-	osName := strings.ToLower(runtime.GOOS)
-	arch := runtime.GOARCH
-	switch arch {
-	case "amd64":
-		arch = "x86_64"
-	case "arm64":
-		if osName == "linux" {
-			arch = "aarch64"
-		}
+	p, err := platform.New(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
 	}
-
-	ext := "tar.gz"
-	if osName == "windows" {
-		ext = "zip"
-	}
+	arch := bundleArch(p)
 
 	// Fetch latest release info from GitHub
 	fmt.Println("==> Checking for updates...")
@@ -53,7 +44,7 @@ func Upgrade(currentVersion string) error {
 	}
 
 	// Download the bundle
-	assetName := fmt.Sprintf("devlayer-%s-%s.%s", osName, arch, ext)
+	assetName := fmt.Sprintf("devlayer-%s-%s.%s", p.OS, arch, p.BundleExt)
 	var downloadURL string
 	for _, asset := range release.Assets {
 		if asset.Name == assetName {
@@ -67,11 +58,11 @@ func Upgrade(currentVersion string) error {
 		}
 	}
 	if downloadURL == "" {
-		return fmt.Errorf("no release asset found for %s/%s (%s)", osName, arch, assetName)
+		return fmt.Errorf("no release asset found for %s/%s (%s)", p.OS, arch, assetName)
 	}
 
 	fmt.Printf("==> Downloading %s...\n", assetName)
-	tmp, err := os.CreateTemp("", "devlayer-upgrade-*."+ext)
+	tmp, err := os.CreateTemp("", "devlayer-upgrade-*."+p.BundleExt)
 	if err != nil {
 		return err
 	}
@@ -101,14 +92,13 @@ func Upgrade(currentVersion string) error {
 		return err
 	}
 
-	if ext == "zip" {
-		if err := archive.ExtractZip(tmp.Name(), prefix); err != nil {
-			return fmt.Errorf("extract: %w", err)
-		}
+	if p.BundleExt == "zip" {
+		err = archive.ExtractZip(tmp.Name(), prefix)
 	} else {
-		if err := archive.ExtractTarGz(tmp.Name(), prefix); err != nil {
-			return fmt.Errorf("extract: %w", err)
-		}
+		err = archive.ExtractTarGz(tmp.Name(), prefix)
+	}
+	if err != nil {
+		return fmt.Errorf("extract: %w", err)
 	}
 
 	fmt.Printf("==> Upgraded to %s\n", latestTag)

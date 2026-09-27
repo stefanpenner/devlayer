@@ -67,7 +67,7 @@ func githubRelease(repo, tag, asset string) string {
 }
 
 func rustURL(p *platform.Platform, repo, tag, base string) string {
-	return githubRelease(repo, tag, base+"."+p.RustArchiveExt())
+	return githubRelease(repo, tag, base+"."+p.ArchiveExt())
 }
 
 func fdURL(p *platform.Platform, ver string) string {
@@ -95,21 +95,17 @@ func ezaURL(p *platform.Platform, ver string) string {
 }
 
 func fzfURL(p *platform.Platform, ver string) string {
-	asset := fmt.Sprintf("fzf-%s-%s_%s.%s", ver, p.OS, p.GoArch, p.FzfArchiveExt())
+	asset := fmt.Sprintf("fzf-%s-%s_%s.%s", ver, p.OS, p.GoArch, p.ArchiveExt())
 	return githubRelease("junegunn/fzf", "v"+ver, asset)
 }
 
 func lazygitURL(p *platform.Platform, ver string) string {
-	asset := fmt.Sprintf("lazygit_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.LazygitArchiveExt())
+	asset := fmt.Sprintf("lazygit_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.ArchiveExt())
 	return githubRelease("jesseduffield/lazygit", "v"+ver, asset)
 }
 
 func ageURL(p *platform.Platform, ver string) string {
-	ext := "tar.gz"
-	if p.IsWindows() {
-		ext = "zip"
-	}
-	asset := fmt.Sprintf("age-v%s-%s-%s.%s", ver, p.OS, p.GoArch, ext)
+	asset := fmt.Sprintf("age-v%s-%s-%s.%s", ver, p.OS, p.GoArch, p.ArchiveExt())
 	return githubRelease("FiloSottile/age", "v"+ver, asset)
 }
 
@@ -130,11 +126,11 @@ func batmanURL(ver string) string {
 }
 
 func nvimURL(p *platform.Platform, ver string) string {
-	return githubRelease("neovim/neovim", "v"+ver, p.NvimArchiveName(ver)+"."+p.NvimArchiveExt())
+	return githubRelease("neovim/neovim", "v"+ver, p.NvimArchiveName(ver)+"."+p.ArchiveExt())
 }
 
 func goSDKURL(p *platform.Platform, ver string) string {
-	return fmt.Sprintf("https://go.dev/dl/go%s.%s-%s.%s", ver, p.OS, p.GoArch, p.GoArchiveExt())
+	return fmt.Sprintf("https://go.dev/dl/go%s.%s-%s.%s", ver, p.OS, p.GoArch, p.ArchiveExt())
 }
 
 func zigURL(p *platform.Platform, ver string) string {
