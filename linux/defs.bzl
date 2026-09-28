@@ -154,12 +154,21 @@ _scratch_smoke_test = rule(
     },
 )
 
-def scratch_smoke(tool, arch, entry, cmd, expect, env = ""):
-    """scratch image with only this tool's files. cmd is what the program runs."""
+def _arch_of(image):
+    if image.endswith("_x86_64"):
+        return "x86_64"
+    if image.endswith("_aarch64"):
+        return "aarch64"
+    fail("image must end with _x86_64 or _aarch64: " + image)
+
+def scratch_test(name, image, entry, cmd, expect, env = ""):
+    """Run image in FROM scratch. name ends with _test. cmd is the program's arguments."""
+    if not name.endswith("_test"):
+        fail("scratch test name must end with _test: " + name)
     _scratch_smoke_test(
-        name = tool + "_smoke_" + arch,
-        archive = ":{}_{}".format(tool, arch),
-        arch = arch,
+        name = name,
+        archive = image,
+        arch = _arch_of(image),
         entry = entry,
         cmd = cmd,
         expect = expect,
