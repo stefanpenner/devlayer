@@ -4,12 +4,11 @@ def _docker(arch):
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
     return "linux/" + docker_arch, "devlayer-build-base-" + docker_arch
 
-def base_image(arch):
+def base_image(name, arch):
     """Create a genrule that builds the Docker base image for source compilation."""
     docker_platform, tag = _docker(arch)
-    # compile_tool looks this tag up by the same name.
     native.genrule(
-        name = "base_image_" + arch,
+        name = name,
         srcs = ["Dockerfile.base"],
         outs = ["base_image_{}.marker".format(arch)],
         cmd = " && ".join([
@@ -22,21 +21,18 @@ def base_image(arch):
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
     )
+    return ":" + name
 
-def _linuxbuild(arch):
-    goarch = "amd64" if arch == "x86_64" else "arm64"
-    return "//tools/linuxbuild:linuxbuild_linux_" + goarch
-
-def compile_tool(name, arch, env, patch = None):
-    """Compile a tool inside Docker via the linuxbuild CLI; stdout is the tarball."""
+def compile_tool(name, tool, arch, env, base, sysroot, linuxbuild, patch = None):
+    """Compile one tool. name is the target. Returns that label."""
     docker_platform, tag = _docker(arch)
     env_flags = " ".join(["-e {}={}".format(k, v) for k, v in env.items()])
-    tool = _linuxbuild(arch)
+    tree = arch + "-linux-musl"
 
     srcs = [
-        ":base_image_" + arch,
+        base,
         "Dockerfile.base",
-        "sysroot/" + arch + "-linux-musl.tar.gz",
+        sysroot,
     ]
     patch_mount = ""
     if patch:
@@ -44,46 +40,47 @@ def compile_tool(name, arch, env, patch = None):
         patch_mount = "-v $$(realpath $(location {patch})):/btop-amdgpu-sysfs.patch:ro".format(patch = patch)
 
     native.genrule(
-        name = name + "_" + arch,
+        name = name,
         srcs = srcs,
-        tools = [tool],
-        outs = ["{}_{}.tar.gz".format(name, arch)],
+        tools = [linuxbuild],
+        outs = [name + ".tar.gz"],
         cmd = """
 set -euo pipefail
 docker image inspect {tag} >/dev/null 2>&1 || \
   docker build --platform {platform} -t {tag} -f $$(realpath $(location Dockerfile.base)) .
 toolbin=$$(mktemp)
 root=$$(mktemp -d)
-cp $$(realpath $(location {tool})) $$toolbin
+cp $$(realpath $(location {linuxbuild})) $$toolbin
 chmod +x $$toolbin
-tar -xzf $(location sysroot/{arch}-linux-musl.tar.gz) -C "$$root"
+tar -xzf $(location {sysroot}) -C "$$root"
 docker run --rm --pull never --platform {platform} {env} \
   -e SYSROOT=/sysroot \
   -e PKG_CONFIG_SYSROOT_DIR=/sysroot \
   -e PKG_CONFIG_LIBDIR=/sysroot/usr/lib/pkgconfig \
-  -v "$$root/{arch}-linux-musl:/sysroot:ro" \
+  -v "$$root/{tree}:/sysroot:ro" \
   {patch_mount} \
-  -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
+  -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {tool} > $@
 rm -f $$toolbin
 rm -rf "$$root"
 """.format(
             platform = docker_platform,
             env = env_flags,
-            tool = tool,
+            linuxbuild = linuxbuild,
+            sysroot = sysroot,
+            tree = tree,
             tag = tag,
-            name = name,
-            arch = arch,
+            tool = tool,
             patch_mount = patch_mount,
         ),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
     )
-    return ":" + name + "_" + arch
+    return ":" + name
 
-def bundle(arch, git, zsh, htop, btop, nvim, make):
+def bundle(name, arch, git, zsh, htop, btop, nvim, make):
     """Create the final bundle assembly target."""
     native.genrule(
-        name = "bundle_" + arch,
+        name = name,
         srcs = [
             git,
             zsh,
@@ -155,21 +152,14 @@ _scratch_smoke_test = rule(
     },
 )
 
-def _arch_of(image):
-    if image.endswith("_x86_64"):
-        return "x86_64"
-    if image.endswith("_aarch64"):
-        return "aarch64"
-    fail("image must end with _x86_64 or _aarch64: " + image)
-
-def scratch_test(name, image, entry, cmd, expect, env = ""):
+def scratch_test(name, image, arch, entry, cmd, expect, env = ""):
     """Run image in FROM scratch. name ends with _test. cmd is the program's arguments."""
     if not name.endswith("_test"):
         fail("scratch test name must end with _test: " + name)
     _scratch_smoke_test(
         name = name,
         archive = image,
-        arch = _arch_of(image),
+        arch = arch,
         entry = entry,
         cmd = cmd,
         expect = expect,
