@@ -1,90 +1,69 @@
 #!/bin/sh
-# Smoke-test one static tool in a scratch container.
-# The image has no shell and no libraries. Docker's default /proc and /sys
-# mounts are the only kernel interfaces. Everything else is the tool tree.
+# Run one static tool from a scratch image.
+# Usage: smoke.sh ARCHIVE PLATFORM TOOL
+# PLATFORM is linux/amd64 or linux/arm64.
+# The tool tarball is extracted, then copied into FROM scratch.
+# Docker still mounts /proc and /sys. Nothing else is in the image.
 set -eu
 
-arch=$1
-archive=$2
-kind=$3
-
-case "$arch" in
-x86_64) platform=linux/amd64 ;;
-aarch64) platform=linux/arm64 ;;
-*) echo "unknown arch $arch" >&2; exit 2 ;;
-esac
+archive=$1
+platform=$2
+tool=$3
 
 root=$(mktemp -d)
 trap 'rm -rf "$root"' EXIT
 tar -xzf "$archive" -C "$root"
-image="devlayer-smoke-$kind-$$"
 
-# scratch is not a runnable image name. Build a one-off image that contains
-# only the files copied in the Dockerfile below, then run that.
-build() {
-	docker build --platform "$platform" -t "$image" "$root" >/dev/null
-}
-run() {
-	docker run --rm --network=none --platform "$platform" "$image" "$@"
-}
-
-case "$kind" in
+# entry: program path inside the image
+# env:   optional Dockerfile ENV line
+# expect: grep -q pattern on stdout
+case "$tool" in
 btop)
+	entry=/btop
+	env=
+	set -- --version
+	expect=btop
 	test -x "$root/btop"
-	cat > "$root/Dockerfile" <<'EOF'
-FROM scratch
-COPY btop /btop
-ENTRYPOINT ["/btop"]
-EOF
-	build
-	out=$(run --version)
-	printf '%s\n' "$out" | grep -q btop
 	;;
 git)
+	entry=/bin/git
+	env="ENV GIT_EXEC_PATH=/libexec/git-core"
+	set -- --version
+	expect='^git version'
 	test -x "$root/bin/git"
 	test -d "$root/libexec/git-core"
-	cat > "$root/Dockerfile" <<'EOF'
-FROM scratch
-COPY . /
-ENV GIT_EXEC_PATH=/libexec/git-core
-ENTRYPOINT ["/bin/git"]
-EOF
-	build
-	out=$(run --version)
-	printf '%s\n' "$out" | grep -q '^git version'
 	;;
 zsh)
-	test -x "$root/bin/zsh"
+	entry=/bin/zsh
 	fns=$(find "$root/share/zsh" -type d -name functions | head -n 1)
 	test -n "$fns"
-	rel=${fns#"$root"/}
-	cat > "$root/Dockerfile" <<EOF
-FROM scratch
-COPY . /
-ENV FPATH=/$rel
-ENTRYPOINT ["/bin/zsh"]
-EOF
-	build
-	# print is a builtin. A missing libc fails here. A missing functions
-	# directory already failed the test above.
-	out=$(run -fc 'print smoke-ok')
-	printf '%s\n' "$out" | grep -q '^smoke-ok$'
+	env="ENV FPATH=/${fns#"$root"/}"
+	set -- -fc 'print smoke-ok'
+	expect='^smoke-ok$'
+	test -x "$root/bin/zsh"
 	;;
 nvim)
+	entry=/bin/nvim
+	env="ENV VIMRUNTIME=/share/nvim/runtime"
+	set -- --headless --version
+	expect='^NVIM v'
 	test -x "$root/bin/nvim"
 	test -d "$root/share/nvim/runtime"
-	cat > "$root/Dockerfile" <<'EOF'
-FROM scratch
-COPY . /
-ENV VIMRUNTIME=/share/nvim/runtime
-ENTRYPOINT ["/bin/nvim"]
-EOF
-	build
-	out=$(run --headless --version)
-	printf '%s\n' "$out" | grep -q '^NVIM v'
 	;;
 *)
-	echo "unknown kind $kind" >&2
+	echo "unknown tool $tool" >&2
 	exit 2
 	;;
 esac
+
+cat > "$root/Dockerfile" <<EOF
+FROM scratch
+COPY . /
+$env
+ENTRYPOINT ["$entry"]
+EOF
+
+image="devlayer-smoke-$tool-$$"
+docker build --platform "$platform" -t "$image" "$root" >/dev/null
+out=$(docker run --rm --network=none --platform "$platform" "$image" "$@")
+printf '%s\n' "$out" | grep -q "$expect"

@@ -114,19 +114,21 @@ def _bundle(arch):
     )
 
 def _scratch_smoke_impl(ctx):
+    # This Bazel has no sh_test. The generated file only locates smoke.sh.
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    platform = "linux/amd64" if ctx.attr.arch == "x86_64" else "linux/arm64"
     ctx.actions.write(
         output = script,
         is_executable = True,
         content = """#!/bin/bash
 set -euo pipefail
 root="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}"
-exec "$root/{smoke}" {arch} "$root/{archive}" {kind}
+exec "$root/{smoke}" "$root/{archive}" {platform} {tool}
 """.format(
             smoke = ctx.file._smoke.short_path,
             archive = ctx.file.archive.short_path,
-            arch = ctx.attr.arch,
-            kind = ctx.attr.kind,
+            platform = platform,
+            tool = ctx.attr.tool,
         ),
     )
     return DefaultInfo(
@@ -140,18 +142,18 @@ _scratch_smoke_test = rule(
     attrs = {
         "archive": attr.label(allow_single_file = True),
         "arch": attr.string(mandatory = True),
-        "kind": attr.string(mandatory = True),
+        "tool": attr.string(mandatory = True),
         "_smoke": attr.label(allow_single_file = True, default = "//linux:smoke/smoke.sh"),
     },
 )
 
-def _scratch_smoke(kind, arch):
-    """Run kind in a scratch container with only the files that kind needs."""
+def _scratch_smoke(tool, arch):
+    """scratch image with only this tool's files. See linux/smoke/smoke.sh."""
     _scratch_smoke_test(
-        name = kind + "_smoke_" + arch,
-        archive = ":{}_{}".format(kind, arch),
+        name = tool + "_smoke_" + arch,
+        archive = ":{}_{}".format(tool, arch),
         arch = arch,
-        kind = kind,
+        tool = tool,
         tags = ["manual", "no-sandbox", "no-remote"],
     )
 
@@ -178,7 +180,7 @@ def linux_targets(arch):
         "MAKE_VERSION": VERSIONS["MAKE"],
     })
 
-    for kind in ["btop", "git", "zsh", "nvim"]:
-        _scratch_smoke(kind, arch)
+    for tool in ["btop", "git", "zsh", "nvim"]:
+        _scratch_smoke(tool, arch)
 
     _bundle(arch)
