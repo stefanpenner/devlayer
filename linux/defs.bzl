@@ -41,6 +41,7 @@ def _docker_build(name, arch, image_tag, env = {}):
         srcs = [
             ":base_image_" + arch,
             "Dockerfile.base",
+            "sysroot/" + arch + "-linux-musl.tar.gz",
         ],
         tools = [tool],
         outs = ["{}_{}.tar.gz".format(name, arch)],
@@ -49,16 +50,25 @@ set -euo pipefail
 docker image inspect {tag} >/dev/null 2>&1 || \
   docker build --platform {platform} -t {tag} -f $$(realpath $(location Dockerfile.base)) .
 toolbin=$$(mktemp)
+root=$$(mktemp -d)
 cp $$(realpath $(location {tool})) $$toolbin
 chmod +x $$toolbin
-docker run --rm --pull never --platform {platform} {env} -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
+tar -xzf $(location sysroot/{arch}-linux-musl.tar.gz) -C "$$root"
+docker run --rm --pull never --platform {platform} {env} \
+  -e SYSROOT=/sysroot \
+  -e PKG_CONFIG_SYSROOT_DIR=/sysroot \
+  -e PKG_CONFIG_LIBDIR=/sysroot/usr/lib/pkgconfig \
+  -v "$$root/{arch}-linux-musl:/sysroot:ro" \
+  -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
 rm -f $$toolbin
+rm -rf "$$root"
 """.format(
             platform = docker_platform,
             env = env_flags,
             tool = tool,
             tag = image_tag,
             name = name,
+            arch = arch,
         ),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],

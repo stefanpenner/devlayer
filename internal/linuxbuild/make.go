@@ -14,7 +14,7 @@ func Make(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 		return err
 	}
 
-	if err := x(dir, "./configure", "CFLAGS=-Os -DNDEBUG", "LDFLAGS=-static"); err != nil {
+	if err := x(dir, "./configure", configureArgs(env, "CFLAGS=-Os -DNDEBUG", "LDFLAGS=-static")...); err != nil {
 		return err
 	}
 	if err := x(dir, "make", jobs()); err != nil {

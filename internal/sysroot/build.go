@@ -79,6 +79,9 @@ func Build(archName, out string) (string, error) {
 	if err := trim(prefix); err != nil {
 		return "", err
 	}
+	if err := sanitizePC(prefix); err != nil {
+		return "", err
+	}
 	tarPath := prefix + ".tar.gz"
 	if err := writeTarGz(tarPath, prefix, arch.Triple); err != nil {
 		return "", err
@@ -409,6 +412,33 @@ func singleChild(dir string) (string, error) {
 		return "", fmt.Errorf("%s has %d top-level directories", dir, len(dirs))
 	}
 	return filepath.Join(dir, dirs[0]), nil
+}
+
+func sanitizePC(prefix string) error {
+	dir := filepath.Join(prefix, "usr", "lib", "pkgconfig")
+	abs := filepath.Join(prefix, "usr", "lib")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".pc") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		next := strings.ReplaceAll(string(body), "-L"+abs, "-L${libdir}")
+		if err := os.WriteFile(path, []byte(next), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func trim(prefix string) error {
