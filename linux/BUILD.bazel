@@ -14,9 +14,11 @@ btop = compile_tool("btop_x86_64", "btop", "x86_64", {"BTOP_VERSION": VERSIONS["
 nvim = compile_tool("nvim_x86_64", "nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]}, base, sysroot, linuxbuild)
 make = compile_tool("make_x86_64", "make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]}, base, sysroot, linuxbuild)
 
+scratch = image("scratch_linux_amd64", arch = "x86_64")
+
 btop_image = image(
     "btop_x86_64_image",
-    "x86_64",
+    base = scratch,
     tars = [btop],
     entrypoint = ["/btop"],
 )
@@ -30,7 +32,7 @@ container_test(
 
 git_image = image(
     "git_x86_64_image",
-    "x86_64",
+    base = scratch,
     tars = [git],
     entrypoint = ["/bin/git"],
     env = {"GIT_EXEC_PATH": "/libexec/git-core"},
@@ -45,10 +47,10 @@ container_test(
 
 zsh_image = image(
     "zsh_x86_64_image",
-    "x86_64",
+    base = scratch,
     tars = [zsh],
     entrypoint = ["/bin/zsh"],
-    env = {"FPATH": "@functions"},
+    env = {"FPATH": "/share/zsh/" + VERSIONS["ZSH"] + "/functions"},
 )
 container_test(
     "zsh_x86_64_test",
@@ -60,7 +62,7 @@ container_test(
 
 nvim_image = image(
     "nvim_x86_64_image",
-    "x86_64",
+    base = scratch,
     tars = [nvim],
     entrypoint = ["/bin/nvim"],
     env = {"VIMRUNTIME": "/share/nvim/runtime"},
@@ -86,9 +88,11 @@ btop = compile_tool("btop_aarch64", "btop", "aarch64", {"BTOP_VERSION": VERSIONS
 nvim = compile_tool("nvim_aarch64", "nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]}, base, sysroot, linuxbuild)
 make = compile_tool("make_aarch64", "make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]}, base, sysroot, linuxbuild)
 
+scratch = image("scratch_linux_arm64", arch = "aarch64")
+
 btop_image = image(
     "btop_aarch64_image",
-    "aarch64",
+    base = scratch,
     tars = [btop],
     entrypoint = ["/btop"],
 )
@@ -102,7 +106,7 @@ container_test(
 
 git_image = image(
     "git_aarch64_image",
-    "aarch64",
+    base = scratch,
     tars = [git],
     entrypoint = ["/bin/git"],
     env = {"GIT_EXEC_PATH": "/libexec/git-core"},
@@ -117,10 +121,10 @@ container_test(
 
 zsh_image = image(
     "zsh_aarch64_image",
-    "aarch64",
+    base = scratch,
     tars = [zsh],
     entrypoint = ["/bin/zsh"],
-    env = {"FPATH": "@functions"},
+    env = {"FPATH": "/share/zsh/" + VERSIONS["ZSH"] + "/functions"},
 )
 container_test(
     "zsh_aarch64_test",
@@ -132,7 +136,7 @@ container_test(
 
 nvim_image = image(
     "nvim_aarch64_image",
-    "aarch64",
+    base = scratch,
     tars = [nvim],
     entrypoint = ["/bin/nvim"],
     env = {"VIMRUNTIME": "/share/nvim/runtime"},

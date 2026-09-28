@@ -113,46 +113,27 @@ def bundle(name, arch, git, zsh, htop, btop, nvim, make):
 def _sh_quote(s):
     return "'" + s.replace("'", "'\\''") + "'"
 
-def image(name, arch, tars, entrypoint, env = None):
-    """An OCI image. No base means scratch. tars are layers. Returns the label."""
-    architecture = "amd64" if arch == "x86_64" else "arm64"
-    env_arg = None
+def image(name, arch = None, base = None, tars = [], entrypoint = None, env = None):
+    """An OCI image. No base means scratch. tars and env mutate it. Returns the label."""
+    if base and arch:
+        fail("arch comes from base: " + name)
+    if not base and not arch:
+        fail("a scratch image needs arch: " + name)
+    kwargs = {}
+    if base:
+        kwargs["base"] = base
+    else:
+        kwargs["os"] = "linux"
+        kwargs["architecture"] = "amd64" if arch == "x86_64" else "arm64"
+    if tars:
+        kwargs["tars"] = tars
+    if entrypoint:
+        kwargs["entrypoint"] = entrypoint
     if env:
-        needs_functions = False
-        lines = []
-        for key, value in env.items():
-            if value == "@functions":
-                needs_functions = True
-            else:
-                lines.append("{}={}".format(key, value))
-        if needs_functions:
-            native.genrule(
-                name = name + "_env",
-                srcs = tars,
-                outs = [name + ".env"],
-                cmd = """
-set -euo pipefail
-fns=$$(tar -tzf $(location {tar}) | grep '/functions/$$' | head -n 1)
-fns=$${{fns%/}}
-{{
-  echo FPATH=/$$fns
-{extra}
-}} > $@
-""".format(
-                    tar = tars[0],
-                    extra = "\n".join(["  echo '{}'".format(line) for line in lines]),
-                ),
-            )
-            env_arg = ":" + name + "_env"
-        else:
-            env_arg = env
+        kwargs["env"] = env
     oci_image(
         name = name,
-        os = "linux",
-        architecture = architecture,
-        tars = tars,
-        entrypoint = entrypoint,
-        env = env_arg,
+        **kwargs
     )
     return ":" + name
 
