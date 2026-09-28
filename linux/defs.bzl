@@ -1,5 +1,7 @@
 """Linux bundle build macros — per-tool Docker compilation + assembly."""
 
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
+
 def _docker(arch):
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
     return "linux/" + docker_arch, "devlayer-build-base-" + docker_arch
@@ -111,8 +113,50 @@ def bundle(name, arch, git, zsh, htop, btop, nvim, make):
 def _sh_quote(s):
     return "'" + s.replace("'", "'\\''") + "'"
 
-def _scratch_smoke_impl(ctx):
-    # This Bazel has no sh_test. The generated file only locates smoke.sh.
+def image(name, arch, tars, entrypoint, env = None):
+    """An OCI image. No base means scratch. tars are layers. Returns the label."""
+    architecture = "amd64" if arch == "x86_64" else "arm64"
+    env_arg = None
+    if env:
+        needs_functions = False
+        lines = []
+        for key, value in env.items():
+            if value == "@functions":
+                needs_functions = True
+            else:
+                lines.append("{}={}".format(key, value))
+        if needs_functions:
+            native.genrule(
+                name = name + "_env",
+                srcs = tars,
+                outs = [name + ".env"],
+                cmd = """
+set -euo pipefail
+fns=$$(tar -tzf $(location {tar}) | grep '/functions/$$' | head -n 1)
+fns=$${{fns%/}}
+{{
+  echo FPATH=/$$fns
+{extra}
+}} > $@
+""".format(
+                    tar = tars[0],
+                    extra = "\n".join(["  echo '{}'".format(line) for line in lines]),
+                ),
+            )
+            env_arg = ":" + name + "_env"
+        else:
+            env_arg = env
+    oci_image(
+        name = name,
+        os = "linux",
+        architecture = architecture,
+        tars = tars,
+        entrypoint = entrypoint,
+        env = env_arg,
+    )
+    return ":" + name
+
+def _container_test_impl(ctx):
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     platform = "linux/amd64" if ctx.attr.arch == "x86_64" else "linux/arm64"
     args = " ".join([_sh_quote(a) for a in ctx.attr.cmd])
@@ -122,48 +166,58 @@ def _scratch_smoke_impl(ctx):
         content = """#!/bin/bash
 set -euo pipefail
 root="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}"
-exec "$root/{smoke}" "$root/{archive}" {platform} {entry} {env} {expect} -- {args}
+docker load -i "$root/{tarball}" >/dev/null
+out=$(docker run --rm --network=none --platform {platform} {tag} {args})
+printf '%s\\n' "$out" | grep -q {expect}
 """.format(
-            smoke = ctx.file._smoke.short_path,
-            archive = ctx.file.archive.short_path,
+            tarball = ctx.file.tarball.short_path,
             platform = platform,
-            entry = _sh_quote(ctx.attr.entry),
-            env = _sh_quote(ctx.attr.env),
-            expect = _sh_quote(ctx.attr.expect),
+            tag = ctx.attr.tag,
             args = args,
+            expect = _sh_quote(ctx.attr.expect),
         ),
     )
     return DefaultInfo(
         executable = script,
-        runfiles = ctx.runfiles(files = [ctx.file.archive, ctx.file._smoke]),
+        runfiles = ctx.runfiles(files = [ctx.file.tarball]),
     )
 
-_scratch_smoke_test = rule(
-    implementation = _scratch_smoke_impl,
+_container_test = rule(
+    implementation = _container_test_impl,
     test = True,
     attrs = {
-        "archive": attr.label(allow_single_file = True),
+        "tarball": attr.label(allow_single_file = True),
+        "tag": attr.string(mandatory = True),
         "arch": attr.string(mandatory = True),
-        "entry": attr.string(mandatory = True),
         "cmd": attr.string_list(mandatory = True),
         "expect": attr.string(mandatory = True),
-        "env": attr.string(default = ""),
-        "_smoke": attr.label(allow_single_file = True, default = "//linux:smoke/smoke.sh"),
     },
 )
 
-def scratch_test(name, image, arch, entry, cmd, expect, env = ""):
-    """Run image in FROM scratch. name ends with _test. cmd is the program's arguments."""
+def container_test(name, image, arch, cmd, expect):
+    """Load an OCI image and run cmd. name ends with _test."""
     if not name.endswith("_test"):
-        fail("scratch test name must end with _test: " + name)
-    _scratch_smoke_test(
+        fail("container test name must end with _test: " + name)
+    tag = "devlayer/" + name + ":test"
+    oci_load(
+        name = name + "_load",
+        image = image,
+        repo_tags = [tag],
+        tags = ["manual"],
+    )
+    native.filegroup(
+        name = name + "_tar",
+        srcs = [":" + name + "_load"],
+        output_group = "tarball",
+        tags = ["manual"],
+    )
+    _container_test(
         name = name,
-        archive = image,
+        tarball = ":" + name + "_tar",
+        tag = tag,
         arch = arch,
-        entry = entry,
         cmd = cmd,
         expect = expect,
-        env = env,
         tags = ["manual", "no-sandbox", "no-remote"],
     )
 

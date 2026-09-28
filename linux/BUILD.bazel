@@ -1,7 +1,7 @@
 # Linux bundle. Each name is written once. Later lines use that value.
 
 load("@versions//:versions.bzl", "VERSIONS")
-load(":defs.bzl", "base_image", "bundle", "compile_tool", "scratch_test")
+load(":defs.bzl", "base_image", "bundle", "compile_tool", "container_test", "image")
 
 base = base_image("base_image_x86_64", "x86_64")
 sysroot = "sysroot/x86_64-linux-musl.tar.gz"
@@ -14,40 +14,63 @@ btop = compile_tool("btop_x86_64", "btop", "x86_64", {"BTOP_VERSION": VERSIONS["
 nvim = compile_tool("nvim_x86_64", "nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]}, base, sysroot, linuxbuild)
 make = compile_tool("make_x86_64", "make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]}, base, sysroot, linuxbuild)
 
-scratch_test(
-    "btop_x86_64_test",
-    btop,
+btop_image = image(
+    "btop_x86_64_image",
     "x86_64",
-    entry = "/btop",
+    tars = [btop],
+    entrypoint = ["/btop"],
+)
+container_test(
+    "btop_x86_64_test",
+    btop_image,
+    "x86_64",
     cmd = ["--version"],
     expect = "btop",
 )
-scratch_test(
-    "git_x86_64_test",
-    git,
+
+git_image = image(
+    "git_x86_64_image",
     "x86_64",
-    entry = "/bin/git",
+    tars = [git],
+    entrypoint = ["/bin/git"],
+    env = {"GIT_EXEC_PATH": "/libexec/git-core"},
+)
+container_test(
+    "git_x86_64_test",
+    git_image,
+    "x86_64",
     cmd = ["--version"],
     expect = "^git version",
-    env = "GIT_EXEC_PATH=/libexec/git-core",
 )
-scratch_test(
-    "zsh_x86_64_test",
-    zsh,
+
+zsh_image = image(
+    "zsh_x86_64_image",
     "x86_64",
-    entry = "/bin/zsh",
+    tars = [zsh],
+    entrypoint = ["/bin/zsh"],
+    env = {"FPATH": "@functions"},
+)
+container_test(
+    "zsh_x86_64_test",
+    zsh_image,
+    "x86_64",
     cmd = ["-fc", "print smoke-ok"],
     expect = "^smoke-ok$",
-    env = "FPATH=@functions",
 )
-scratch_test(
-    "nvim_x86_64_test",
-    nvim,
+
+nvim_image = image(
+    "nvim_x86_64_image",
     "x86_64",
-    entry = "/bin/nvim",
+    tars = [nvim],
+    entrypoint = ["/bin/nvim"],
+    env = {"VIMRUNTIME": "/share/nvim/runtime"},
+)
+container_test(
+    "nvim_x86_64_test",
+    nvim_image,
+    "x86_64",
     cmd = ["--headless", "--version"],
     expect = "^NVIM v",
-    env = "VIMRUNTIME=/share/nvim/runtime",
 )
 
 bundle("bundle_x86_64", "x86_64", git, zsh, htop, btop, nvim, make)
@@ -63,40 +86,63 @@ btop = compile_tool("btop_aarch64", "btop", "aarch64", {"BTOP_VERSION": VERSIONS
 nvim = compile_tool("nvim_aarch64", "nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]}, base, sysroot, linuxbuild)
 make = compile_tool("make_aarch64", "make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]}, base, sysroot, linuxbuild)
 
-scratch_test(
-    "btop_aarch64_test",
-    btop,
+btop_image = image(
+    "btop_aarch64_image",
     "aarch64",
-    entry = "/btop",
+    tars = [btop],
+    entrypoint = ["/btop"],
+)
+container_test(
+    "btop_aarch64_test",
+    btop_image,
+    "aarch64",
     cmd = ["--version"],
     expect = "btop",
 )
-scratch_test(
-    "git_aarch64_test",
-    git,
+
+git_image = image(
+    "git_aarch64_image",
     "aarch64",
-    entry = "/bin/git",
+    tars = [git],
+    entrypoint = ["/bin/git"],
+    env = {"GIT_EXEC_PATH": "/libexec/git-core"},
+)
+container_test(
+    "git_aarch64_test",
+    git_image,
+    "aarch64",
     cmd = ["--version"],
     expect = "^git version",
-    env = "GIT_EXEC_PATH=/libexec/git-core",
 )
-scratch_test(
-    "zsh_aarch64_test",
-    zsh,
+
+zsh_image = image(
+    "zsh_aarch64_image",
     "aarch64",
-    entry = "/bin/zsh",
+    tars = [zsh],
+    entrypoint = ["/bin/zsh"],
+    env = {"FPATH": "@functions"},
+)
+container_test(
+    "zsh_aarch64_test",
+    zsh_image,
+    "aarch64",
     cmd = ["-fc", "print smoke-ok"],
     expect = "^smoke-ok$",
-    env = "FPATH=@functions",
 )
-scratch_test(
-    "nvim_aarch64_test",
-    nvim,
+
+nvim_image = image(
+    "nvim_aarch64_image",
     "aarch64",
-    entry = "/bin/nvim",
+    tars = [nvim],
+    entrypoint = ["/bin/nvim"],
+    env = {"VIMRUNTIME": "/share/nvim/runtime"},
+)
+container_test(
+    "nvim_aarch64_test",
+    nvim_image,
+    "aarch64",
     cmd = ["--headless", "--version"],
     expect = "^NVIM v",
-    env = "VIMRUNTIME=/share/nvim/runtime",
 )
 
 bundle("bundle_aarch64", "aarch64", git, zsh, htop, btop, nvim, make)
