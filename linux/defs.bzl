@@ -113,6 +113,48 @@ def _bundle(arch):
         visibility = ["//visibility:public"],
     )
 
+def _scratch_smoke_impl(ctx):
+    script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(
+        output = script,
+        is_executable = True,
+        content = """#!/bin/bash
+set -euo pipefail
+root="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}"
+exec "$root/{smoke}" {arch} "$root/{archive}" {kind}
+""".format(
+            smoke = ctx.file._smoke.short_path,
+            archive = ctx.file.archive.short_path,
+            arch = ctx.attr.arch,
+            kind = ctx.attr.kind,
+        ),
+    )
+    return DefaultInfo(
+        executable = script,
+        runfiles = ctx.runfiles(files = [ctx.file.archive, ctx.file._smoke]),
+    )
+
+_scratch_smoke_test = rule(
+    implementation = _scratch_smoke_impl,
+    test = True,
+    attrs = {
+        "archive": attr.label(allow_single_file = True),
+        "arch": attr.string(mandatory = True),
+        "kind": attr.string(mandatory = True),
+        "_smoke": attr.label(allow_single_file = True, default = "//linux:smoke/smoke.sh"),
+    },
+)
+
+def _scratch_smoke(kind, arch):
+    """Run kind in a scratch container with only the files that kind needs."""
+    _scratch_smoke_test(
+        name = kind + "_smoke_" + arch,
+        archive = ":{}_{}".format(kind, arch),
+        arch = arch,
+        kind = kind,
+        tags = ["manual", "no-sandbox", "no-remote"],
+    )
+
 def linux_targets(arch):
     """Generate all Linux build targets for the given architecture."""
     image_tag = _base_image(arch)
@@ -135,5 +177,8 @@ def linux_targets(arch):
     _docker_build("make", arch, image_tag, env = {
         "MAKE_VERSION": VERSIONS["MAKE"],
     })
+
+    for kind in ["btop", "git", "zsh", "nvim"]:
+        _scratch_smoke(kind, arch)
 
     _bundle(arch)
