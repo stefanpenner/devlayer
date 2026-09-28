@@ -1,18 +1,40 @@
-# Linux bundle build — replaces monolithic Dockerfile with per-tool Bazel targets.
-#
-# Each source-compiled tool has its own genrule: Docker runs the linuxbuild
-# CLI (linux ELF). assemble then fetches prebuilts and packs the bundle.
-# Tools are built independently and cached by Bazel, so changing one tool
-# only rebuilds that tool.
-#
-# Usage:
-#   bazel build //linux:bundle_x86_64     # Build x86_64 bundle
-#   bazel build //linux:bundle_aarch64    # Build aarch64 bundle
-#
-# Prerequisites: Docker must be available on the build machine.
+# Linux bundle. Each line is one target.
+# base_image builds the Alpine compiler image.
+# compile_tool runs linuxbuild in that image and writes a tarball.
+# scratch_smoke starts that tarball in FROM scratch.
+# bundle packs the tarballs with the prebuilt tools.
 
-load(":defs.bzl", "linux_targets")
+load("@versions//:versions.bzl", "VERSIONS")
+load(":defs.bzl", "base_image", "bundle", "compile_tool", "scratch_smoke")
 
-linux_targets("x86_64")
+base_image("x86_64")
 
-linux_targets("aarch64")
+compile_tool("git", "x86_64", {"GIT_VERSION": VERSIONS["GIT"]})
+compile_tool("zsh", "x86_64", {"ZSH_VERSION": VERSIONS["ZSH"]})
+compile_tool("htop", "x86_64", {"HTOP_VERSION": VERSIONS["HTOP"]})
+compile_tool("btop", "x86_64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
+compile_tool("nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]})
+compile_tool("make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]})
+
+scratch_smoke("btop", "x86_64")
+scratch_smoke("git", "x86_64")
+scratch_smoke("zsh", "x86_64")
+scratch_smoke("nvim", "x86_64")
+
+bundle("x86_64")
+
+base_image("aarch64")
+
+compile_tool("git", "aarch64", {"GIT_VERSION": VERSIONS["GIT"]})
+compile_tool("zsh", "aarch64", {"ZSH_VERSION": VERSIONS["ZSH"]})
+compile_tool("htop", "aarch64", {"HTOP_VERSION": VERSIONS["HTOP"]})
+compile_tool("btop", "aarch64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
+compile_tool("nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]})
+compile_tool("make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]})
+
+scratch_smoke("btop", "aarch64")
+scratch_smoke("git", "aarch64")
+scratch_smoke("zsh", "aarch64")
+scratch_smoke("nvim", "aarch64")
+
+bundle("aarch64")

@@ -1,13 +1,13 @@
 """Linux bundle build macros — per-tool Docker compilation + assembly."""
 
-load("@versions//:versions.bzl", "VERSIONS")
-
-def _base_image(arch):
-    """Create a genrule that builds the Docker base image for source compilation."""
+def _docker(arch):
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
-    docker_platform = "linux/" + docker_arch
-    tag = "devlayer-build-base-" + docker_arch
+    return "linux/" + docker_arch, "devlayer-build-base-" + docker_arch
 
+def base_image(arch):
+    """Create a genrule that builds the Docker base image for source compilation."""
+    docker_platform, tag = _docker(arch)
+    # compile_tool looks this tag up by the same name.
     native.genrule(
         name = "base_image_" + arch,
         srcs = ["Dockerfile.base"],
@@ -23,16 +23,13 @@ def _base_image(arch):
         visibility = ["//visibility:private"],
     )
 
-    return tag
-
 def _linuxbuild(arch):
     goarch = "amd64" if arch == "x86_64" else "arm64"
     return "//tools/linuxbuild:linuxbuild_linux_" + goarch
 
-def _docker_build(name, arch, image_tag, env = {}, patch = None):
+def compile_tool(name, arch, env, patch = None):
     """Compile a tool inside Docker via the linuxbuild CLI; stdout is the tarball."""
-    docker_arch = "amd64" if arch == "x86_64" else "arm64"
-    docker_platform = "linux/" + docker_arch
+    docker_platform, tag = _docker(arch)
     env_flags = " ".join(["-e {}={}".format(k, v) for k, v in env.items()])
     tool = _linuxbuild(arch)
 
@@ -73,7 +70,7 @@ rm -rf "$$root"
             platform = docker_platform,
             env = env_flags,
             tool = tool,
-            tag = image_tag,
+            tag = tag,
             name = name,
             arch = arch,
             patch_mount = patch_mount,
@@ -82,7 +79,7 @@ rm -rf "$$root"
         visibility = ["//visibility:private"],
     )
 
-def _bundle(arch):
+def bundle(arch):
     """Create the final bundle assembly target."""
     native.genrule(
         name = "bundle_" + arch,
@@ -147,7 +144,7 @@ _scratch_smoke_test = rule(
     },
 )
 
-def _scratch_smoke(tool, arch):
+def scratch_smoke(tool, arch):
     """scratch image with only this tool's files. See linux/smoke/smoke.sh."""
     _scratch_smoke_test(
         name = tool + "_smoke_" + arch,
@@ -157,30 +154,4 @@ def _scratch_smoke(tool, arch):
         tags = ["manual", "no-sandbox", "no-remote"],
     )
 
-def linux_targets(arch):
-    """Generate all Linux build targets for the given architecture."""
-    image_tag = _base_image(arch)
 
-    _docker_build("git", arch, image_tag, env = {
-        "GIT_VERSION": VERSIONS["GIT"],
-    })
-    _docker_build("zsh", arch, image_tag, env = {
-        "ZSH_VERSION": VERSIONS["ZSH"],
-    })
-    _docker_build("htop", arch, image_tag, env = {
-        "HTOP_VERSION": VERSIONS["HTOP"],
-    })
-    _docker_build("btop", arch, image_tag, env = {
-        "BTOP_VERSION": VERSIONS["BTOP"],
-    }, patch = "patches/btop-amdgpu-sysfs.patch")
-    _docker_build("nvim", arch, image_tag, env = {
-        "NVIM_VERSION": VERSIONS["NVIM"],
-    })
-    _docker_build("make", arch, image_tag, env = {
-        "MAKE_VERSION": VERSIONS["MAKE"],
-    })
-
-    for tool in ["btop", "git", "zsh", "nvim"]:
-        _scratch_smoke(tool, arch)
-
-    _bundle(arch)
