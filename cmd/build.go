@@ -607,14 +607,22 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	if err != nil {
 		return fmt.Errorf("find cargo: %w", err)
 	}
-	env := ezaBuildEnv(os.Environ(), runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
+	// CARGO_TARGET_DIR beats ~/.cargo/config.toml target-dir, so the binary
+	// stays next to this clone instead of a shared cache.
+	targetDir := filepath.Join(srcRoot, "target")
+	env := ezaCargoEnv(os.Environ(), srcRoot, runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
 	if err := run(srcRoot, env, cargoPath, "build", "--release"); err != nil {
 		return fmt.Errorf("eza cargo build: %w", err)
 	}
-	if err := copyFile(filepath.Join(srcRoot, "target", "release", "eza"), filepath.Join(binDir, "eza")); err != nil {
+	if err := copyFile(filepath.Join(targetDir, "release", "eza"), filepath.Join(binDir, "eza")); err != nil {
 		return fmt.Errorf("copy eza: %w", err)
 	}
 	return nil
+}
+
+func ezaCargoEnv(base []string, srcRoot, goos, cargoPath, clang, clangxx, sdk string) []string {
+	env := ezaBuildEnv(base, goos, cargoPath, clang, clangxx, sdk)
+	return withEnv(env, "CARGO_TARGET_DIR", filepath.Join(srcRoot, "target"))
 }
 
 // buildMake compiles GNU make from source.
