@@ -16,10 +16,37 @@ compile_tool("btop", "x86_64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop
 compile_tool("nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]})
 compile_tool("make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]})
 
-scratch_test("btop_x86_64_test", ":btop_x86_64", entry = "/btop", cmd = ["--version"], expect = "btop")
-scratch_test("git_x86_64_test", ":git_x86_64", entry = "/bin/git", cmd = ["--version"], expect = "^git version", env = "GIT_EXEC_PATH=/libexec/git-core")
-scratch_test("zsh_x86_64_test", ":zsh_x86_64", entry = "/bin/zsh", cmd = ["-fc", "print smoke-ok"], expect = "^smoke-ok$", env = "FPATH=@functions")
-scratch_test("nvim_x86_64_test", ":nvim_x86_64", entry = "/bin/nvim", cmd = ["--headless", "--version"], expect = "^NVIM v", env = "VIMRUNTIME=/share/nvim/runtime")
+scratch_test(
+    "btop_x86_64_test",
+    ":btop_x86_64",
+    entry = "/btop",
+    cmd = ["--version"],
+    expect = "btop",
+)
+scratch_test(
+    "git_x86_64_test",
+    ":git_x86_64",
+    entry = "/bin/git",
+    cmd = ["--version"],
+    expect = "^git version",
+    env = "GIT_EXEC_PATH=/libexec/git-core",
+)
+scratch_test(
+    "zsh_x86_64_test",
+    ":zsh_x86_64",
+    entry = "/bin/zsh",
+    cmd = ["-fc", "print smoke-ok"],
+    expect = "^smoke-ok$",
+    env = "FPATH=@functions",
+)
+scratch_test(
+    "nvim_x86_64_test",
+    ":nvim_x86_64",
+    entry = "/bin/nvim",
+    cmd = ["--headless", "--version"],
+    expect = "^NVIM v",
+    env = "VIMRUNTIME=/share/nvim/runtime",
+)
 
 bundle("x86_64")
 
@@ -32,9 +59,36 @@ compile_tool("btop", "aarch64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/bto
 compile_tool("nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]})
 compile_tool("make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]})
 
-scratch_test("btop_aarch64_test", ":btop_aarch64", entry = "/btop", cmd = ["--version"], expect = "btop")
-scratch_test("git_aarch64_test", ":git_aarch64", entry = "/bin/git", cmd = ["--version"], expect = "^git version", env = "GIT_EXEC_PATH=/libexec/git-core")
-scratch_test("zsh_aarch64_test", ":zsh_aarch64", entry = "/bin/zsh", cmd = ["-fc", "print smoke-ok"], expect = "^smoke-ok$", env = "FPATH=@functions")
-scratch_test("nvim_aarch64_test", ":nvim_aarch64", entry = "/bin/nvim", cmd = ["--headless", "--version"], expect = "^NVIM v", env = "VIMRUNTIME=/share/nvim/runtime")
+scratch_test(
+    "btop_aarch64_test",
+    ":btop_aarch64",
+    entry = "/btop",
+    cmd = ["--version"],
+    expect = "btop",
+)
+scratch_test(
+    "git_aarch64_test",
+    ":git_aarch64",
+    entry = "/bin/git",
+    cmd = ["--version"],
+    expect = "^git version",
+    env = "GIT_EXEC_PATH=/libexec/git-core",
+)
+scratch_test(
+    "zsh_aarch64_test",
+    ":zsh_aarch64",
+    entry = "/bin/zsh",
+    cmd = ["-fc", "print smoke-ok"],
+    expect = "^smoke-ok$",
+    env = "FPATH=@functions",
+)
+scratch_test(
+    "nvim_aarch64_test",
+    ":nvim_aarch64",
+    entry = "/bin/nvim",
+    cmd = ["--headless", "--version"],
+    expect = "^NVIM v",
+    env = "VIMRUNTIME=/share/nvim/runtime",
+)
 
 bundle("aarch64")
