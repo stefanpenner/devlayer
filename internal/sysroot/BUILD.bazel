@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "sysroot",
+    srcs = [
+        "build.go",
+        "graph.go",
+        "http.go",
+        "pins.go",
+    ],
+    importpath = "github.com/stefanpenner/devlayer/internal/sysroot",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "sysroot_test",
+    srcs = ["graph_test.go"],
+    embed = [":sysroot"],
+)
