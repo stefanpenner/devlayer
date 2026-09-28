@@ -1,15 +1,16 @@
 """Linux bundle build macros — per-tool Docker compilation + assembly."""
 
-load("@versions//:versions.bzl", "VERSIONS")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
 
-def _base_image(arch):
-    """Create a genrule that builds the Docker base image for source compilation."""
+def _docker(arch):
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
-    docker_platform = "linux/" + docker_arch
-    tag = "devlayer-build-base-" + docker_arch
+    return "linux/" + docker_arch, "devlayer-build-base-" + docker_arch
 
+def base_image(name, arch):
+    """Create a genrule that builds the Docker base image for source compilation."""
+    docker_platform, tag = _docker(arch)
     native.genrule(
-        name = "base_image_" + arch,
+        name = name,
         srcs = ["Dockerfile.base"],
         outs = ["base_image_{}.marker".format(arch)],
         cmd = " && ".join([
@@ -22,69 +23,73 @@ def _base_image(arch):
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
     )
+    return ":" + name
 
-    return tag
-
-def _linuxbuild(arch):
-    goarch = "amd64" if arch == "x86_64" else "arm64"
-    return "//tools/linuxbuild:linuxbuild_linux_" + goarch
-
-def _docker_build(name, arch, image_tag, env = {}):
-    """Compile a tool inside Docker via the linuxbuild CLI; stdout is the tarball."""
-    docker_arch = "amd64" if arch == "x86_64" else "arm64"
-    docker_platform = "linux/" + docker_arch
+def compile_tool(name, tool, arch, env, base, sysroot, linuxbuild, patch = None):
+    """Compile one tool. name is the target. Returns that label."""
+    docker_platform, tag = _docker(arch)
     env_flags = " ".join(["-e {}={}".format(k, v) for k, v in env.items()])
-    tool = _linuxbuild(arch)
+    tree = arch + "-linux-musl"
+
+    srcs = [
+        base,
+        "Dockerfile.base",
+        sysroot,
+    ]
+    patch_mount = ""
+    if patch:
+        srcs.append(patch)
+        patch_mount = "-v $$(realpath $(location {patch})):/btop-amdgpu-sysfs.patch:ro".format(patch = patch)
 
     native.genrule(
-        name = name + "_" + arch,
-        srcs = [
-            ":base_image_" + arch,
-            "Dockerfile.base",
-            "sysroot/" + arch + "-linux-musl.tar.gz",
-        ],
-        tools = [tool],
-        outs = ["{}_{}.tar.gz".format(name, arch)],
+        name = name,
+        srcs = srcs,
+        tools = [linuxbuild],
+        outs = [name + ".tar.gz"],
         cmd = """
 set -euo pipefail
 docker image inspect {tag} >/dev/null 2>&1 || \
   docker build --platform {platform} -t {tag} -f $$(realpath $(location Dockerfile.base)) .
 toolbin=$$(mktemp)
 root=$$(mktemp -d)
-cp $$(realpath $(location {tool})) $$toolbin
+cp $$(realpath $(location {linuxbuild})) $$toolbin
 chmod +x $$toolbin
-tar -xzf $(location sysroot/{arch}-linux-musl.tar.gz) -C "$$root"
+tar -xzf $(location {sysroot}) -C "$$root"
 docker run --rm --pull never --platform {platform} {env} \
   -e SYSROOT=/sysroot \
   -e PKG_CONFIG_SYSROOT_DIR=/sysroot \
   -e PKG_CONFIG_LIBDIR=/sysroot/usr/lib/pkgconfig \
-  -v "$$root/{arch}-linux-musl:/sysroot:ro" \
-  -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
+  -v "$$root/{tree}:/sysroot:ro" \
+  {patch_mount} \
+  -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {tool} > $@
 rm -f $$toolbin
 rm -rf "$$root"
 """.format(
             platform = docker_platform,
             env = env_flags,
+            linuxbuild = linuxbuild,
+            sysroot = sysroot,
+            tree = tree,
+            tag = tag,
             tool = tool,
-            tag = image_tag,
-            name = name,
-            arch = arch,
+            patch_mount = patch_mount,
         ),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
     )
+    return ":" + name
 
-def _bundle(arch):
+def bundle(name, arch, git, zsh, htop, btop, nvim, make):
     """Create the final bundle assembly target."""
     native.genrule(
-        name = "bundle_" + arch,
+        name = name,
         srcs = [
-            ":git_" + arch,
-            ":zsh_" + arch,
-            ":htop_" + arch,
-            ":btop_" + arch,
-            ":nvim_" + arch,
-            ":make_" + arch,
+            git,
+            zsh,
+            htop,
+            btop,
+            nvim,
+            make,
             "//:versions.env",
         ],
         tools = ["//tools/assemble:assemble"],
@@ -94,38 +99,107 @@ def _bundle(arch):
             "--out $@",
             "--arch " + arch,
             "--versions $(location //:versions.env)",
-            "--git $(location :git_{arch})".format(arch = arch),
-            "--zsh $(location :zsh_{arch})".format(arch = arch),
-            "--htop $(location :htop_{arch})".format(arch = arch),
-            "--btop $(location :btop_{arch})".format(arch = arch),
-            "--nvim $(location :nvim_{arch})".format(arch = arch),
-            "--make $(location :make_{arch})".format(arch = arch),
+            "--git $(location {})".format(git),
+            "--zsh $(location {})".format(zsh),
+            "--htop $(location {})".format(htop),
+            "--btop $(location {})".format(btop),
+            "--nvim $(location {})".format(nvim),
+            "--make $(location {})".format(make),
         ]),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:public"],
     )
 
-def linux_targets(arch):
-    """Generate all Linux build targets for the given architecture."""
-    image_tag = _base_image(arch)
+def _sh_quote(s):
+    return "'" + s.replace("'", "'\\''") + "'"
 
-    _docker_build("git", arch, image_tag, env = {
-        "GIT_VERSION": VERSIONS["GIT"],
-    })
-    _docker_build("zsh", arch, image_tag, env = {
-        "ZSH_VERSION": VERSIONS["ZSH"],
-    })
-    _docker_build("htop", arch, image_tag, env = {
-        "HTOP_VERSION": VERSIONS["HTOP"],
-    })
-    _docker_build("btop", arch, image_tag, env = {
-        "BTOP_VERSION": VERSIONS["BTOP"],
-    })
-    _docker_build("nvim", arch, image_tag, env = {
-        "NVIM_VERSION": VERSIONS["NVIM"],
-    })
-    _docker_build("make", arch, image_tag, env = {
-        "MAKE_VERSION": VERSIONS["MAKE"],
-    })
+def image(name, arch = None, base = None, tars = [], entrypoint = None, env = None):
+    """An OCI image. No base means scratch. tars and env mutate it. Returns the label."""
+    if base and arch:
+        fail("arch comes from base: " + name)
+    if not base and not arch:
+        fail("a scratch image needs arch: " + name)
+    kwargs = {}
+    if base:
+        kwargs["base"] = base
+    else:
+        kwargs["os"] = "linux"
+        kwargs["architecture"] = "amd64" if arch == "x86_64" else "arm64"
+    if tars:
+        kwargs["tars"] = tars
+    if entrypoint:
+        kwargs["entrypoint"] = entrypoint
+    if env:
+        kwargs["env"] = env
+    oci_image(
+        name = name,
+        **kwargs
+    )
+    return ":" + name
 
-    _bundle(arch)
+def _container_test_impl(ctx):
+    script = ctx.actions.declare_file(ctx.label.name + ".sh")
+    platform = "linux/amd64" if ctx.attr.arch == "x86_64" else "linux/arm64"
+    args = " ".join([_sh_quote(a) for a in ctx.attr.cmd])
+    ctx.actions.write(
+        output = script,
+        is_executable = True,
+        content = """#!/bin/bash
+set -euo pipefail
+root="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}"
+docker load -i "$root/{tarball}" >/dev/null
+out=$(docker run --rm --network=none --platform {platform} {tag} {args})
+printf '%s\\n' "$out" | grep -q {expect}
+""".format(
+            tarball = ctx.file.tarball.short_path,
+            platform = platform,
+            tag = ctx.attr.tag,
+            args = args,
+            expect = _sh_quote(ctx.attr.expect),
+        ),
+    )
+    return DefaultInfo(
+        executable = script,
+        runfiles = ctx.runfiles(files = [ctx.file.tarball]),
+    )
+
+_container_test = rule(
+    implementation = _container_test_impl,
+    test = True,
+    attrs = {
+        "tarball": attr.label(allow_single_file = True),
+        "tag": attr.string(mandatory = True),
+        "arch": attr.string(mandatory = True),
+        "cmd": attr.string_list(mandatory = True),
+        "expect": attr.string(mandatory = True),
+    },
+)
+
+def container_test(name, image, arch, cmd, expect):
+    """Load an OCI image and run cmd. name ends with _test."""
+    if not name.endswith("_test"):
+        fail("container test name must end with _test: " + name)
+    tag = "devlayer/" + name + ":test"
+    oci_load(
+        name = name + "_load",
+        image = image,
+        repo_tags = [tag],
+        tags = ["manual"],
+    )
+    native.filegroup(
+        name = name + "_tar",
+        srcs = [":" + name + "_load"],
+        output_group = "tarball",
+        tags = ["manual"],
+    )
+    _container_test(
+        name = name,
+        tarball = ":" + name + "_tar",
+        tag = tag,
+        arch = arch,
+        cmd = cmd,
+        expect = expect,
+        tags = ["manual", "no-sandbox", "no-remote"],
+    )
+
+

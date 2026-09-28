@@ -85,6 +85,8 @@ def _tool_repos_impl(module_ctx):
         urls = ["https://github.com/aristocratos/btop/archive/refs/tags/v{}.tar.gz".format(v["BTOP"])],
         strip_prefix = "btop-{}".format(v["BTOP"]),
         build_file_content = _ALL_SRCS,
+        patches = [Label("//linux:patches/btop-amdgpu-sysfs.patch")],
+        patch_args = ["-p1"],
         patch_cmds = [
             "sed -i.bak 's/cmake_minimum_required(VERSION 3.25)/cmake_minimum_required(VERSION 3.20)/' CMakeLists.txt",
             """sed -i.bak 's/\\$<LINK_LIBRARY:FRAMEWORK,CoreFoundation>/"-framework CoreFoundation"/g; s/\\$<LINK_LIBRARY:FRAMEWORK,IOKit>/"-framework IOKit"/g' CMakeLists.txt""",

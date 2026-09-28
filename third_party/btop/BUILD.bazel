@@ -7,7 +7,9 @@ cmake(
         "@platforms//os:linux": {
             "CMAKE_BUILD_TYPE": "Release",
             "BTOP_STATIC": "ON",
-            "BTOP_GPU": "OFF",
+            "BTOP_GPU": "ON",
+            "BTOP_AMDGPU_SYSFS": "ON",
+            "BTOP_RSMI_STATIC": "OFF",
             "BTOP_LTO": "OFF",
         },
         "//conditions:default": {

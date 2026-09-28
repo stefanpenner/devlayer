@@ -68,7 +68,7 @@ func TestBtop(t *testing.T) {
 	r.hasSeq(t,
 		"curl",
 		"tar",
-		dir+": cmake -B build -DCMAKE_BUILD_TYPE=Release -DBTOP_STATIC=ON -DBTOP_GPU=OFF -DBTOP_LTO=ON",
+		dir+": cmake -B build -DCMAKE_BUILD_TYPE=Release -DBTOP_STATIC=ON -DBTOP_GPU=ON -DBTOP_AMDGPU_SYSFS=ON -DBTOP_RSMI_STATIC=OFF -DBTOP_LTO=ON",
 		dir+": cmake --build build "+jobsArg(),
 		"strip "+dest,
 		"tar czf - -C "+os.TempDir()+" btop",
