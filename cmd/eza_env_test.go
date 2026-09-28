@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -32,6 +33,22 @@ func TestEzaBuildEnvDarwinUsesCargoAndSystemPath(t *testing.T) {
 
 	if path != "/Users/stef/.cargo/bin:/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin" {
 		t.Fatalf("unexpected PATH: %s", path)
+	}
+}
+
+func TestEzaCargoEnvOverridesUserTargetDir(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "eza")
+	base := []string{"CARGO_TARGET_DIR=" + filepath.Join(t.TempDir(), "shared")}
+	got := ezaCargoEnv(base, src, "darwin", "/Users/stef/.cargo/bin/cargo", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
+
+	var dir string
+	for _, entry := range got {
+		if strings.HasPrefix(entry, "CARGO_TARGET_DIR=") {
+			dir = strings.TrimPrefix(entry, "CARGO_TARGET_DIR=")
+		}
+	}
+	if dir != filepath.Join(src, "target") {
+		t.Fatalf("target dir = %q", dir)
 	}
 }
 
