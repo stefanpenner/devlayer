@@ -3,7 +3,7 @@
 FROM alpine:3.21
 
 RUN apk add --no-cache \
-    build-base cmake git curl wget linux-headers \
+    build-base cmake git curl wget patch linux-headers \
     ncurses-dev ncurses-static \
     go ninja gettext-tiny-dev unzip autoconf automake libtool pkgconf \
     zlib-dev zlib-static \

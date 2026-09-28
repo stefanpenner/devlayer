@@ -18,11 +18,19 @@ func Btop(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 	if err := fetchTarball(x, "https://github.com/aristocratos/btop/archive/refs/tags/v"+ver+".tar.gz", dir+".tar.gz"); err != nil {
 		return err
 	}
+	// The patch reads AMD GPUs from sysfs. It is mounted by the Linux build.
+	if _, err := os.Stat("/btop-amdgpu-sysfs.patch"); err == nil {
+		if err := x(dir, "patch", "-p1", "-i", "/btop-amdgpu-sysfs.patch"); err != nil {
+			return err
+		}
+	}
 
 	if err := x(dir, "cmake", "-B", "build",
 		"-DCMAKE_BUILD_TYPE=Release",
 		"-DBTOP_STATIC=ON",
-		"-DBTOP_GPU=OFF",
+		"-DBTOP_GPU=ON",
+		"-DBTOP_AMDGPU_SYSFS=ON",
+		"-DBTOP_RSMI_STATIC=OFF",
 		"-DBTOP_LTO=ON",
 	); err != nil {
 		return err

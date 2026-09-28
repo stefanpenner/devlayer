@@ -29,20 +29,26 @@ def _linuxbuild(arch):
     goarch = "amd64" if arch == "x86_64" else "arm64"
     return "//tools/linuxbuild:linuxbuild_linux_" + goarch
 
-def _docker_build(name, arch, image_tag, env = {}):
+def _docker_build(name, arch, image_tag, env = {}, patch = None):
     """Compile a tool inside Docker via the linuxbuild CLI; stdout is the tarball."""
     docker_arch = "amd64" if arch == "x86_64" else "arm64"
     docker_platform = "linux/" + docker_arch
     env_flags = " ".join(["-e {}={}".format(k, v) for k, v in env.items()])
     tool = _linuxbuild(arch)
 
+    srcs = [
+        ":base_image_" + arch,
+        "Dockerfile.base",
+        "sysroot/" + arch + "-linux-musl.tar.gz",
+    ]
+    patch_mount = ""
+    if patch:
+        srcs.append(patch)
+        patch_mount = "-v $$(realpath $(location {patch})):/btop-amdgpu-sysfs.patch:ro".format(patch = patch)
+
     native.genrule(
         name = name + "_" + arch,
-        srcs = [
-            ":base_image_" + arch,
-            "Dockerfile.base",
-            "sysroot/" + arch + "-linux-musl.tar.gz",
-        ],
+        srcs = srcs,
         tools = [tool],
         outs = ["{}_{}.tar.gz".format(name, arch)],
         cmd = """
@@ -59,6 +65,7 @@ docker run --rm --pull never --platform {platform} {env} \
   -e PKG_CONFIG_SYSROOT_DIR=/sysroot \
   -e PKG_CONFIG_LIBDIR=/sysroot/usr/lib/pkgconfig \
   -v "$$root/{arch}-linux-musl:/sysroot:ro" \
+  {patch_mount} \
   -v $$toolbin:/linuxbuild:ro {tag} /linuxbuild {name} > $@
 rm -f $$toolbin
 rm -rf "$$root"
@@ -69,6 +76,7 @@ rm -rf "$$root"
             tag = image_tag,
             name = name,
             arch = arch,
+            patch_mount = patch_mount,
         ),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
@@ -120,7 +128,7 @@ def linux_targets(arch):
     })
     _docker_build("btop", arch, image_tag, env = {
         "BTOP_VERSION": VERSIONS["BTOP"],
-    })
+    }, patch = "patches/btop-amdgpu-sysfs.patch")
     _docker_build("nvim", arch, image_tag, env = {
         "NVIM_VERSION": VERSIONS["NVIM"],
     })

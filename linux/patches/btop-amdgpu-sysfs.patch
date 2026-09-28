@@ -1,0 +1,258 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -31,6 +31,7 @@
+ option(BTOP_STATIC "Link btop statically" OFF)
+ option(BTOP_GPU "Enable GPU support" ON)
+ cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
++option(BTOP_AMDGPU_SYSFS "Read AMD GPUs from sysfs instead of ROCm SMI" OFF)
+ 
+ # Enable LTO in release builds by default
+ if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
+@@ -163,8 +164,11 @@
+ # Enable GPU support
+ if(LINUX AND BTOP_GPU)
+   target_compile_definitions(libbtop PUBLIC GPU_SUPPORT)
++  if(BTOP_AMDGPU_SYSFS)
++    target_compile_definitions(libbtop PUBLIC AMDGPU_SYSFS)
++  endif()
+ 
+-  if(BTOP_RSMI_STATIC)
++  if(BTOP_RSMI_STATIC AND NOT BTOP_AMDGPU_SYSFS)
+     # ROCm doesn't properly add it's folders to the module path if `CMAKE_MODULE_PATH` is already
+     # set
+     # We could also manually append ROCm's path here
+--- a/Makefile
++++ b/Makefile
+@@ -37,10 +37,13 @@
+ override PLATFORM_LC := $(shell echo $(PLATFORM) | tr '[:upper:]' '[:lower:]')
+ 
+ #? GPU Support
+-ifeq ($(PLATFORM_LC)$(ARCH),linuxx86_64)
+-	ifneq ($(STATIC),true)
+-		GPU_SUPPORT := true
++ifeq ($(PLATFORM_LC),linux)
++	GPU_SUPPORT := true
++	ifeq ($(ARCH),x86_64)
+ 		INTEL_GPU_SUPPORT := true
++	endif
++	ifeq ($(STATIC),true)
++		override ADDFLAGS += -DAMDGPU_SYSFS
+ 	endif
+ endif
+ ifeq ($(PLATFORM_LC),macos)
+--- a/src/linux/btop_collect.cpp
++++ b/src/linux/btop_collect.cpp
+@@ -1534,7 +1534,76 @@
+ 
+ 	//? AMD
+ 	namespace Rsmi {
++		vector<fs::path> sysfs_cards;
++
++		static long long read_ll(const fs::path& path) {
++			ifstream in(path);
++			long long value = 0;
++			if (!(in >> value)) return -1;
++			return value;
++		}
++
++		static string read_text(const fs::path& path) {
++			ifstream in(path);
++			string text;
++			getline(in, text);
++			return text;
++		}
++
++		static fs::path hwmon_dir(const fs::path& device) {
++			std::error_code ec;
++			for (const auto& entry : fs::directory_iterator(device / "hwmon", ec)) {
++				if (entry.is_directory()) return entry.path();
++			}
++			return {};
++		}
++
++		static long long dpm_mhz(const fs::path& path) {
++			ifstream in(path);
++			string line;
++			long long last = -1;
++			while (getline(in, line)) {
++				auto colon = line.find(':');
++				if (colon == string::npos) continue;
++				size_t i = colon + 1;
++				while (i < line.size() && line[i] == ' ') i++;
++				long long mhz = 0;
++				bool any = false;
++				for (; i < line.size() && line[i] >= '0' && line[i] <= '9'; ++i) {
++					mhz = mhz * 10 + (line[i] - '0');
++					any = true;
++				}
++				if (!any) continue;
++				last = mhz;
++				if (line.find('*') != string::npos) return mhz;
++			}
++			return last;
++		}
++
+ 		bool init() {
++
++#if defined(AMDGPU_SYSFS)
++			if (initialized) return false;
++			sysfs_cards.clear();
++			std::error_code ec;
++			if (!fs::exists("/sys/class/drm", ec)) return false;
++			for (const auto& entry : fs::directory_iterator("/sys/class/drm", ec)) {
++				auto name = entry.path().filename().string();
++				if (!name.starts_with("card") || name.find('-') != string::npos) continue;
++				auto device = entry.path() / "device";
++				if (read_text(device / "vendor") != "0x1002") continue;
++				if (!fs::exists(device / "gpu_busy_percent", ec)) continue;
++				sysfs_cards.push_back(device);
++			}
++			device_count = static_cast<uint32_t>(sysfs_cards.size());
++			if (device_count == 0) return false;
++			gpus.resize(gpus.size() + device_count);
++			gpu_names.resize(gpus.size() + device_count);
++			initialized = true;
++			collect<1>(gpus.data() + Nvml::device_count);
++			return true;
++#else
++
+ 			if (initialized) return false;
+ 
+ 			//? Dynamic loading & linking
+@@ -1651,10 +1720,21 @@
+ 
+ 				return true;
+ 			} else {initialized = true; shutdown(); return false;}
+-		}
++		
++#endif
++}
+ 
+ 		bool shutdown() {
++
++#if defined(AMDGPU_SYSFS)
+ 			if (!initialized) return false;
++			initialized = false;
++			device_count = 0;
++			sysfs_cards.clear();
++			return true;
++#else
++
++			if (!initialized) return false;
+     		if (rsmi_shut_down() == RSMI_STATUS_SUCCESS) {
+ 				initialized = false;
+ 			#if !defined(RSMI_STATIC)
+@@ -1663,10 +1743,100 @@
+ 			} else Logger::warning("Failed to shutdown ROCm SMI");
+ 
+ 			return true;
+-		}
++		
++#endif
++}
+ 
+ 		template <bool is_init>
+-		bool collect(gpu_info* gpus_slice) { // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
++		bool collect(gpu_info* gpus_slice) {
++
++#if defined(AMDGPU_SYSFS)
++			if (!initialized) return false;
++			for (uint32_t i = 0; i < device_count; ++i) {
++				const auto& device = sysfs_cards[i];
++				auto hwmon = hwmon_dir(device);
++				if constexpr (is_init) {
++					auto product = read_text(device / "product_name");
++					if (product.empty()) product = "AMD GPU";
++					gpu_names[Nvml::device_count + i] = product;
++					long long cap = hwmon.empty() ? -1 : read_ll(hwmon / "power1_cap");
++					if (cap > 0) {
++						gpus_slice[i].pwr_max_usage = cap / 1000;
++						gpu_pwr_total_max += gpus_slice[i].pwr_max_usage;
++					}
++					long long crit = hwmon.empty() ? -1 : read_ll(hwmon / "temp1_crit");
++					if (crit > 0) gpus_slice[i].temp_max = crit / 1000;
++					gpus_slice[i].supported_functions.encoder_utilization = false;
++					gpus_slice[i].supported_functions.decoder_utilization = false;
++					gpus_slice[i].supported_functions.pwr_state = false;
++					gpus_slice[i].supported_functions.pcie_txrx = false;
++				}
++				if (gpus_slice[i].supported_functions.gpu_utilization) {
++					auto busy = read_ll(device / "gpu_busy_percent");
++					if (busy < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.gpu_utilization = false;
++					} else gpus_slice[i].gpu_percent.at("gpu-totals").push_back(busy);
++				}
++				if (gpus_slice[i].supported_functions.mem_utilization) {
++					auto busy = read_ll(device / "mem_busy_percent");
++					if (busy < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.mem_utilization = false;
++					} else gpus_slice[i].mem_utilization_percent.push_back(busy);
++				}
++				if (gpus_slice[i].supported_functions.gpu_clock) {
++					auto mhz = dpm_mhz(device / "pp_dpm_sclk");
++					if (mhz < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.gpu_clock = false;
++					} else gpus_slice[i].gpu_clock_speed = mhz;
++				}
++				if (gpus_slice[i].supported_functions.mem_clock) {
++					auto mhz = dpm_mhz(device / "pp_dpm_mclk");
++					if (mhz < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.mem_clock = false;
++					} else gpus_slice[i].mem_clock_speed = mhz;
++				}
++				if (gpus_slice[i].supported_functions.pwr_usage) {
++					auto power = hwmon.empty() ? -1 : read_ll(hwmon / "power1_average");
++					if (power < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.pwr_usage = false;
++					} else {
++						gpus_slice[i].pwr_usage = power / 1000;
++						if (gpus_slice[i].pwr_usage > gpus_slice[i].pwr_max_usage)
++							gpus_slice[i].pwr_max_usage = gpus_slice[i].pwr_usage;
++						if (gpus_slice[i].pwr_max_usage > 0)
++							gpus_slice[i].gpu_percent.at("gpu-pwr-totals").push_back(clamp((long long)round((double)gpus_slice[i].pwr_usage * 100.0 / (double)gpus_slice[i].pwr_max_usage), 0ll, 100ll));
++					}
++				}
++				if (gpus_slice[i].supported_functions.temp_info) {
++					if (Config::getB("check_temp") or is_init) {
++						auto temp = hwmon.empty() ? -1 : read_ll(hwmon / "temp1_input");
++						if (temp < 0) {
++							if constexpr (is_init) gpus_slice[i].supported_functions.temp_info = false;
++						} else gpus_slice[i].temp.push_back(temp / 1000);
++					}
++				}
++				if (gpus_slice[i].supported_functions.mem_total) {
++					auto total = read_ll(device / "mem_info_vram_total");
++					if (total < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.mem_total = false;
++					} else gpus_slice[i].mem_total = total;
++				}
++				if (gpus_slice[i].supported_functions.mem_used) {
++					auto used = read_ll(device / "mem_info_vram_used");
++					if (used < 0) {
++						if constexpr (is_init) gpus_slice[i].supported_functions.mem_used = false;
++					} else {
++						gpus_slice[i].mem_used = used;
++						if (gpus_slice[i].supported_functions.mem_total and gpus_slice[i].mem_total > 0)
++							gpus_slice[i].gpu_percent.at("gpu-vram-totals").push_back((long long)round((double)used * 100.0 / (double)gpus_slice[i].mem_total));
++					}
++				}
++				gpus_slice[i].pcie_tx = -1;
++				gpus_slice[i].pcie_rx = -1;
++			}
++			return true;
++#else
++ // raw pointer to vector data, size == device_count, offset by Nvml::device_count elements
+ 			if (!initialized) return false;
+ 			rsmi_status_t result;
+ 
+@@ -1879,7 +2049,9 @@
+     		}
+ 
+ 			return true;
+-		}
++		
++#endif
++}
+ 	}
+ 
+ 	namespace Intel {
