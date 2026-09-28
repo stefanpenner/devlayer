@@ -110,22 +110,29 @@ def bundle(arch):
         visibility = ["//visibility:public"],
     )
 
+def _sh_quote(s):
+    return "'" + s.replace("'", "'\\''") + "'"
+
 def _scratch_smoke_impl(ctx):
     # This Bazel has no sh_test. The generated file only locates smoke.sh.
     script = ctx.actions.declare_file(ctx.label.name + ".sh")
     platform = "linux/amd64" if ctx.attr.arch == "x86_64" else "linux/arm64"
+    args = " ".join([_sh_quote(a) for a in ctx.attr.cmd])
     ctx.actions.write(
         output = script,
         is_executable = True,
         content = """#!/bin/bash
 set -euo pipefail
 root="${{TEST_SRCDIR}}/${{TEST_WORKSPACE}}"
-exec "$root/{smoke}" "$root/{archive}" {platform} {tool}
+exec "$root/{smoke}" "$root/{archive}" {platform} {entry} {env} {expect} -- {args}
 """.format(
             smoke = ctx.file._smoke.short_path,
             archive = ctx.file.archive.short_path,
             platform = platform,
-            tool = ctx.attr.tool,
+            entry = _sh_quote(ctx.attr.entry),
+            env = _sh_quote(ctx.attr.env),
+            expect = _sh_quote(ctx.attr.expect),
+            args = args,
         ),
     )
     return DefaultInfo(
@@ -139,18 +146,24 @@ _scratch_smoke_test = rule(
     attrs = {
         "archive": attr.label(allow_single_file = True),
         "arch": attr.string(mandatory = True),
-        "tool": attr.string(mandatory = True),
+        "entry": attr.string(mandatory = True),
+        "cmd": attr.string_list(mandatory = True),
+        "expect": attr.string(mandatory = True),
+        "env": attr.string(default = ""),
         "_smoke": attr.label(allow_single_file = True, default = "//linux:smoke/smoke.sh"),
     },
 )
 
-def scratch_smoke(tool, arch):
-    """scratch image with only this tool's files. See linux/smoke/smoke.sh."""
+def scratch_smoke(tool, arch, entry, cmd, expect, env = ""):
+    """scratch image with only this tool's files. cmd is what the program runs."""
     _scratch_smoke_test(
         name = tool + "_smoke_" + arch,
         archive = ":{}_{}".format(tool, arch),
         arch = arch,
-        tool = tool,
+        entry = entry,
+        cmd = cmd,
+        expect = expect,
+        env = env,
         tags = ["manual", "no-sandbox", "no-remote"],
     )
 
