@@ -9,6 +9,20 @@ import (
 	"testing"
 )
 
+func TestConfigureArgsAddsSysroot(t *testing.T) {
+	got := configureArgs(map[string]string{"SYSROOT": "/sysroot"}, "CFLAGS=-Os", "LDFLAGS=-static")
+	if got[0] != "CFLAGS=-Os -I/sysroot/usr/include" {
+		t.Fatalf("cflags = %q", got[0])
+	}
+	if got[1] != "LDFLAGS=-static -L/sysroot/usr/lib" {
+		t.Fatalf("ldflags = %q", got[1])
+	}
+	plain := configureArgs(nil, "CFLAGS=-Os")
+	if plain[0] != "CFLAGS=-Os" {
+		t.Fatalf("plain = %q", plain[0])
+	}
+}
+
 func jobsArg() string {
 	return "-j" + strconv.Itoa(runtime.NumCPU())
 }

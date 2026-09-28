@@ -16,7 +16,7 @@ func Htop(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 	if err := x("htop", "./autogen.sh"); err != nil {
 		return err
 	}
-	if err := x("htop", "./configure", "--enable-static", "LDFLAGS=-static", "CFLAGS=-Os -DNDEBUG"); err != nil {
+	if err := x("htop", "./configure", configureArgs(env, "--enable-static", "LDFLAGS=-static", "CFLAGS=-Os -DNDEBUG")...); err != nil {
 		return err
 	}
 

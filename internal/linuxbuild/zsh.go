@@ -26,7 +26,7 @@ func Zsh(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 	if err := x("zsh", "./Util/preconfig"); err != nil {
 		return err
 	}
-	if err := x("zsh", "./configure",
+	if err := x("zsh", "./configure", configureArgs(env,
 		"--prefix=/opt/zsh",
 		"--enable-static",
 		"--disable-dynamic",
@@ -34,7 +34,7 @@ func Zsh(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 		"--with-tcsetpgrp",
 		"LDFLAGS=-static",
 		"CFLAGS=-Os -DNDEBUG",
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 

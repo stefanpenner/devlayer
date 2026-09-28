@@ -62,6 +62,29 @@ func jobs() string {
 	return "-j" + strconv.Itoa(runtime.NumCPU())
 }
 
+// configureArgs appends the sysroot include and lib directories when SYSROOT
+// is set. The mounted tree holds curl, Mbed TLS, zlib, and ncurses.
+func configureArgs(env map[string]string, args ...string) []string {
+	root := ""
+	if env != nil {
+		root = env["SYSROOT"]
+	}
+	if root == "" {
+		return args
+	}
+	out := make([]string, 0, len(args)+2)
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "CFLAGS="):
+			a += " -I" + root + "/usr/include"
+		case strings.HasPrefix(a, "LDFLAGS="):
+			a += " -L" + root + "/usr/lib"
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 func fetchTarball(x Exec, url, dest string) error {
 	if err := x("", "curl", "-fsSL", "-o", dest, url); err != nil {
 		return err

@@ -32,7 +32,11 @@ func Git(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 		return err
 	}
 
-	if err := writeGitConfigMak(dir, out); err != nil {
+	sysroot := ""
+	if env != nil {
+		sysroot = env["SYSROOT"]
+	}
+	if err := writeGitConfigMak(dir, out, sysroot); err != nil {
 		return err
 	}
 
@@ -50,12 +54,22 @@ func Git(x Exec, out Output, env map[string]string, stdout io.Writer) error {
 	return tarPrefix(x, "/opt/git")
 }
 
-func writeGitConfigMak(dir string, out Output) error {
+func writeGitConfigMak(dir string, out Output, sysroot string) error {
 	libs, err := out("", "pkg-config", "--static", "--libs", "libcurl")
 	if err != nil {
 		return err
 	}
 	body := GitConfigMak + "CURL_LDFLAGS = " + StripLdl(strings.TrimSpace(libs)) + "\n"
+	if sysroot != "" {
+		cflags, err := out("", "pkg-config", "--static", "--cflags", "libcurl")
+		if err != nil {
+			return err
+		}
+		body = strings.Replace(body,
+			"CFLAGS = -Os -DNDEBUG\n",
+			"CFLAGS = -Os -DNDEBUG "+strings.TrimSpace(cflags)+"\n",
+			1)
+	}
 	return os.WriteFile(filepath.Join(dir, "config.mak"), []byte(body), 0644)
 }
 
