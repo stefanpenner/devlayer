@@ -78,18 +78,19 @@ rm -rf "$$root"
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:private"],
     )
+    return ":" + name + "_" + arch
 
-def bundle(arch):
+def bundle(arch, git, zsh, htop, btop, nvim, make):
     """Create the final bundle assembly target."""
     native.genrule(
         name = "bundle_" + arch,
         srcs = [
-            ":git_" + arch,
-            ":zsh_" + arch,
-            ":htop_" + arch,
-            ":btop_" + arch,
-            ":nvim_" + arch,
-            ":make_" + arch,
+            git,
+            zsh,
+            htop,
+            btop,
+            nvim,
+            make,
             "//:versions.env",
         ],
         tools = ["//tools/assemble:assemble"],
@@ -99,12 +100,12 @@ def bundle(arch):
             "--out $@",
             "--arch " + arch,
             "--versions $(location //:versions.env)",
-            "--git $(location :git_{arch})".format(arch = arch),
-            "--zsh $(location :zsh_{arch})".format(arch = arch),
-            "--htop $(location :htop_{arch})".format(arch = arch),
-            "--btop $(location :btop_{arch})".format(arch = arch),
-            "--nvim $(location :nvim_{arch})".format(arch = arch),
-            "--make $(location :make_{arch})".format(arch = arch),
+            "--git $(location {})".format(git),
+            "--zsh $(location {})".format(zsh),
+            "--htop $(location {})".format(htop),
+            "--btop $(location {})".format(btop),
+            "--nvim $(location {})".format(nvim),
+            "--make $(location {})".format(make),
         ]),
         tags = ["manual", "no-sandbox", "requires-network", "no-remote"],
         visibility = ["//visibility:public"],

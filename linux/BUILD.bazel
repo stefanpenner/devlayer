@@ -9,23 +9,23 @@ load(":defs.bzl", "base_image", "bundle", "compile_tool", "scratch_test")
 
 base_image("x86_64")
 
-compile_tool("git", "x86_64", {"GIT_VERSION": VERSIONS["GIT"]})
-compile_tool("zsh", "x86_64", {"ZSH_VERSION": VERSIONS["ZSH"]})
-compile_tool("htop", "x86_64", {"HTOP_VERSION": VERSIONS["HTOP"]})
-compile_tool("btop", "x86_64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
-compile_tool("nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]})
-compile_tool("make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]})
+git = compile_tool("git", "x86_64", {"GIT_VERSION": VERSIONS["GIT"]})
+zsh = compile_tool("zsh", "x86_64", {"ZSH_VERSION": VERSIONS["ZSH"]})
+htop = compile_tool("htop", "x86_64", {"HTOP_VERSION": VERSIONS["HTOP"]})
+btop = compile_tool("btop", "x86_64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
+nvim = compile_tool("nvim", "x86_64", {"NVIM_VERSION": VERSIONS["NVIM"]})
+make = compile_tool("make", "x86_64", {"MAKE_VERSION": VERSIONS["MAKE"]})
 
 scratch_test(
     "btop_x86_64_test",
-    ":btop_x86_64",
+    btop,
     entry = "/btop",
     cmd = ["--version"],
     expect = "btop",
 )
 scratch_test(
     "git_x86_64_test",
-    ":git_x86_64",
+    git,
     entry = "/bin/git",
     cmd = ["--version"],
     expect = "^git version",
@@ -33,7 +33,7 @@ scratch_test(
 )
 scratch_test(
     "zsh_x86_64_test",
-    ":zsh_x86_64",
+    zsh,
     entry = "/bin/zsh",
     cmd = ["-fc", "print smoke-ok"],
     expect = "^smoke-ok$",
@@ -41,34 +41,34 @@ scratch_test(
 )
 scratch_test(
     "nvim_x86_64_test",
-    ":nvim_x86_64",
+    nvim,
     entry = "/bin/nvim",
     cmd = ["--headless", "--version"],
     expect = "^NVIM v",
     env = "VIMRUNTIME=/share/nvim/runtime",
 )
 
-bundle("x86_64")
+bundle("x86_64", git, zsh, htop, btop, nvim, make)
 
 base_image("aarch64")
 
-compile_tool("git", "aarch64", {"GIT_VERSION": VERSIONS["GIT"]})
-compile_tool("zsh", "aarch64", {"ZSH_VERSION": VERSIONS["ZSH"]})
-compile_tool("htop", "aarch64", {"HTOP_VERSION": VERSIONS["HTOP"]})
-compile_tool("btop", "aarch64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
-compile_tool("nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]})
-compile_tool("make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]})
+git = compile_tool("git", "aarch64", {"GIT_VERSION": VERSIONS["GIT"]})
+zsh = compile_tool("zsh", "aarch64", {"ZSH_VERSION": VERSIONS["ZSH"]})
+htop = compile_tool("htop", "aarch64", {"HTOP_VERSION": VERSIONS["HTOP"]})
+btop = compile_tool("btop", "aarch64", {"BTOP_VERSION": VERSIONS["BTOP"]}, "patches/btop-amdgpu-sysfs.patch")
+nvim = compile_tool("nvim", "aarch64", {"NVIM_VERSION": VERSIONS["NVIM"]})
+make = compile_tool("make", "aarch64", {"MAKE_VERSION": VERSIONS["MAKE"]})
 
 scratch_test(
     "btop_aarch64_test",
-    ":btop_aarch64",
+    btop,
     entry = "/btop",
     cmd = ["--version"],
     expect = "btop",
 )
 scratch_test(
     "git_aarch64_test",
-    ":git_aarch64",
+    git,
     entry = "/bin/git",
     cmd = ["--version"],
     expect = "^git version",
@@ -76,7 +76,7 @@ scratch_test(
 )
 scratch_test(
     "zsh_aarch64_test",
-    ":zsh_aarch64",
+    zsh,
     entry = "/bin/zsh",
     cmd = ["-fc", "print smoke-ok"],
     expect = "^smoke-ok$",
@@ -84,11 +84,11 @@ scratch_test(
 )
 scratch_test(
     "nvim_aarch64_test",
-    ":nvim_aarch64",
+    nvim,
     entry = "/bin/nvim",
     cmd = ["--headless", "--version"],
     expect = "^NVIM v",
     env = "VIMRUNTIME=/share/nvim/runtime",
 )
 
-bundle("aarch64")
+bundle("aarch64", git, zsh, htop, btop, nvim, make)
