@@ -1,7 +1,9 @@
 # Multi-stage build: compile static binaries + download pre-built tools
 # Stages run in parallel via BuildKit for faster builds
 
-FROM alpine:3.21 AS base
+# Index digest for alpine 3.21. Pins the base root for amd64 and arm64.
+# The apk packages below are a second download. They are not inside this digest.
+FROM alpine:3.21@sha256:ce64758a109eb420d874a118f87920e625e12d3634e03b4a5573fd9f6e5d3507 AS base
 
 RUN apk add --no-cache \
     build-base cmake git curl wget linux-headers \
