@@ -82,6 +82,9 @@ func Build(archName, out string) (string, error) {
 	if err := sanitizePC(prefix); err != nil {
 		return "", err
 	}
+	if err := ensureZlibPC(prefix); err != nil {
+		return "", err
+	}
 	tarPath := prefix + ".tar.gz"
 	if err := writeTarGz(tarPath, prefix, arch.Triple); err != nil {
 		return "", err
@@ -412,6 +415,29 @@ func singleChild(dir string) (string, error) {
 		return "", fmt.Errorf("%s has %d top-level directories", dir, len(dirs))
 	}
 	return filepath.Join(dir, dirs[0]), nil
+}
+
+func ensureZlibPC(prefix string) error {
+	dir := filepath.Join(prefix, "usr", "lib", "pkgconfig")
+	path := filepath.Join(dir, "zlib.pc")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	const body = `prefix=/usr
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: zlib
+Description: zlib
+Version: 1.3.1
+Libs: -L${libdir} -lz
+Cflags: -I${includedir}
+`
+	return os.WriteFile(path, []byte(body), 0644)
 }
 
 func sanitizePC(prefix string) error {
