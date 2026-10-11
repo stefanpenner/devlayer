@@ -61,6 +61,14 @@ func Install(scriptDir string) error {
 		}
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if err := installPrivate(scriptDir, home); err != nil {
+		return err
+	}
+
 	// Install nvim plugins (if built)
 	nvimTar := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
 	if _, err := os.Stat(nvimTar); err == nil {

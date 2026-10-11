@@ -1,5 +1,6 @@
 output/
 *.tar.gz
+!linux/sysroot/*.tar.gz
 *.zip
 .DS_Store
 

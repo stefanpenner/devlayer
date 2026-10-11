@@ -32,6 +32,9 @@ func Push(host, scriptDir string, vers *versions.Versions) error {
 	if err := deployDotfiles(host, scriptDir); err != nil {
 		return err
 	}
+	if err := deployPrivate(host, scriptDir); err != nil {
+		return err
+	}
 	if err := deployNvimPlugins(host, scriptDir); err != nil {
 		return err
 	}

@@ -63,6 +63,26 @@ Write the sync list.
 Edit the list.
 Do not list a private key.
 
+## Private layer
+
+House tools stay out of this repo.
+Write `~/.config/devlayer/private.toml` on a machine that needs them.
+
+```toml
+[private]
+repo = "git@github.com:you/private.git"
+path = "~/.ai-private"
+```
+
+`devlayer build` clones that checkout.
+The command writes `devlayer-private.tar.gz`.
+The archive omits `.git`.
+`devlayer install` and `devlayer push` extract it under `$HOME`.
+They run `$HOME/.ai-private/install.sh` when that file exists.
+No `private.toml` means no private layer.
+Do not commit `private.toml`.
+Do not commit the private archive.
+
 ```bash
 devlayer init
 ```

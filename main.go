@@ -22,8 +22,8 @@ func usage() {
 	fmt.Print(`Usage: devlayer <command> [options]
 
 Commands:
-  build [--os OS] [--arch ARCH]   Build the sysroot, the dotfiles, and the nvim plugins
-  push <host>                     Send the sysroot, the dotfiles, and the nvim plugins
+  build [--os OS] [--arch ARCH]   Build the sysroot, the dotfiles, the private layer, and the nvim plugins
+  push <host>                     Send the sysroot, the dotfiles, the private layer, and the nvim plugins
   status [host]                   Show installed tool versions (local or SSH)
   install                         Install the sysroot (DEVLAYER_PREFIX, default ~/.local)
   init [--force]                  Write ~/.config/devlayer/config.toml
