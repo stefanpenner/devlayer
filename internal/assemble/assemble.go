@@ -18,7 +18,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
-// Compiled is the set of linuxbuild tar.gz paths extracted into the bundle.
+// Compiled is one archive path for each source-built tool.
 type Compiled struct {
 	Git, Zsh, Htop, Btop, Nvim, Make string
 }
@@ -76,24 +76,28 @@ func makeStaging() (string, error) {
 }
 
 func extractCompiled(staging string, c Compiled) error {
+	trees := []struct{ name, tar string }{
+		{"git", c.Git},
+		{"zsh", c.Zsh},
+		{"nvim", c.Nvim},
+	}
+	for _, tree := range trees {
+		dest := filepath.Join(staging, tree.name)
+		if err := extractTree(tree.tar, dest); err != nil {
+			return fmt.Errorf("%s: %w", tree.name, err)
+		}
+	}
+
 	bin := filepath.Join(staging, "bin")
-	if err := extractTree(c.Git, filepath.Join(staging, "git")); err != nil {
-		return fmt.Errorf("git: %w", err)
+	bins := []struct{ name, tar string }{
+		{"htop", c.Htop},
+		{"btop", c.Btop},
+		{"make", c.Make},
 	}
-	if err := extractTree(c.Zsh, filepath.Join(staging, "zsh")); err != nil {
-		return fmt.Errorf("zsh: %w", err)
-	}
-	if err := extractBin(c.Htop, "htop", bin); err != nil {
-		return fmt.Errorf("htop: %w", err)
-	}
-	if err := extractBin(c.Btop, "btop", bin); err != nil {
-		return fmt.Errorf("btop: %w", err)
-	}
-	if err := extractTree(c.Nvim, filepath.Join(staging, "nvim")); err != nil {
-		return fmt.Errorf("nvim: %w", err)
-	}
-	if err := extractBin(c.Make, "make", bin); err != nil {
-		return fmt.Errorf("make: %w", err)
+	for _, tool := range bins {
+		if err := extractBin(tool.tar, tool.name, bin); err != nil {
+			return fmt.Errorf("%s: %w", tool.name, err)
+		}
 	}
 	return nil
 }
