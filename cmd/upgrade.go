@@ -23,7 +23,6 @@ func Upgrade(currentVersion string) error {
 	}
 	arch := bundleArch(p)
 
-	// Fetch latest release info from GitHub
 	fmt.Println("==> Checking for updates...")
 	release, err := getLatestRelease()
 	if err != nil {
@@ -43,20 +42,8 @@ func Upgrade(currentVersion string) error {
 		fmt.Println()
 	}
 
-	// Download the bundle
 	assetName := fmt.Sprintf("devlayer-%s-%s.%s", p.OS, arch, p.BundleExt)
-	var downloadURL string
-	for _, asset := range release.Assets {
-		if asset.Name == assetName {
-			// Use API URL for private repos (browser_download_url doesn't work with token auth)
-			if ghToken() != "" && asset.URL != "" {
-				downloadURL = asset.URL
-			} else {
-				downloadURL = asset.BrowserDownloadURL
-			}
-			break
-		}
-	}
+	downloadURL := releaseAsset(release, assetName)
 	if downloadURL == "" {
 		return fmt.Errorf("no release asset found for %s/%s (%s)", p.OS, arch, assetName)
 	}
@@ -86,7 +73,6 @@ func Upgrade(currentVersion string) error {
 
 	fmt.Printf("==> Downloaded %.0f MB\n", float64(size)/1024/1024)
 
-	// Extract to prefix
 	fmt.Printf("==> Installing to %s...\n", prefix)
 	if err := os.MkdirAll(prefix, 0755); err != nil {
 		return err
@@ -109,6 +95,21 @@ type ghRelease struct {
 	TagName string    `json:"tag_name"`
 	Body    string    `json:"body"`
 	Assets  []ghAsset `json:"assets"`
+}
+
+// releaseAsset picks the bytes for one asset name.
+// A token uses the API URL. The browser URL rejects that token.
+func releaseAsset(release *ghRelease, name string) string {
+	for _, asset := range release.Assets {
+		if asset.Name != name {
+			continue
+		}
+		if ghToken() != "" && asset.URL != "" {
+			return asset.URL
+		}
+		return asset.BrowserDownloadURL
+	}
+	return ""
 }
 
 func sameVersion(a, b string) bool {
