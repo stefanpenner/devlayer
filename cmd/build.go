@@ -795,7 +795,6 @@ func buildNvimPlugins(scriptDir string) error {
 	home, _ := os.UserHomeDir()
 	nvimData := filepath.Join(home, ".local", "share", "nvim")
 
-	// 1. Plugins from lockfile
 	pluginDir := filepath.Join(staging, "site", "pack", "core", "opt")
 	if err := nvimplugins.SyncPlugins(lockfile, pluginDir); err != nil {
 		return fmt.Errorf("sync nvim plugins: %w", err)
@@ -803,43 +802,26 @@ func buildNvimPlugins(scriptDir string) error {
 	entries, _ := os.ReadDir(pluginDir)
 	fmt.Printf("  %d plugins\n", len(entries))
 
-	// Parsers and Mason are host-built, not lockfile pins. Absent on a clean machine.
-	// 2. Treesitter parsers (.so files) and queries
-	parserSrc := filepath.Join(nvimData, "site", "parser")
-	if _, err := os.Stat(parserSrc); err == nil {
-		parserDst := filepath.Join(staging, "site", "parser")
-		if err := copyDirSimple(parserSrc, parserDst); err != nil {
-			return fmt.Errorf("copy treesitter parsers: %w", err)
-		}
+	parserDst := filepath.Join(staging, "site", "parser")
+	copied, err := copyPresentDir(filepath.Join(nvimData, "site", "parser"), parserDst)
+	if err != nil {
+		return fmt.Errorf("copy treesitter parsers: %w", err)
+	}
+	if copied {
 		parsers, _ := os.ReadDir(parserDst)
 		fmt.Printf("  %d treesitter parsers\n", len(parsers))
 	}
-	// Treesitter queries are symlinks to plugin dirs — resolve and copy content
-	querySrc := filepath.Join(nvimData, "site", "queries")
-	if entries, err := os.ReadDir(querySrc); err == nil {
-		queryDst := filepath.Join(staging, "site", "queries")
-		if err := os.MkdirAll(queryDst, 0755); err != nil {
-			return fmt.Errorf("mkdir queries: %w", err)
-		}
-		for _, e := range entries {
-			src := filepath.Join(querySrc, e.Name())
-			realSrc, err := filepath.EvalSymlinks(src)
-			if err != nil {
-				continue
-			}
-			if err := copyDirSimple(realSrc, filepath.Join(queryDst, e.Name())); err != nil {
-				return fmt.Errorf("copy query %s: %w", e.Name(), err)
-			}
-		}
+
+	if err := copyQueries(filepath.Join(nvimData, "site", "queries"), filepath.Join(staging, "site", "queries")); err != nil {
+		return err
 	}
 
-	// 3. Mason LSP servers
-	masonSrc := filepath.Join(nvimData, "mason")
-	if _, err := os.Stat(masonSrc); err == nil {
-		masonDst := filepath.Join(staging, "mason")
-		if err := copyDirSimple(masonSrc, masonDst); err != nil {
-			return fmt.Errorf("copy mason packages: %w", err)
-		}
+	masonDst := filepath.Join(staging, "mason")
+	copied, err = copyPresentDir(filepath.Join(nvimData, "mason"), masonDst)
+	if err != nil {
+		return fmt.Errorf("copy mason packages: %w", err)
+	}
+	if copied {
 		pkgs, _ := os.ReadDir(filepath.Join(masonDst, "packages"))
 		fmt.Printf("  %d mason packages\n", len(pkgs))
 	}
@@ -850,6 +832,36 @@ func buildNvimPlugins(scriptDir string) error {
 	}
 
 	printSize(outputFile)
+	return nil
+}
+
+// copyPresentDir copies a host tree. A missing tree is not an error.
+func copyPresentDir(src, dst string) (bool, error) {
+	if _, err := os.Stat(src); err != nil {
+		return false, nil
+	}
+	return true, copyDirSimple(src, dst)
+}
+
+// copyQueries copies each query tree. A link is stored as its target.
+// A missing query directory is not an error.
+func copyQueries(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return nil
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return fmt.Errorf("mkdir queries: %w", err)
+	}
+	for _, e := range entries {
+		realSrc, err := filepath.EvalSymlinks(filepath.Join(src, e.Name()))
+		if err != nil {
+			continue
+		}
+		if err := copyDirSimple(realSrc, filepath.Join(dst, e.Name())); err != nil {
+			return fmt.Errorf("copy query %s: %w", e.Name(), err)
+		}
+	}
 	return nil
 }
 
