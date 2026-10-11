@@ -716,42 +716,13 @@ func buildDotfiles(scriptDir string) error {
 	defer os.RemoveAll(staging)
 
 	for _, rel := range cfg.Dotfiles.Sync {
-		src := filepath.Join(home, rel)
-		dst := filepath.Join(staging, rel)
-
-		_, err := os.Stat(src)
-		if os.IsNotExist(err) {
+		found, err := stageDotfile(home, staging, rel)
+		if err != nil {
+			return err
+		}
+		if !found {
 			fmt.Printf("  skipped (not found): %s\n", rel)
 			continue
-		}
-		if err != nil {
-			return err
-		}
-
-		// Resolve symlinks — we want actual content in the tarball
-		realSrc, err := filepath.EvalSymlinks(src)
-		if err != nil {
-			return fmt.Errorf("resolve %s: %w", rel, err)
-		}
-		realInfo, err := os.Stat(realSrc)
-		if err != nil {
-			return err
-		}
-
-		if realInfo.IsDir() {
-			if err := os.MkdirAll(dst, 0755); err != nil {
-				return err
-			}
-			if err := copyDirSimple(realSrc, dst); err != nil {
-				return fmt.Errorf("copy %s: %w", rel, err)
-			}
-		} else {
-			if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-				return err
-			}
-			if err := copyFile(realSrc, dst); err != nil {
-				return fmt.Errorf("copy %s: %w", rel, err)
-			}
 		}
 		fmt.Printf("  %s\n", rel)
 	}
@@ -763,6 +734,45 @@ func buildDotfiles(scriptDir string) error {
 
 	printSize(outputFile)
 	return nil
+}
+
+// stageDotfile copies one home path into the staging tree.
+// The archive stores the target of a link.
+func stageDotfile(home, staging, rel string) (bool, error) {
+	src := filepath.Join(home, rel)
+	dst := filepath.Join(staging, rel)
+	_, err := os.Stat(src)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	realSrc, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return false, fmt.Errorf("resolve %s: %w", rel, err)
+	}
+	realInfo, err := os.Stat(realSrc)
+	if err != nil {
+		return false, err
+	}
+	if realInfo.IsDir() {
+		if err := os.MkdirAll(dst, 0755); err != nil {
+			return false, err
+		}
+		if err := copyDirSimple(realSrc, dst); err != nil {
+			return false, fmt.Errorf("copy %s: %w", rel, err)
+		}
+		return true, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return false, err
+	}
+	if err := copyFile(realSrc, dst); err != nil {
+		return false, fmt.Errorf("copy %s: %w", rel, err)
+	}
+	return true, nil
 }
 
 // buildNvimPlugins packages nvim plugins, treesitter parsers, and Mason LSP
