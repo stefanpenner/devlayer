@@ -1,9 +1,21 @@
+# ---
+# why: This file selects a build platform and exports link scripts.
+# uses: bazel
+# how: Bazel reads the config settings and the exported files.
+# ---
+
 # Build tooling: config_settings for platform-aware target selection.
 
 exports_files(
     [
         "workspace_status.sh",
         "workspace_status.cmd",
+        "extensions.bzl",
+        "cargo_link.sh",
+        "cargo_link_linux.sh",
+        "libiconv/config.h",
+        "libiconv/iconv.h",
+        "libiconv/localcharset.h",
     ],
     visibility = ["//visibility:public"],
 )

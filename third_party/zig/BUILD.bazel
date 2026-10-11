@@ -8,3 +8,13 @@ alias(
     }),
     visibility = ["//visibility:public"],
 )
+
+alias(
+    name = "zig_bin",
+    actual = select({
+        "//tools:linux_amd64": "@zig_linux_amd64//:zig",
+        "//tools:linux_arm64": "@zig_linux_arm64//:zig",
+        "//tools:darwin_arm64": "@zig_darwin_arm64//:zig",
+    }),
+    visibility = ["//visibility:public"],
+)

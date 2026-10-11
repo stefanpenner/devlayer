@@ -166,6 +166,21 @@ def _tool_repos_impl(module_ctx):
         patch_args = ["-p1"],
     )
 
+
+    _http_archive(sums,
+        name = "libiconv_src",
+        urls = ["https://ftp.gnu.org/gnu/libiconv/libiconv-{}.tar.gz".format(v["ICONV"])],
+        strip_prefix = "libiconv-{}".format(v["ICONV"]),
+        build_file_content = """\
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+exports_files(["README"], visibility = ["//visibility:public"])
+""",
+    )
+
     _http_archive(sums, 
         name = "zlib_src",
         urls = ["https://zlib.net/fossils/zlib-{}.tar.gz".format(v["ZLIB"])],
@@ -504,7 +519,7 @@ exports_files(
                 prefix = prefix,
             )],
             strip_prefix = prefix,
-            build_file_content = _FILEGROUP_ALL,
+            build_file_content = _FILEGROUP_ALL + _exports(["zig"]),
         )
 
     # ═══════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,31 @@
+# One sample, then the claims that must match.
+# hermetic means the header names no other file.
+# kind, pie, interp, and needed use the same words as the page.
+# needed= repeats once per library, in order.
+# A line with no claim expects hermetic.
+
+samples/out/rel-x86-64.o hermetic=false kind=rel pie=false interp=null needed=
+samples/out/exec-x86-64 hermetic kind=static pie=false interp=null needed=
+samples/out/static-pie-x86-64 hermetic kind=static-pie pie=true interp=null needed=
+samples/out/lib-x86-64.so hermetic=false kind=shared pie=false interp=null needed=
+samples/out/libtiny.so hermetic=false kind=shared pie=false interp=null needed=
+samples/out/libneed.so hermetic=false kind=shared pie=false interp=null needed=libtiny.so
+samples/out/dyn-x86-64 hermetic=false kind=dynamic pie=false interp=/lib/ld-musl-x86_64.so.1 needed=libtiny.so
+samples/out/dyn-pie-x86-64 hermetic=false kind=dynamic-pie pie=true interp=/lib/ld-musl-x86_64.so.1 needed=libtiny.so
+samples/out/exec-i386 hermetic kind=static pie=false interp=null needed=
+samples/out/exec-aarch64 hermetic kind=static pie=false interp=null needed=
+samples/out/exec-powerpc64 hermetic kind=static pie=false interp=null needed=
+samples/out/rel-aarch64.o hermetic=false kind=rel pie=false interp=null needed=
+samples/out/libtiny.dylib hermetic=false kind=shared pie=false interp=/usr/lib/dyld needed=/usr/lib/libSystem.B.dylib
+samples/out/static-aarch64 hermetic kind=static pie=false interp=null needed=
+samples/out/static-pie-aarch64 hermetic kind=static-pie pie=true interp=null needed=
+samples/out/dyn-fixed-aarch64 hermetic=false kind=dynamic pie=false interp=/usr/lib/dyld needed=/usr/lib/libSystem.B.dylib
+samples/out/dyn-pie-aarch64 hermetic=false kind=dynamic-pie pie=true interp=/usr/lib/dyld needed=/usr/lib/libSystem.B.dylib
+samples/out/dyn-aarch64 hermetic=false kind=dynamic-pie pie=true interp=/usr/lib/dyld needed=libtiny.dylib needed=/usr/lib/libSystem.B.dylib
+samples/out/rel-x86-64.obj hermetic=false kind=rel pie=false interp=null needed=
+samples/out/exec-x86-64.exe hermetic kind=static-pie pie=true interp=null needed=
+samples/out/static-x86-64.exe hermetic kind=static pie=false interp=null needed=
+samples/out/exec-i386.exe hermetic kind=static-pie pie=true interp=null needed=
+samples/out/tiny.dll hermetic=false kind=shared pie=true interp=null needed=
+samples/out/dyn-x86-64.exe hermetic=false kind=dynamic pie=false interp=null needed=tiny.dll
+samples/out/dyn-pie-x86-64.exe hermetic=false kind=dynamic-pie pie=true interp=null needed=tiny.dll

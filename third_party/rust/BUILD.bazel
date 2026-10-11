@@ -1,0 +1,32 @@
+# Pinned Rust 1.90.0. The exec platform picks the toolchain.
+# Each toolchain can compile the three pinned triples.
+
+alias(
+    name = "rustc",
+    actual = select({
+        "//tools:darwin_arm64": "@rust_aarch64_apple_darwin//:prefix/bin/rustc",
+        "//tools:linux_arm64": "@rust_aarch64_unknown_linux_musl//:prefix/bin/rustc",
+        "//tools:linux_amd64": "@rust_x86_64_unknown_linux_musl//:prefix/bin/rustc",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "cargo",
+    actual = select({
+        "//tools:darwin_arm64": "@rust_aarch64_apple_darwin//:prefix/bin/cargo",
+        "//tools:linux_arm64": "@rust_aarch64_unknown_linux_musl//:prefix/bin/cargo",
+        "//tools:linux_amd64": "@rust_x86_64_unknown_linux_musl//:prefix/bin/cargo",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "all",
+    actual = select({
+        "//tools:darwin_arm64": "@rust_aarch64_apple_darwin//:all",
+        "//tools:linux_arm64": "@rust_aarch64_unknown_linux_musl//:all",
+        "//tools:linux_amd64": "@rust_x86_64_unknown_linux_musl//:all",
+    }),
+    visibility = ["//visibility:public"],
+)

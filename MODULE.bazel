@@ -81,6 +81,7 @@ use_repo(
     "btop_src",
     "git_src",
     "htop_src",
+    "libiconv_src",
     "make_src",
     "ncurses_src",
     "nvim_libuv",
@@ -154,4 +155,18 @@ use_repo(
     "powerlevel10k",
     "zsh_autosuggestions",
     "zsh_history_substring_search",
+)
+
+# Rust 1.90.0 and vendored crates. Repo rules run on the Mac.
+# Build actions use the outputs. They do not call host cargo.
+crate_repos = use_extension("//tools:crates.bzl", "crate_repos")
+use_repo(
+    crate_repos,
+    "bininfo_crates",
+    "cratevendor_go",
+    "eza_crates",
+    "eza_src",
+    "rust_aarch64_apple_darwin",
+    "rust_aarch64_unknown_linux_musl",
+    "rust_x86_64_unknown_linux_musl",
 )

@@ -1,0 +1,24 @@
+# ---
+# why: This file names the bininfo crate and its two dependencies.
+# uses: cargo
+# how: Cargo reads this file to build the library and the command.
+# ---
+
+[package]
+name = "bininfo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Read an ELF, Mach-O, or PE header and check how the file starts. Also read a zip, a dmg, or a tiff."
+
+[dependencies]
+crossterm = "0.28"
+toml = "0.8"
+
+[lib]
+name = "bininfo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bininfo"
+path = "src/main.rs"

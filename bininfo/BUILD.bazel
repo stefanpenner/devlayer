@@ -1,0 +1,81 @@
+# ---
+# why: This file builds the bininfo command for each platform.
+# uses: bazel
+# how: Bazel calls offline_cargo. The alias selects one binary.
+# ---
+
+load("//tools:cargo.bzl", "offline_cargo")
+
+# bininfo reads ELF, Mach-O, PE, zip, dmg, and tiff.
+# The crate list is Cargo.lock. The bytes are @bininfo_crates.
+# The compiler is the pinned Rust toolchain. Zig links the binary.
+# The alias follows the execution platform, so the tool runs where it is built.
+
+exports_files(
+    ["Cargo.lock"],
+    visibility = ["//visibility:public"],
+)
+
+offline_cargo(
+    name = "bininfo_darwin_arm64",
+    anchor = "//bininfo:src/main.rs",
+    ups = 2,
+    vendor = "@bininfo_crates//:vendor/ANCHOR",
+    bin_name = "bininfo",
+    triple = "aarch64-apple-darwin",
+    release = False,
+    srcs = glob([
+        "src/**",
+        "policy/devlayer.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+offline_cargo(
+    name = "bininfo_linux_arm64",
+    anchor = "//bininfo:src/main.rs",
+    ups = 2,
+    vendor = "@bininfo_crates//:vendor/ANCHOR",
+    bin_name = "bininfo",
+    triple = "aarch64-unknown-linux-musl",
+    release = False,
+    srcs = glob([
+        "src/**",
+        "policy/devlayer.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+offline_cargo(
+    name = "bininfo_linux_amd64",
+    anchor = "//bininfo:src/main.rs",
+    ups = 2,
+    vendor = "@bininfo_crates//:vendor/ANCHOR",
+    bin_name = "bininfo",
+    triple = "x86_64-unknown-linux-musl",
+    release = False,
+    srcs = glob([
+        "src/**",
+        "policy/devlayer.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+alias(
+    name = "bininfo",
+    actual = select({
+        "//tools:darwin_arm64": ":bininfo_darwin_arm64",
+        "//tools:linux_arm64": ":bininfo_linux_arm64",
+        "//tools:linux_amd64": ":bininfo_linux_amd64",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "policy",
+    srcs = ["policy/devlayer.toml"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,18 @@
+# Policy for bin/devlayer.
+# One file is one binary.
+# needed lists the library names the loader opens.
+# Each name has a why.
+
+format = "macho"
+universal = "null"
+cpu = ["AArch64"]
+kind = "dynamic-pie"
+pie = true
+interp = "/usr/lib/dyld"
+rpath = []
+needed = [
+  { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
+  { name = "/usr/lib/libresolv.9.dylib", why = "The Go CLI records this name. The host Go toolchain adds it." },
+  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", why = "The Go CLI calls Core Foundation." },
+  { name = "/System/Library/Frameworks/Security.framework/Versions/A/Security", why = "The Go CLI calls Security for certificates." },
+]

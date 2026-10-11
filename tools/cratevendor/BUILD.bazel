@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+exports_files(
+    ["main.go"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "cratevendor_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/cratevendor",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "cratevendor",
+    embed = [":cratevendor_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "cratevendor_test",
+    srcs = ["main_test.go"],
+    embed = [":cratevendor_lib"],
+)
