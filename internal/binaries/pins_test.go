@@ -17,11 +17,28 @@ func TestSourceArchiveURLs(t *testing.T) {
 	got := SourceArchiveURLs(testVers())
 	want := map[string]string{
 		"btop":    "https://github.com/aristocratos/btop/archive/refs/tags/v1.4.7.tar.gz",
-		"htop":    "https://github.com/htop-dev/htop/archive/refs/tags/3.5.3.tar.gz",
+		"htop":    "https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz",
 		"make":    "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
 		"ncurses": "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
 		"git":     "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.55.0.tar.xz",
-		"zsh":     "https://www.zsh.org/pub/zsh-5.9.2.tar.xz",
+		"zsh":                      "https://www.zsh.org/pub/zsh-5.9.2.tar.xz",
+		"zlib":                     "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+		"toybox":                   "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
+		"nvim":                     "https://github.com/neovim/neovim/archive/refs/tags/v0.12.5.tar.gz",
+		"nvim_libuv":               "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz",
+		"nvim_luajit":              "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz",
+		"nvim_lua_compat53":        "https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz",
+		"nvim_luv":                 "https://github.com/luvit/luv/archive/1.52.1-0.tar.gz",
+		"nvim_lpeg":                "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz",
+		"nvim_unibilium":           "https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz",
+		"nvim_utf8proc":            "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz",
+		"nvim_treesitter":          "https://github.com/tree-sitter/tree-sitter/archive/v0.26.13.tar.gz",
+		"nvim_treesitter_c":        "https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz",
+		"nvim_treesitter_lua":      "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz",
+		"nvim_treesitter_vim":      "https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz",
+		"nvim_treesitter_vimdoc":   "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
+		"nvim_treesitter_query":    "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
+		"nvim_treesitter_markdown": "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len %d want %d (%v)", len(got), len(want), got)

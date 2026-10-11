@@ -1,27 +1,36 @@
-# ncurses — terminal UI library (built from source as static library)
-# Dependency for htop/btop when system ncurses is not available.
-genrule(
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
+
+# Static wide ncurses. Fallbacks avoid a host tic binary.
+configure_make(
     name = "ncurses",
-    srcs = ["@ncurses_src//:all_srcs"],
-    outs = ["ncurses-install.tar.gz"],
-    cmd = """
-        set -e
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$$PATH"
-        OUT=$$(pwd)/$@
-        SRC=$$(pwd)/external/+tool_repos+ncurses_src
-        BUILD=$$(mktemp -d)
-        INSTALL=$$(mktemp -d)
-        cp -r $$SRC/* $$BUILD/
-        cd $$BUILD
-        ./configure --prefix=$$INSTALL \
-            --without-shared --without-debug --without-ada \
-            --without-tests --without-manpages \
-            --enable-widec --with-default-terminfo-dir=/usr/share/terminfo
-        make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-        make install.libs install.includes
-        tar czf $$OUT -C $$INSTALL .
-        rm -rf $$BUILD $$INSTALL
-    """,
-    tags = ["no-sandbox"],
+    configure_options = select({
+        "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
+        "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
+        "//conditions:default": [],
+    }) + [
+        "--disable-db-install",
+        "--enable-widec",
+        "--without-ada",
+        "--without-database",
+        "--without-cxx",
+        "--without-debug",
+        "--without-manpages",
+        "--without-progs",
+        "--without-shared",
+        "--without-tests",
+    ],
+    env = select({
+        "//tools:is_linux": {
+            # Empty cache skips the ar probe. A failed probe writes ARFLAGS "unknown".
+            "cf_cv_ar_flags": "",
+            "CFLAGS": "-Os -DNDEBUG",
+            "LDFLAGS": "-static",
+        },
+        "//conditions:default": {
+            "CFLAGS": "-Os -DNDEBUG",
+        },
+    }),
+    lib_source = "@ncurses_src//:all_srcs",
+    out_static_libs = ["libncursesw.a"],
     visibility = ["//visibility:public"],
 )

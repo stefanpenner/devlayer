@@ -17,7 +17,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/archive"
 	"github.com/stefanpenner/devlayer/internal/binaries"
 	"github.com/stefanpenner/devlayer/internal/config"
-	"github.com/stefanpenner/devlayer/internal/docker"
+	"github.com/stefanpenner/devlayer/internal/deadstrip"
 	"github.com/stefanpenner/devlayer/internal/download"
 	"github.com/stefanpenner/devlayer/internal/nvimplugins"
 	"github.com/stefanpenner/devlayer/internal/platform"
@@ -65,8 +65,8 @@ func parseBuildOpts(args []string, defaultOS, defaultArch string) (buildOptions,
 	return opts, nil
 }
 
-// Build builds a devlayer bundle for the given OS and architecture.
-// Artifacts are written to outDir (cwd). scriptDir is the docker/source context.
+// Build builds the sysroot for one OS and one architecture.
+// Artifacts are written to outDir. scriptDir is the source checkout.
 func Build(args []string, vers *versions.Versions, scriptDir, outDir string) error {
 	opts, err := parseBuildOpts(args, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
@@ -83,7 +83,7 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 			return err
 		}
 	default:
-		if err := buildLinux(opts.arch, scriptDir, outDir, vers); err != nil {
+		if err := buildLinux(opts.arch, scriptDir, outDir); err != nil {
 			return err
 		}
 	}
@@ -114,7 +114,7 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, outDir string) erro
 	if err := writeDarwinWrappers(binDir); err != nil {
 		return err
 	}
-	if err := installSelf(binDir, "devlayer"); err != nil {
+	if err := installBundleSelf(binDir, "darwin"); err != nil {
 		return err
 	}
 	output := filepath.Join(outDir, fmt.Sprintf("devlayer-darwin-%s.tar.gz", p.ArchGeneric))
@@ -134,11 +134,7 @@ func buildWindows(arch string, vers *versions.Versions, outDir string) error {
 	if err := writeWindowsWrappers(binDir); err != nil {
 		return err
 	}
-	name := "devlayer"
-	if runtime.GOOS == "windows" {
-		name = "devlayer.exe"
-	}
-	if err := installSelf(binDir, name); err != nil {
+	if err := installBundleSelf(binDir, "windows"); err != nil {
 		return err
 	}
 	output := filepath.Join(outDir, fmt.Sprintf("devlayer-windows-%s.zip", p.ArchGeneric))
@@ -229,6 +225,26 @@ func writeWindowsWrappers(binDir string) error {
 	return createZigCCWrappersWindows(binDir)
 }
 
+// bundleSelfName is the CLI filename copied from the builder.
+// A different target OS gets no copy. The pipeline injects that CLI.
+func bundleSelfName(hostOS, targetOS string) (string, bool) {
+	if hostOS != targetOS {
+		return "", false
+	}
+	if targetOS == "windows" {
+		return "devlayer.exe", true
+	}
+	return "devlayer", true
+}
+
+func installBundleSelf(binDir, targetOS string) error {
+	name, ok := bundleSelfName(runtime.GOOS, targetOS)
+	if !ok {
+		return nil
+	}
+	return installSelf(binDir, name)
+}
+
 func installSelf(binDir, name string) error {
 	self, err := os.Executable()
 	if err != nil {
@@ -268,13 +284,22 @@ func printSize(path string) {
 	fmt.Printf("  %s (%.0f MB)\n", path, mb)
 }
 
-func buildLinux(arch, scriptDir, outDir string, vers *versions.Versions) error {
-	if _, err := exec.LookPath("bazel"); err == nil {
-		if _, err := os.Stat(filepath.Join(scriptDir, "MODULE.bazel")); err == nil {
-			return bazelLinuxBundle(arch, scriptDir, outDir)
-		}
+func buildLinux(arch, scriptDir, outDir string) error {
+	if err := requireBazelCheckout(scriptDir); err != nil {
+		return err
 	}
-	return dockerLinuxBundle(arch, scriptDir, outDir, vers)
+	return bazelLinuxBundle(arch, scriptDir, outDir)
+}
+
+func requireBazelCheckout(scriptDir string) error {
+	if _, err := exec.LookPath("bazel"); err != nil {
+		return fmt.Errorf("linux build needs bazel on PATH")
+	}
+	mod := filepath.Join(scriptDir, "MODULE.bazel")
+	if _, err := os.Stat(mod); err != nil {
+		return fmt.Errorf("linux build needs %s", mod)
+	}
+	return nil
 }
 
 func bazelLinuxBundle(arch, scriptDir, outDir string) error {
@@ -294,40 +319,6 @@ func bazelLinuxBundle(arch, scriptDir, outDir string) error {
 		return err
 	}
 	printSize(dst)
-	fmt.Println("==> Build complete.")
-	return nil
-}
-
-func dockerLinuxBundle(arch, scriptDir, outDir string, vers *versions.Versions) error {
-	fmt.Printf("==> Building devlayer for linux/%s (Docker)...\n", arch)
-
-	if _, err := os.Stat(filepath.Join(scriptDir, "internal", "binaries")); err != nil {
-		return fmt.Errorf("linux docker build needs a source checkout (internal/binaries missing); try bazel build //linux:bundle_%s", arch)
-	}
-
-	p, err := platform.New("linux", arch)
-	if err != nil {
-		return err
-	}
-
-	args := map[string]string{
-		"GIT_VERSION":  vers.Get("GIT_VERSION"),
-		"ZSH_VERSION":  vers.Get("ZSH_VERSION"),
-		"HTOP_VERSION": vers.Get("HTOP_VERSION"),
-		"BTOP_VERSION": vers.Get("BTOP_VERSION"),
-		"NVIM_VERSION": vers.Get("NVIM_VERSION"),
-		"MAKE_VERSION": vers.Get("MAKE_VERSION"),
-	}
-	if err := docker.Build(p.DockerPlatform, "devlayer", scriptDir, args); err != nil {
-		return fmt.Errorf("docker build: %w", err)
-	}
-
-	outputFile := filepath.Join(outDir, fmt.Sprintf("devlayer-linux-%s.tar.gz", arch))
-	if err := docker.RunToFile("devlayer", outputFile); err != nil {
-		return fmt.Errorf("docker run: %w", err)
-	}
-
-	printSize(outputFile)
 	fmt.Println("==> Build complete.")
 	return nil
 }
@@ -375,7 +366,7 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	if err := copyFile(btopBin, filepath.Join(binDir, "btop")); err != nil {
 		return fmt.Errorf("copy btop: %w", err)
 	}
-	return nil
+	return deadstrip.File(filepath.Join(binDir, "btop"))
 }
 
 // buildNvim builds neovim from source using cmake.
@@ -418,6 +409,9 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	if err := run(srcRoot, env, "make", "install"); err != nil {
 		return fmt.Errorf("nvim install: %w", err)
 	}
+	if err := deadstrip.Tree(installDir); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -429,7 +423,7 @@ func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
 	env = append(env, "CC="+clang)
 	env = append(env, "CXX="+clangxx)
 	env = append(env, "SDKROOT="+sdk)
-	return env
+	return appendLinkFlag(env, "LDFLAGS", "-Wl,-dead_strip_dylibs")
 }
 
 func findXcodeTool(name string) string {
@@ -496,6 +490,27 @@ func run(dir string, env []string, name string, args ...string) error {
 	return cmd.Run()
 }
 
+func appendLinkFlag(base []string, key, flag string) []string {
+	prefix := key + "="
+	for i, entry := range base {
+		if !strings.HasPrefix(entry, prefix) {
+			continue
+		}
+		val := strings.TrimPrefix(entry, prefix)
+		if strings.Contains(val, flag) {
+			return base
+		}
+		out := append([]string{}, base...)
+		if val == "" {
+			out[i] = prefix + flag
+		} else {
+			out[i] = prefix + val + " " + flag
+		}
+		return out
+	}
+	return append(base, prefix+flag)
+}
+
 func withEnv(env []string, key, value string) []string {
 	out := make([]string, 0, len(env)+1)
 	prefix := key + "="
@@ -516,7 +531,11 @@ func withEnv(env []string, key, value string) []string {
 
 func htopBuildEnv(base []string) []string {
 	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
-	return withEnv(base, "PATH", systemPath)
+	env := withEnv(base, "PATH", systemPath)
+	if runtime.GOOS == "darwin" {
+		env = appendLinkFlag(env, "LDFLAGS", "-Wl,-dead_strip_dylibs")
+	}
+	return env
 }
 
 func ezaBuildEnv(base []string, goos, cargoPath, clang, clangxx, sdk string) []string {
@@ -525,6 +544,7 @@ func ezaBuildEnv(base []string, goos, cargoPath, clang, clangxx, sdk string) []s
 		return base
 	}
 	env := darwinXcodeEnv(base, goos, clang, clangxx, sdk)
+	env = appendLinkFlag(env, "RUSTFLAGS", "-C link-arg=-dead_strip_dylibs")
 	// Darwin PATH even when this test/binary runs on Windows.
 	cargoDir := path.Dir(filepath.ToSlash(cargoPath))
 	if cargoDir == "" || cargoDir == "." {
@@ -573,7 +593,7 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	if err := copyFile(filepath.Join(srcRoot, "htop"), filepath.Join(binDir, "htop")); err != nil {
 		return fmt.Errorf("copy htop: %w", err)
 	}
-	return nil
+	return deadstrip.File(filepath.Join(binDir, "htop"))
 }
 
 func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip map[string]bool) error {
@@ -611,7 +631,7 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	if err := copyFile(filepath.Join(srcRoot, "target", "release", "eza"), filepath.Join(binDir, "eza")); err != nil {
 		return fmt.Errorf("copy eza: %w", err)
 	}
-	return nil
+	return deadstrip.File(filepath.Join(binDir, "eza"))
 }
 
 // buildMake compiles GNU make from source.
@@ -650,7 +670,7 @@ func buildMake(binDir string, vers *versions.Versions) error {
 	if err := copyFile(filepath.Join(srcRoot, "make"), filepath.Join(binDir, "make")); err != nil {
 		return fmt.Errorf("copy make: %w", err)
 	}
-	return nil
+	return deadstrip.File(filepath.Join(binDir, "make"))
 }
 
 func createZigCCWrappers(binDir string) error {
@@ -946,40 +966,34 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// FindScriptDir returns the directory containing the devlayer source files.
-// It checks for the repo checkout first (Dockerfile exists), then falls back
-// to a temp dir with embedded files.
-func FindScriptDir(embeddedDockerfile, embeddedVersionsEnv, nvimPackLock string) (string, bool, error) {
+// FindScriptDir returns the source checkout.
+// A checkout contains MODULE.bazel.
+// An installed CLI with no checkout gets a temp dir.
+func FindScriptDir(embeddedVersionsEnv, nvimPackLock string) (string, bool, error) {
 	if d := os.Getenv("BUILD_WORKING_DIRECTORY"); d != "" {
 		return d, false, nil
 	}
 
-	// Check if we're in a repo checkout
 	exe, err := os.Executable()
 	if err == nil {
 		dir := filepath.Dir(exe)
-		if _, err := os.Stat(filepath.Join(dir, "Dockerfile")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "MODULE.bazel")); err == nil {
 			return dir, false, nil
 		}
 	}
 
-	// Check current working directory
 	cwd, err := os.Getwd()
 	if err == nil {
-		if _, err := os.Stat(filepath.Join(cwd, "Dockerfile")); err == nil {
+		if _, err := os.Stat(filepath.Join(cwd, "MODULE.bazel")); err == nil {
 			return cwd, false, nil
 		}
 	}
 
-	// Fall back to temp dir with embedded files
 	tmp, err := os.MkdirTemp("", "devlayer-context-*")
 	if err != nil {
 		return "", false, err
 	}
 
-	if err := os.WriteFile(filepath.Join(tmp, "Dockerfile"), []byte(embeddedDockerfile), 0644); err != nil {
-		return "", true, err
-	}
 	if err := os.WriteFile(filepath.Join(tmp, "versions.env"), []byte(embeddedVersionsEnv), 0644); err != nil {
 		return "", true, err
 	}

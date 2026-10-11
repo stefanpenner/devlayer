@@ -1,9 +1,10 @@
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+dead_strip_binary(
     name = "shh",
-    actual = select({
-        "//tools:linux_amd64": "@shh_linux_amd64//:shh",
-        "//tools:linux_arm64": "@shh_linux_arm64//:shh",
-        "//tools:darwin_arm64": "@shh_darwin_arm64//:shh",
+    srcs = select({
+        "//tools:linux_amd64": ["@shh_linux_amd64//:shh"],
+        "//tools:linux_arm64": ["@shh_linux_arm64//:shh"],
+        "//tools:darwin_arm64": ["@shh_darwin_arm64//:shh"],
     }),
-    visibility = ["//visibility:public"],
 )

@@ -1,10 +1,10 @@
-# direnv — per-directory environment variables (pre-built binary)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+dead_strip_binary(
     name = "direnv",
-    actual = select({
-        "//tools:linux_amd64": "@direnv_linux_amd64//file:direnv",
-        "//tools:linux_arm64": "@direnv_linux_arm64//file:direnv",
-        "//tools:darwin_arm64": "@direnv_darwin_arm64//file:direnv",
+    srcs = select({
+        "//tools:linux_amd64": ["@direnv_linux_amd64//file:direnv"],
+        "//tools:linux_arm64": ["@direnv_linux_arm64//file:direnv"],
+        "//tools:darwin_arm64": ["@direnv_darwin_arm64//file:direnv"],
     }),
-    visibility = ["//visibility:public"],
 )

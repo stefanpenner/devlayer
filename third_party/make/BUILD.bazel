@@ -6,8 +6,21 @@ load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 configure_make(
     name = "gnumake",
     args = ["-j"],
+    # Zig emits a Linux ELF. Configure must not run that ELF on the build machine.
+    configure_options = select({
+        "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
+        "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
+        # The depfile probe runs the target PE. This host cannot run it.
+        "//tools:windows_amd64": ["--host=x86_64-w64-mingw32", "--disable-dependency-tracking"],
+        "//tools:windows_arm64": ["--host=aarch64-w64-mingw32", "--disable-dependency-tracking"],
+        "//conditions:default": [],
+    }),
     env = select({
         "@platforms//os:linux": {
+            "CFLAGS": "-Os -DNDEBUG",
+            "LDFLAGS": "-static",
+        },
+        "@platforms//os:windows": {
             "CFLAGS": "-Os -DNDEBUG",
             "LDFLAGS": "-static",
         },
@@ -20,6 +33,9 @@ configure_make(
         },
     }),
     lib_source = "@make_src//:all_srcs",
-    out_binaries = ["make"],
+    out_binaries = select({
+        "//tools:is_windows": ["make.exe"],
+        "//conditions:default": ["make"],
+    }),
     visibility = ["//visibility:public"],
 )

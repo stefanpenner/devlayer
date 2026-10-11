@@ -1,5 +1,5 @@
-// Package assemble stages a Linux devlayer bundle:
-// stage → fetch prebuilts (skip nvim) → extract compiled tars → write wrappers → checksums → pack tar.gz
+// Package assemble stages the Linux sysroot.
+// The steps are stage, fetch, extract, wrappers, checksums, and pack.
 package assemble
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
-// Compiled is the set of linuxbuild tar.gz paths extracted into the bundle.
+// Compiled is the set of source-built archives in the bundle.
 type Compiled struct {
 	Git, Zsh, Htop, Btop, Nvim, Make string
 }

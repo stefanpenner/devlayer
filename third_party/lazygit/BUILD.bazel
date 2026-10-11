@@ -1,10 +1,11 @@
-# lazygit — terminal UI for git (pre-built binary)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# lazygit — pre-built binary
+dead_strip_binary(
     name = "lazygit",
-    actual = select({
-        "//tools:linux_amd64": "@lazygit_linux_amd64//:lazygit",
-        "//tools:linux_arm64": "@lazygit_linux_arm64//:lazygit",
-        "//tools:darwin_arm64": "@lazygit_darwin_arm64//:lazygit",
+    srcs = select({
+        "//tools:linux_amd64": ["@lazygit_linux_amd64//:lazygit"],
+        "//tools:linux_arm64": ["@lazygit_linux_arm64//:lazygit"],
+        "//tools:darwin_arm64": ["@lazygit_darwin_arm64//:lazygit"],
     }),
-    visibility = ["//visibility:public"],
 )

@@ -1,21 +1,21 @@
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
 # age — file encryption tool (pre-built binary)
 # Provides both `age` and `age-keygen`
-alias(
+dead_strip_binary(
     name = "age",
-    actual = select({
-        "//tools:linux_amd64": "@age_linux_amd64//:age",
-        "//tools:linux_arm64": "@age_linux_arm64//:age",
-        "//tools:darwin_arm64": "@age_darwin_arm64//:age",
+    srcs = select({
+        "//tools:linux_amd64": ["@age_linux_amd64//:age"],
+        "//tools:linux_arm64": ["@age_linux_arm64//:age"],
+        "//tools:darwin_arm64": ["@age_darwin_arm64//:age"],
     }),
-    visibility = ["//visibility:public"],
 )
 
-alias(
+dead_strip_binary(
     name = "age-keygen",
-    actual = select({
-        "//tools:linux_amd64": "@age_linux_amd64//:age-keygen",
-        "//tools:linux_arm64": "@age_linux_arm64//:age-keygen",
-        "//tools:darwin_arm64": "@age_darwin_arm64//:age-keygen",
+    srcs = select({
+        "//tools:linux_amd64": ["@age_linux_amd64//:age-keygen"],
+        "//tools:linux_arm64": ["@age_linux_arm64//:age-keygen"],
+        "//tools:darwin_arm64": ["@age_darwin_arm64//:age-keygen"],
     }),
-    visibility = ["//visibility:public"],
 )

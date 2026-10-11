@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/stefanpenner/devlayer/internal/deadstrip"
 	"github.com/stefanpenner/devlayer/internal/download"
 	"github.com/stefanpenner/devlayer/internal/platform"
 	"github.com/stefanpenner/devlayer/internal/sums"
@@ -64,6 +65,9 @@ func Fetch(out string, p *platform.Platform, vers *versions.Versions, skip map[s
 	}
 
 	if err := chmodBin(binDir); err != nil {
+		return err
+	}
+	if err := deadstrip.Tree(out); err != nil {
 		return err
 	}
 

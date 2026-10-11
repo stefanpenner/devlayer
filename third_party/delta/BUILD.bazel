@@ -1,11 +1,11 @@
-# delta — git diff viewer (pre-built binary)
-# Note: linux arm64 uses GNU target (no musl build available)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# delta — pre-built binary
+dead_strip_binary(
     name = "delta",
-    actual = select({
-        "//tools:linux_amd64": "@delta_linux_amd64//:delta",
-        "//tools:linux_arm64": "@delta_linux_arm64//:delta",
-        "//tools:darwin_arm64": "@delta_darwin_arm64//:delta",
+    srcs = select({
+        "//tools:linux_amd64": ["@delta_linux_amd64//:delta"],
+        "//tools:linux_arm64": ["@delta_linux_arm64//:delta"],
+        "//tools:darwin_arm64": ["@delta_darwin_arm64//:delta"],
     }),
-    visibility = ["//visibility:public"],
 )

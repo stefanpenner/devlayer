@@ -1,6 +1,8 @@
 # sha256  url
 # Incoming tool archives for versions.env. No line → download is refused.
 dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3  https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz
+9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23  https://zlib.net/fossils/zlib-1.3.1.tar.gz
+082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1  https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz
 355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11  https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz
 3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4  https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz
 800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915  https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz
@@ -26,7 +28,7 @@ d96fc8b7cf020c2d4c1dbbc2ccec5fd1cab05b51c491f02c8527a7fa6c50a1cd  https://github
 d79c085b9d0af7f56c3f69d766a83fe26405faac999c4ed7cdfc27417d2c736f  https://github.com/eth-p/bat-extras/releases/download/v2024.08.24/bat-extras-2024.08.24.zip
 c830638c844a5b89d39ba662b5549903a71fa539018e813880f5b8afa77bac2e  https://github.com/eza-community/eza/releases/download/v0.23.5/eza.exe_x86_64-pc-windows-gnu.zip
 56d7b226b7693196cfc71fef26568f536c4a021ab6c37ff2db4287bed908e96e  https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/MinGit-2.55.0.5-64-bit.zip
-edf25ee020a5263ffbef9eef5a8c14392bf74e78b3d5c8bc64d9343dd9a82605  https://github.com/htop-dev/htop/archive/refs/tags/3.5.3.tar.gz
+a8b164386494cb85bb255a415a3f5f80afe7a0c4491da5d113b3a0f951087e65  https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz
 65a367c6ea9a88efebaaf7998a6835eedb987e04916cef677264ff9b31b1b13e  https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Darwin_arm64.tar.gz
 49abecdf6adf4f2dfdb11bf7b9bfada267ea523612ed809d1c6d87f6c04000a7  https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_arm64.tar.gz
 02beacbcda0fa342e50ae3480ba8147307353af3fb28e1d5f790e02329c201a6  https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_x86_64.tar.gz
@@ -70,3 +72,18 @@ ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17  https://ziglan
 b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489  https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz
 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00  https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
 68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e  https://ziglang.org/download/0.16.0/zig-x86_64-windows-0.16.0.zip
+a810c95332317bd0017e1ca07e376a8472c79075cbed00fa3737d190a8a0a45a  https://github.com/neovim/neovim/archive/refs/tags/v0.12.5.tar.gz
+478baf2599bfbc882c355288c9cb6f92e0e7dda435fa04031fa5b607cf3f414c  https://github.com/libuv/libuv/archive/v1.52.1.tar.gz
+e60cd2f3057aa39d33d1c895a20087ab54494d9a1ca45aa488ff0378af42df48  https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz
+f5dc30e7b1fda856ee4d392be457642c1f0c259264a9b9bfbcb680302ce88fc2  https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz
+e8b8774b31d24be4fcf2b021b90599ecccc8e476c61efcc59c3c10cab813a885  https://github.com/luvit/luv/archive/1.52.1-0.tar.gz
+4b155d67d2246c1ffa7ad7bc466c1ea899bbc40fef0257cc9c03cecbaed4352a  https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz
+370ecb07fbbc20d91d1b350c55f1c806b06bf86797e164081ccc977fc9b3af7a  https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz
+abfed50b6d4da51345713661370290f4f4747263ee73dc90356299dfc7990c78  https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz
+ece24c3c5e2a76384075e830c7139b59fce8fb01e4ef8436fab08bbe10444c89  https://github.com/tree-sitter/tree-sitter/archive/v0.26.13.tar.gz
+25dd4bb3dec770769a407e0fc803f424ce02c494a56ce95fedc525316dcf9b48  https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz
+cf01b93f4b61b96a6d27942cf28eeda4cbce7d503c3bef773a8930b3d778a2d9  https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz
+93cafb9a0269420362454ace725a118ff1c3e08dcdfdc228aa86334b54d53c2a  https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz
+020e8f117f648c8697fca967995c342e92dbd81dab137a115cc7555207fbc84f  https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz
+c2b23b9a54cffcc999ded4a5d3949daf338bebb7945dece229f832332e6e6a7d  https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz
+df845b1ab7c7c163ec57d7fa17170c92b04be199bddab02523636efec5224ab6  https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz

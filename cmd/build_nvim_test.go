@@ -17,7 +17,7 @@ func TestBuildNvimPluginsRequiresLock(t *testing.T) {
 
 func TestFindScriptDirWritesLock(t *testing.T) {
 	t.Setenv("BUILD_WORKING_DIRECTORY", "")
-	dir, tmp, err := FindScriptDir("FROM scratch\n", "FOO=1\n", "{\"plugins\":{}}\n")
+	dir, tmp, err := FindScriptDir("FOO=1\n", "{\"plugins\":{}}\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,11 @@ func TestFindScriptDirWritesLock(t *testing.T) {
 	if string(got) != "{\"plugins\":{}}\n" {
 		t.Fatalf("lock = %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "Dockerfile")); err != nil {
+	env, err := os.ReadFile(filepath.Join(dir, "versions.env"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if string(env) != "FOO=1\n" {
+		t.Fatalf("versions.env = %q", env)
 	}
 }

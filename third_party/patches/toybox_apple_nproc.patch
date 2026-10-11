@@ -1,0 +1,35 @@
+--- a/toys/other/taskset.c
++++ b/toys/other/taskset.c
+@@ -38,10 +38,16 @@
+ #include "toys.h"
+ 
+ // mask is array of long which makes layout a bit weird on big endian systems
++#ifdef __APPLE__
++#include <sys/sysctl.h>
++#define sched_setaffinity(pid, size, cpuset) (-1)
++#define sched_getaffinity(pid, size, cpuset) (-1)
++#else
+ #define sched_setaffinity(pid, size, cpuset) \
+   syscall(__NR_sched_setaffinity, (pid_t)pid, (size_t)size, (void *)cpuset)
+ #define sched_getaffinity(pid, size, cpuset) \
+   syscall(__NR_sched_getaffinity, (pid_t)pid, (size_t)size, (void *)cpuset)
++#endif
+ 
+ #define TOYBUF_BITS (8*sizeof(toybuf))
+ 
+@@ -202,6 +208,15 @@
+ 
+ void nproc_main(void)
+ {
++#ifdef __APPLE__
++  int n = 1;
++  size_t len = sizeof(n);
++  int mib[2] = {CTL_HW, HW_NCPU};
++
++  if (sysctl(mib, 2, &n, &len, 0, 0) || n < 1) n = 1;
++  xprintf("%d\n", n);
++  return;
++#endif
+   unsigned i, j, nproc = 0;
+   DIR *dd;
+ 

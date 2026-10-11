@@ -1,26 +1,30 @@
-load("@versions//:versions.bzl", "VERSIONS")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 
-# htop — interactive process viewer (built from source)
-# Requires autotools (autoconf, automake, libtool) on the host.
-# Install via: brew install autoconf automake libtool
-genrule(
+# The release tarball ships configure. The tag archive does not.
+configure_make(
     name = "htop",
-    srcs = ["@htop_src//:all_srcs"],
-    outs = ["htop_bin"],
-    cmd = """
-        set -e
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$$PATH"
-        OUT=$$(pwd)/$@
-        SRC=$$(pwd)/external/+tool_repos+htop_src
-        BUILD=$$(mktemp -d)
-        cp -r $$SRC/* $$BUILD/
-        cd $$BUILD
-        ./autogen.sh
-        ./configure CFLAGS="-Os -DNDEBUG"
-        make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-        cp htop $$OUT
-        rm -rf $$BUILD
-    """,
-    tags = ["no-sandbox"],
+    args = ["-j"],
+    configure_options = select({
+        "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
+        "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
+        "//conditions:default": [],
+    }) + [
+        "--enable-static",
+    ],
+    # The install dir must not be named htop. The Makefile removes that path
+    # before it links the binary.
+    install_prefix = "out",
+    deps = ["//third_party/ncurses"],
+    env = select({
+        "//tools:is_linux": {
+            "CFLAGS": "-Os -DNDEBUG",
+            "LDFLAGS": "-static",
+        },
+        "//conditions:default": {
+            "CFLAGS": "-Os -DNDEBUG",
+        },
+    }),
+    lib_source = "@htop_src//:all_srcs",
+    out_binaries = ["htop"],
     visibility = ["//visibility:public"],
 )

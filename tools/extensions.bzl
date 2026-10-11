@@ -25,6 +25,47 @@ filegroup(
 )
 """
 
+# Neovim cmake.deps downloads these unless the URL cache entries point at the files.
+# The names match third_party/nvim/defs.bzl.
+_NVIM_DEP_URLS = [
+    ("nvim_libuv", "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz"),
+    ("nvim_luajit", "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz"),
+    ("nvim_lua_compat53", "https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz"),
+    ("nvim_luv", "https://github.com/luvit/luv/archive/1.52.1-0.tar.gz"),
+    ("nvim_lpeg", "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz"),
+    ("nvim_unibilium", "https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz"),
+    ("nvim_utf8proc", "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz"),
+    ("nvim_treesitter", "https://github.com/tree-sitter/tree-sitter/archive/v0.26.13.tar.gz"),
+    ("nvim_treesitter_c", "https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz"),
+    ("nvim_treesitter_lua", "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz"),
+    ("nvim_treesitter_vim", "https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz"),
+    ("nvim_treesitter_vimdoc", "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz"),
+    ("nvim_treesitter_query", "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz"),
+    ("nvim_treesitter_markdown", "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz"),
+]
+
+# Install deps into the foreign_cc prefix. Pass the host compiler to LuaJIT.
+# Pass the Linux system name into each ExternalProject.
+_NVIM_PATCH = """
+set -eu
+grep -F 'set(DEPS_INSTALL_DIR "${CMAKE_BINARY_DIR}/usr")' cmake/Deps.cmake >/dev/null
+awk 'BEGIN{done=0} { if (!done && index($0, "set(DEPS_INSTALL_DIR \\"${CMAKE_BINARY_DIR}/usr\\")")) { print "if(\\"$ENV{NVIM_DEPS_PREFIX}\\" STREQUAL \\"\\")"; print "  set(DEPS_INSTALL_DIR \\"${CMAKE_BINARY_DIR}/usr\\")"; print "else()"; print "  set(DEPS_INSTALL_DIR \\"$ENV{NVIM_DEPS_PREFIX}\\")"; print "endif()"; done=1; next } print }' cmake/Deps.cmake > cmake/Deps.cmake.new
+mv cmake/Deps.cmake.new cmake/Deps.cmake
+grep -F 'NVIM_DEPS_PREFIX' cmake/Deps.cmake >/dev/null
+grep -F -- '-D CMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR})' cmake/Deps.cmake >/dev/null
+sed -i.bak 's|-D CMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR})|-D CMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR} -D CMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME} -D CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR} -D CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY -D CMAKE_RANLIB=$ENV{NVIM_RANLIB})|' cmake/Deps.cmake
+grep -F 'CMAKE_RANLIB=$ENV{NVIM_RANLIB}' cmake/Deps.cmake >/dev/null
+grep -F 'elseif(UNIX)' cmake.deps/cmake/BuildLuajit.cmake >/dev/null
+grep -F 'CC=${DEPS_C_COMPILER} PREFIX=${DEPS_INSTALL_DIR}' cmake.deps/cmake/BuildLuajit.cmake >/dev/null
+awk 'BEGIN{inserted=0} { if (!inserted && $0 ~ /elseif\\(UNIX\\)/) { print; print "  get_filename_component(_nvim_zig_bin \\"$ENV{NVIM_ZIG}\\" DIRECTORY)"; inserted=1; next } print }' cmake.deps/cmake/BuildLuajit.cmake > cmake.deps/cmake/BuildLuajit.cmake.new
+mv cmake.deps/cmake/BuildLuajit.cmake.new cmake.deps/cmake/BuildLuajit.cmake
+sed -i.bak 's|CC=${DEPS_C_COMPILER} PREFIX=${DEPS_INSTALL_DIR}|CC=${DEPS_C_COMPILER} HOST_CC=${NVIM_HOST_CC} TARGET_SYS=Linux BUILDMODE=static TARGET_LDFLAGS=-lunwind "TARGET_AR=${_nvim_zig_bin}/tools/ar rcus" PREFIX=${DEPS_INSTALL_DIR}|' cmake.deps/cmake/BuildLuajit.cmake
+grep -F 'find_path2(ICONV_INCLUDE_DIR NAMES iconv.h)' cmake/FindIconv.cmake >/dev/null
+awk 'BEGIN{inserted=0} { print; if (!inserted && $0 ~ /find_path2\\(ICONV_INCLUDE_DIR NAMES iconv.h\\)/) { print "if(NOT ICONV_INCLUDE_DIR)"; print "  get_filename_component(_cc_dir \\"${CMAKE_C_COMPILER}\\" DIRECTORY)"; print "  get_filename_component(_cc_tools \\"${_cc_dir}\\" DIRECTORY)"; print "  get_filename_component(_zig_root \\"${_cc_tools}\\" DIRECTORY)"; print "  set(_musl_inc \\"${_zig_root}/lib/libc/include/generic-musl\\")"; print "  if(EXISTS \\"${_musl_inc}/iconv.h\\")"; print "    set(ICONV_INCLUDE_DIR \\"${_musl_inc}\\")"; print "  endif()"; print "endif()"; inserted=1 } }' cmake/FindIconv.cmake > cmake/FindIconv.cmake.new
+mv cmake/FindIconv.cmake.new cmake/FindIconv.cmake
+grep -F 'include/generic-musl' cmake/FindIconv.cmake >/dev/null
+"""
+
 def _exports(names):
     return 'exports_files([{}], visibility = ["//visibility:public"])'.format(
         ", ".join(['"%s"' % n for n in names]),
@@ -90,12 +131,21 @@ def _tool_repos_impl(module_ctx):
             """sed -i.bak 's/\\$<LINK_LIBRARY:FRAMEWORK,CoreFoundation>/"-framework CoreFoundation"/g; s/\\$<LINK_LIBRARY:FRAMEWORK,IOKit>/"-framework IOKit"/g' CMakeLists.txt""",
             "sed -i.bak '/add_subdirectory.*tests/d' CMakeLists.txt",
             "sed -i.bak 's/--fatal-warnings//g' CMakeLists.txt",
+            # CMake 3.25 defines LINUX. The pinned CMake is 3.23.
+            """sed -i.bak 's/elseif(LINUX)/elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")/; s/if(LINUX AND BTOP_GPU)/if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND BTOP_GPU)/' CMakeLists.txt""",
+            # This libc++ cannot form a constexpr optional of filesystem::path.
+            "sed -i.bak 's/static constexpr auto get_xdg_state_dir/static auto get_xdg_state_dir/' src/btop_config.cpp",
+            # ifstream is not a constant expression. Drop constexpr on the CPU probe.
+            "sed -i.bak 's/static constexpr auto detect_active_cpus/static auto detect_active_cpus/' src/linux/btop_collect.cpp",
+            # void unexpected() lives in namespace std. The class lives in std::__1.
+            # std::unexpected<int> is still ambiguous. Qualify the class.
+            "sed -i.bak 's/std::unexpected {/std::__1::unexpected<int> {/g' src/btop_cli.cpp",
         ],
     )
 
     _http_archive(sums, 
         name = "htop_src",
-        urls = ["https://github.com/htop-dev/htop/archive/refs/tags/{}.tar.gz".format(v["HTOP"])],
+        urls = ["https://github.com/htop-dev/htop/releases/download/{0}/htop-{0}.tar.xz".format(v["HTOP"])],
         strip_prefix = "htop-{}".format(v["HTOP"]),
         build_file_content = _ALL_SRCS,
     )
@@ -104,6 +154,22 @@ def _tool_repos_impl(module_ctx):
         name = "make_src",
         urls = ["https://ftp.gnu.org/gnu/make/make-{}.tar.gz".format(v["MAKE"])],
         strip_prefix = "make-{}".format(v["MAKE"]),
+        build_file_content = _ALL_SRCS,
+    )
+
+    _http_archive(sums,
+        name = "toybox_src",
+        urls = ["https://github.com/landley/toybox/archive/refs/tags/{}.tar.gz".format(v["TOYBOX"])],
+        strip_prefix = "toybox-{}".format(v["TOYBOX"]),
+        build_file_content = _ALL_SRCS,
+        patches = ["//third_party/patches:toybox_apple_nproc.patch"],
+        patch_args = ["-p1"],
+    )
+
+    _http_archive(sums, 
+        name = "zlib_src",
+        urls = ["https://zlib.net/fossils/zlib-{}.tar.gz".format(v["ZLIB"])],
+        strip_prefix = "zlib-{}".format(v["ZLIB"]),
         build_file_content = _ALL_SRCS,
     )
 
@@ -131,6 +197,37 @@ def _tool_repos_impl(module_ctx):
         ],
         strip_prefix = "zsh-{}".format(v["ZSH"]),
         build_file_content = _ALL_SRCS,
+        # configure writes config.modules. This wrapper then sets link=static.
+        # The list is the static zsh modules.
+        patch_cmds = ["""cat > devlayer-configure << 'END'
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+./configure "$@"
+awk '
+BEGIN {
+  n = split("compctl complete complist computil zle zutil parameter terminfo datetime stat system mathfunc net/socket net/tcp", mods, " ")
+}
+{
+  line = $0
+  for (i = 1; i <= n; i++) {
+    needle = "name=zsh/" mods[i]
+    p = index(line, needle)
+    if (p == 0) continue
+    c = substr(line, p + length(needle), 1)
+    if (c == "" || c == " " || c == "\\t") {
+      gsub("link=no", "link=static", line)
+      gsub("load=no", "load=yes", line)
+      break
+    }
+  }
+  print line
+}
+' config.modules > config.modules.devlayer
+mv config.modules.devlayer config.modules
+END
+chmod 755 devlayer-configure
+"""],
     )
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -334,9 +431,25 @@ def _tool_repos_impl(module_ctx):
     # SDKs / runtimes (full directory trees)
     # ═══════════════════════════════════════════════════════════════════════════
 
+    # Neovim source. Dep URLs match cmake.deps/deps.txt for this NVIM version.
+    _http_archive(sums,
+        name = "nvim_src",
+        urls = ["https://github.com/neovim/neovim/archive/refs/tags/v{}.tar.gz".format(v["NVIM"])],
+        strip_prefix = "neovim-{}".format(v["NVIM"]),
+        build_file_content = _ALL_SRCS,
+        patch_cmds = [_NVIM_PATCH],
+    )
+    for name, url in _NVIM_DEP_URLS:
+        _http_file(sums,
+            name = name,
+            urls = [url],
+            downloaded_file_path = "archive.tar.gz",
+        )
+
     # Neovim pre-built
     for plat, nvim_os, arch in [
         ("linux_amd64", "linux", "x86_64"),
+        ("linux_arm64", "linux", "arm64"),
         ("darwin_arm64", "macos", "arm64"),
     ]:
         archive = "nvim-{os}-{arch}".format(os = nvim_os, arch = arch)
@@ -347,7 +460,17 @@ def _tool_repos_impl(module_ctx):
                 archive = archive,
             )],
             strip_prefix = archive,
-            build_file_content = _FILEGROUP_ALL,
+            build_file_content = """\
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+exports_files(
+    ["bin/nvim"],
+    visibility = ["//visibility:public"],
+)
+""",
         )
 
     # Go SDK

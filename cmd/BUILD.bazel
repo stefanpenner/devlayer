@@ -24,7 +24,7 @@ go_library(
         "//internal/binaries",
         "//internal/checkupdates",
         "//internal/config",
-        "//internal/docker",
+        "//internal/deadstrip",
         "//internal/download",
         "//internal/nvimplugins",
         "//internal/platform",
@@ -40,6 +40,7 @@ go_library(
 go_test(
     name = "cmd_test",
     srcs = [
+        "build_linux_test.go",
         "build_nvim_test.go",
         "build_opts_test.go",
         "doctor_test.go",

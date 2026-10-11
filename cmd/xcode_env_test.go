@@ -6,9 +6,10 @@ func TestDarwinXcodeEnvUsesSystemClang(t *testing.T) {
 	got := darwinXcodeEnv(nil, "darwin", "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 
 	want := map[string]bool{
-		"CC=/usr/bin/clang":    false,
-		"CXX=/usr/bin/clang++": false,
-		"SDKROOT=/sdk":         false,
+		"CC=/usr/bin/clang":              false,
+		"CXX=/usr/bin/clang++":           false,
+		"SDKROOT=/sdk":                   false,
+		"LDFLAGS=-Wl,-dead_strip_dylibs": false,
 	}
 
 	for _, entry := range got {

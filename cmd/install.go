@@ -12,7 +12,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/platform"
 )
 
-// Install extracts a devlayer bundle to the local DEVLAYER_PREFIX.
+// Install extracts the sysroot archive into DEVLAYER_PREFIX.
 func Install(scriptDir string) error {
 	p, err := platform.New(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
@@ -102,7 +102,7 @@ func defaultPrefix() string {
 	return filepath.Join(home, ".local")
 }
 
-// findBundle looks in cwd first, then extraDir (docker/source context).
+// findBundle looks in cwd first, then extraDir.
 func findBundle(name, extraDir string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -117,5 +117,5 @@ func findBundle(name, extraDir string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("no bundle found at %s", name)
+	return "", fmt.Errorf("no sysroot archive found at %s", name)
 }

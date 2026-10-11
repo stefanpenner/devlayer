@@ -1,17 +1,250 @@
-# Alpine base image with all build dependencies for compiling static binaries.
-# Used by per-tool genrules in BUILD.bazel.
+# Alpine builder. Zig runs on the container CPU and cross-compiles both musl targets.
 FROM alpine:3.21
 
+ARG ZIG_VERSION
+RUN test -n "$ZIG_VERSION"
+
+# Host programs. The C compiler for the bundle is zig, not this gcc.
+# eu-strip reads a foreign ELF. zig objcopy --strip-all returns "unimplemented".
 RUN apk add --no-cache \
-    build-base cmake git curl wget linux-headers \
-    ncurses-dev ncurses-static \
-    go ninja gettext-tiny-dev unzip autoconf automake libtool pkgconf \
-    zlib-dev zlib-static \
-    openssl-dev openssl-libs-static \
-    curl-dev curl-static \
-    expat-dev expat-static \
-    pcre2-dev perl \
-    nghttp2-static brotli-static \
-    libidn2-static libunistring-static libpsl-static zstd-static
+    build-base cmake git curl wget xz elfutils \
+    ninja gettext-tiny-dev unzip autoconf automake libtool pkgconf \
+    perl
+
+# Host zig. The tarball arch is the container CPU, not the bundle target.
+RUN arch="$(uname -m)" \
+ && case "$arch" in x86_64|aarch64) ;; *) echo "unsupported container arch $arch" >&2; exit 1 ;; esac \
+ && curl -fsSL -o /tmp/zig.tar.xz "https://ziglang.org/download/${ZIG_VERSION}/zig-${arch}-linux-${ZIG_VERSION}.tar.xz" \
+ && tar -C /opt -xJf /tmp/zig.tar.xz \
+ && ln -s "/opt/zig-${arch}-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig \
+ && rm /tmp/zig.tar.xz \
+ && zig version
+
+# Headers only. Alpine *-static archives are GCC LTO slim objects. Zig cannot link them.
+# Index keys for the other CPU live under /usr/share/apk/keys/<arch>.
+RUN set -eu; \
+    for arch in x86_64 aarch64; do \
+      root="/opt/sysroot/${arch}"; \
+      mkdir -p "${root}/etc/apk/keys"; \
+      cp /etc/apk/keys/* "${root}/etc/apk/keys/"; \
+      cp /usr/share/apk/keys/*.rsa.pub "${root}/etc/apk/keys/"; \
+      cp /usr/share/apk/keys/${arch}/* "${root}/etc/apk/keys/"; \
+      cp /etc/apk/repositories "${root}/etc/apk/repositories"; \
+      apk add --root "${root}" --arch "${arch}" --initdb --no-cache \
+        musl-dev linux-headers; \
+    done
+
+RUN cat > /usr/local/bin/devlayer-cc <<'EOF'
+#!/bin/sh
+set -eu
+: "${DEVLAYER_TARGET:?missing DEVLAYER_TARGET}"
+exec zig cc -target "${DEVLAYER_TARGET}-linux-musl" \
+  -idirafter "/opt/sysroot/${DEVLAYER_TARGET}/usr/include" \
+  -L"/opt/sysroot/${DEVLAYER_TARGET}/usr/lib" \
+  "$@"
+EOF
+
+RUN cat > /usr/local/bin/devlayer-cxx <<'EOF'
+#!/bin/sh
+set -eu
+: "${DEVLAYER_TARGET:?missing DEVLAYER_TARGET}"
+exec zig c++ -target "${DEVLAYER_TARGET}-linux-musl" \
+  -idirafter "/opt/sysroot/${DEVLAYER_TARGET}/usr/include" \
+  -L"/opt/sysroot/${DEVLAYER_TARGET}/usr/lib" \
+  "$@"
+EOF
+
+RUN printf '%s\n' '#!/bin/sh' 'exec zig ar "$@"' > /usr/local/bin/devlayer-ar \
+ && printf '%s\n' '#!/bin/sh' 'exec zig ranlib "$@"' > /usr/local/bin/devlayer-ranlib
+
+# PATH lists /usr/local/bin before /usr/bin, so this strip wins.
+RUN cat > /usr/local/bin/strip <<'EOF'
+#!/bin/sh
+set -eu
+for f in "$@"; do
+  case "$f" in
+    -*) continue ;;
+  esac
+  eu-strip "$f"
+done
+EOF
+
+RUN cat > /usr/local/bin/devlayer-enter <<'EOF'
+#!/bin/sh
+set -eu
+case "${DEVLAYER_TARGET:-}" in
+  x86_64|aarch64) ;;
+  *) echo "missing or unknown DEVLAYER_TARGET" >&2; exit 1 ;;
+esac
+export PKG_CONFIG_LIBDIR="/opt/sysroot/${DEVLAYER_TARGET}/usr/lib/pkgconfig:/opt/sysroot/${DEVLAYER_TARGET}/usr/share/pkgconfig"
+# Configure skips the run test when --build and --host differ.
+export DEVLAYER_BUILD="$(uname -m)-unknown-linux-musl"
+exec "$@"
+EOF
+
+RUN chmod 755 \
+    /usr/local/bin/devlayer-cc \
+    /usr/local/bin/devlayer-cxx \
+    /usr/local/bin/devlayer-ar \
+    /usr/local/bin/devlayer-ranlib \
+    /usr/local/bin/strip \
+    /usr/local/bin/devlayer-enter
+
+# Host tic. A cross ncurses install runs tic. The target tic cannot run here.
+RUN apk add --no-cache ncurses
+
+# zlib and openssl. This layer stays when the ncurses step changes.
+RUN set -eu; \
+    cd /tmp; \
+    for arch in x86_64 aarch64; do \
+      root="/opt/sysroot/${arch}"; \
+      export DEVLAYER_TARGET="$arch"; \
+      case "$arch" in \
+        x86_64) ossl=linux-x86_64 ;; \
+        aarch64) ossl=linux-aarch64 ;; \
+      esac; \
+      curl -fsSL -o zlib.tar.gz https://zlib.net/fossils/zlib-1.3.1.tar.gz; \
+      echo "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23  zlib.tar.gz" | sha256sum -c; \
+      rm -rf zlib-1.3.1 && tar -xzf zlib.tar.gz && cd zlib-1.3.1; \
+      CC=devlayer-cc AR=devlayer-ar RANLIB=devlayer-ranlib ./configure --prefix="$root/usr" --static; \
+      make -j"$(nproc)" && make install; \
+      cd /tmp && rm -rf zlib-1.3.1 zlib.tar.gz; \
+      curl -fsSL -o openssl.tar.gz https://www.openssl.org/source/openssl-3.3.2.tar.gz; \
+      echo "2e8a40b01979afe8be0bbfb3de5dc1c6709fedb46d6c89c10da114ab5fc3d281  openssl.tar.gz" | sha256sum -c; \
+      rm -rf openssl-3.3.2 && tar -xzf openssl.tar.gz && cd openssl-3.3.2; \
+      ./Configure "$ossl" no-shared no-tests no-module \
+        --prefix="$root/usr" --libdir=lib --openssldir="$root/etc/ssl" \
+        CC=devlayer-cc AR=devlayer-ar RANLIB=devlayer-ranlib; \
+      make -j"$(nproc)" && make install_sw; \
+      cd /tmp && rm -rf openssl-3.3.2 openssl.tar.gz; \
+    done
+
+# ncurses and curl. --build differs from --host, so configure does not run the ELF.
+RUN set -eu; \
+    build="$(uname -m)-unknown-linux-musl"; \
+    cd /tmp; \
+    for arch in x86_64 aarch64; do \
+      root="/opt/sysroot/${arch}"; \
+      host="${arch}-unknown-linux-musl"; \
+      export DEVLAYER_TARGET="$arch"; \
+      curl -fsSL -o ncurses.tar.gz https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz; \
+      echo "136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6  ncurses.tar.gz" | sha256sum -c; \
+      rm -rf ncurses-6.5 && tar -xzf ncurses.tar.gz && cd ncurses-6.5; \
+      ./configure --build="$build" --host="$host" --prefix="$root/usr" \
+        --without-shared --without-debug --without-cxx --enable-widec \
+        --without-tests --without-manpages --without-ada \
+        --with-tic-path=/usr/bin/tic --with-build-cc=gcc \
+        --enable-pc-files --with-pkg-config-libdir="$root/usr/lib/pkgconfig" \
+        CC=devlayer-cc AR=devlayer-ar RANLIB=devlayer-ranlib CFLAGS="-Os"; \
+      make -j"$(nproc)" && make install; \
+      cd /tmp && rm -rf ncurses-6.5 ncurses.tar.gz; \
+      curl -fsSL -o curl.tar.gz https://curl.se/download/curl-8.14.1.tar.gz; \
+      echo "6766ada7101d292b42b8b15681120acd68effa4a9660935853cf6d61f0d984d4  curl.tar.gz" | sha256sum -c; \
+      rm -rf curl-8.14.1 && tar -xzf curl.tar.gz && cd curl-8.14.1; \
+      ./configure --build="$build" --host="$host" --prefix="$root/usr" \
+        --disable-shared --enable-static \
+        --with-openssl="$root/usr" --with-zlib="$root/usr" \
+        --without-libpsl --without-brotli --without-nghttp2 --without-libidn2 \
+        --without-zstd --without-libssh2 --disable-ldap --disable-ldaps \
+        CC=devlayer-cc AR=devlayer-ar RANLIB=devlayer-ranlib \
+        PKG_CONFIG_PATH="$root/usr/lib/pkgconfig" \
+        CPPFLAGS="-I$root/usr/include" LDFLAGS="-L$root/usr/lib"; \
+      make -j"$(nproc)" && make install; \
+      cd /tmp && rm -rf curl-8.14.1 curl.tar.gz; \
+    done
+
+# zig rejects these linker args. Git fuzz links and btop pass them.
+# libuv records Solaris and AIX libs. The static try-compile reports them present.
+RUN cat > /usr/local/bin/devlayer-cc <<'EOF'
+#!/bin/sh
+set -eu
+: "${DEVLAYER_TARGET:?missing DEVLAYER_TARGET}"
+n=$#
+hold=
+for arg do
+  if [ -n "$hold" ]; then
+    case $arg in
+      --allow-multiple-definition|--fatal-warnings) hold=; continue ;;
+    esac
+    set -- "$@" "$hold"
+    hold=
+  fi
+  case $arg in
+    -Wl,--allow-multiple-definition|-Wl,--fatal-warnings) ;;
+    -lkstat|-lkvm|-lnsl|-lperfstat|-lsendfile) ;;
+    -Xlinker) hold=$arg ;;
+    *) set -- "$@" "$arg" ;;
+  esac
+done
+if [ -n "$hold" ]; then
+  set -- "$@" "$hold"
+fi
+if [ "$n" -gt 0 ]; then
+  shift "$n"
+fi
+# LuaJIT with -funwind-tables needs zig libunwind. A compile does not.
+link=1
+for arg do
+  case $arg in
+    -c|-E|-S) link=0 ;;
+  esac
+done
+if [ "$link" -eq 1 ]; then
+  set -- "$@" -lunwind
+fi
+exec zig cc -target "${DEVLAYER_TARGET}-linux-musl" \
+  -idirafter "/opt/sysroot/${DEVLAYER_TARGET}/usr/include" \
+  -L"/opt/sysroot/${DEVLAYER_TARGET}/usr/lib" \
+  "$@"
+EOF
+
+RUN cat > /usr/local/bin/devlayer-cxx <<'EOF'
+#!/bin/sh
+set -eu
+: "${DEVLAYER_TARGET:?missing DEVLAYER_TARGET}"
+n=$#
+hold=
+for arg do
+  if [ -n "$hold" ]; then
+    case $arg in
+      --allow-multiple-definition|--fatal-warnings) hold=; continue ;;
+    esac
+    set -- "$@" "$hold"
+    hold=
+  fi
+  case $arg in
+    -Wl,--allow-multiple-definition|-Wl,--fatal-warnings) ;;
+    -lkstat|-lkvm|-lnsl|-lperfstat|-lsendfile) ;;
+    -Xlinker) hold=$arg ;;
+    *) set -- "$@" "$arg" ;;
+  esac
+done
+if [ -n "$hold" ]; then
+  set -- "$@" "$hold"
+fi
+if [ "$n" -gt 0 ]; then
+  shift "$n"
+fi
+# LuaJIT with -funwind-tables needs zig libunwind. A compile does not.
+link=1
+for arg do
+  case $arg in
+    -c|-E|-S) link=0 ;;
+  esac
+done
+if [ "$link" -eq 1 ]; then
+  set -- "$@" -lunwind
+fi
+exec zig c++ -target "${DEVLAYER_TARGET}-linux-musl" \
+  -idirafter "/opt/sysroot/${DEVLAYER_TARGET}/usr/include" \
+  -L"/opt/sysroot/${DEVLAYER_TARGET}/usr/lib" \
+  "$@"
+EOF
+
+RUN chmod 755 /usr/local/bin/devlayer-cc /usr/local/bin/devlayer-cxx
+
+# Host LuaJIT loads host-nlua0.so. The target LuaJIT is static and cannot dlopen.
+RUN apk add --no-cache luajit luajit-dev
 
 WORKDIR /build
+ENTRYPOINT ["/usr/local/bin/devlayer-enter"]

@@ -1,28 +1,56 @@
-load("@versions//:versions.bzl", "VERSIONS")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 
-# Git — version control (built from source)
-# Uses kernel.org release tarball with pre-generated configure.
-# Produces git binary + libexec/git-core/ support files.
-genrule(
+# Git release tarball. No curl yet: https needs pinned OpenSSL and curl.
+configure_make(
     name = "git",
-    srcs = ["@git_src//:all_srcs"],
-    outs = ["git-install.tar.gz"],
-    cmd = """
-        set -e
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$$PATH"
-        OUT=$$(pwd)/$@
-        SRC=$$(pwd)/external/+tool_repos+git_src
-        BUILD=$$(mktemp -d)
-        INSTALL=$$(mktemp -d)
-        cp -r $$SRC/* $$BUILD/
-        cd $$BUILD
-        make configure
-        ./configure --prefix=$$INSTALL --without-tcltk --without-python
-        make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu) CFLAGS="-Os -DNDEBUG"
-        make install
-        tar czf $$OUT -C $$INSTALL .
-        rm -rf $$BUILD $$INSTALL
-    """,
-    tags = ["no-sandbox"],
+    # The install dir must not be named git. The link writes that path.
+    install_prefix = "out",
+    # config.mak.uname runs uname on the build machine. Command-line values win.
+    args = select({
+        "//tools:linux_amd64": ["uname_S=Linux", "uname_M=x86_64"],
+        "//tools:linux_arm64": ["uname_S=Linux", "uname_M=aarch64"],
+        "//conditions:default": [],
+    }) + [
+        "-j",
+        "LINK_FUZZ_PROGRAMS=",
+        "NO_GETTEXT=YesPlease",
+        "ZLIB_PATH=$$EXT_BUILD_DEPS$$/zlib",
+    ],
+    deps = ["//third_party/zlib"],
+    # Git's configure writes config.mak.autogen beside the Makefile.
+    configure_in_place = True,
+    configure_options = select({
+        "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
+        "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
+        "//conditions:default": [],
+    }) + [
+        "--without-python",
+        "--without-tcltk",
+    ],
+    env = select({
+        "//tools:is_linux": {
+            "ac_cv_fread_reads_directories": "no",
+            "ac_cv_iconv_omits_bom": "no",
+            "ac_cv_snprintf_returns_bogus": "no",
+            "CFLAGS": "-Os -DNDEBUG",
+            "LDFLAGS": "-static",
+            "NO_CURL": "YesPlease",
+            "NO_EXPAT": "YesPlease",
+            "NO_GETTEXT": "YesPlease",
+            "NO_NSEC": "YesPlease",
+            "NO_OPENSSL": "YesPlease",
+            "NO_PERL": "YesPlease",
+            "NO_PYTHON": "YesPlease",
+            "NO_REGEX": "YesPlease",
+            "NO_RUST": "YesPlease",
+            "NO_TCLTK": "YesPlease",
+        },
+        "//conditions:default": {
+            "CFLAGS": "-Os -DNDEBUG",
+        },
+    }),
+    lib_source = "@git_src//:all_srcs",
+    out_binaries = ["git"],
+    out_data_dirs = ["libexec", "share"],
     visibility = ["//visibility:public"],
 )

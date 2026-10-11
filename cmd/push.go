@@ -9,7 +9,7 @@ import (
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
-// Push deploys a devlayer bundle to a remote host via SSH.
+// Push sends the sysroot, the dotfiles, and the nvim plugins over SSH.
 func Push(host, scriptDir string, vers *versions.Versions) error {
 	if host == "" {
 		return fmt.Errorf("usage: devlayer push <host>")
@@ -64,7 +64,7 @@ func ensureLinuxBundle(arch, scriptDir string, vers *versions.Versions) (string,
 		return tarball, nil
 	}
 
-	fmt.Printf("==> No bundle found, building for linux/%s...\n", arch)
+	fmt.Printf("==> No sysroot archive found. devlayer builds the linux/%s sysroot.\n", arch)
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
 		return "", cwdErr

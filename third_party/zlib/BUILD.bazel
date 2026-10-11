@@ -1,0 +1,26 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+# Static zlib. Git includes zlib.h from this install.
+cmake(
+    name = "zlib",
+    cache_entries = select({
+        "//tools:linux_amd64": {
+            "BUILD_SHARED_LIBS": "OFF",
+            "CMAKE_SYSTEM_NAME": "Linux",
+            "CMAKE_SYSTEM_PROCESSOR": "x86_64",
+            "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY",
+        },
+        "//tools:linux_arm64": {
+            "BUILD_SHARED_LIBS": "OFF",
+            "CMAKE_SYSTEM_NAME": "Linux",
+            "CMAKE_SYSTEM_PROCESSOR": "aarch64",
+            "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY",
+        },
+        "//conditions:default": {
+            "BUILD_SHARED_LIBS": "OFF",
+        },
+    }),
+    lib_source = "@zlib_src//:all_srcs",
+    out_static_libs = ["libz.a"],
+    visibility = ["//visibility:public"],
+)

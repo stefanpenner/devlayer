@@ -1,10 +1,11 @@
-# bat — cat with syntax highlighting (pre-built binary)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# bat — pre-built binary
+dead_strip_binary(
     name = "bat",
-    actual = select({
-        "//tools:linux_amd64": "@bat_linux_amd64//:bat",
-        "//tools:linux_arm64": "@bat_linux_arm64//:bat",
-        "//tools:darwin_arm64": "@bat_darwin_arm64//:bat",
+    srcs = select({
+        "//tools:linux_amd64": ["@bat_linux_amd64//:bat"],
+        "//tools:linux_arm64": ["@bat_linux_arm64//:bat"],
+        "//tools:darwin_arm64": ["@bat_darwin_arm64//:bat"],
     }),
-    visibility = ["//visibility:public"],
 )

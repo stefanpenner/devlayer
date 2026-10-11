@@ -1,11 +1,11 @@
-# dust — disk usage analyzer (pre-built binary)
-# Note: darwin arm64 uses x86_64 build (runs via Rosetta, no native arm64 build)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# dust — pre-built binary
+dead_strip_binary(
     name = "dust",
-    actual = select({
-        "//tools:linux_amd64": "@dust_linux_amd64//:dust",
-        "//tools:linux_arm64": "@dust_linux_arm64//:dust",
-        "//tools:darwin_arm64": "@dust_darwin_arm64//:dust",
+    srcs = select({
+        "//tools:linux_amd64": ["@dust_linux_amd64//:dust"],
+        "//tools:linux_arm64": ["@dust_linux_arm64//:dust"],
+        "//tools:darwin_arm64": ["@dust_darwin_arm64//:dust"],
     }),
-    visibility = ["//visibility:public"],
 )

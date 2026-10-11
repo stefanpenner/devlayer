@@ -1,9 +1,14 @@
-load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+load(":defs.bzl", "nvim_musl")
 
-# Neovim — pre-built runtime bundle (binary + runtime files)
-# Pre-built is used because nvim's cmake build uses FetchContent
-# which downloads dependencies at build time (incompatible with sandbox).
-# For source builds, use the genrule target below.
+exports_files(
+    [
+        "host_luajit.sh",
+        "host_nlua0.sh",
+    ],
+    visibility = ["//internal/binaries:__pkg__"],
+)
+
+# Pre-built runtime. Darwin and the non-Linux bundle use this alias.
 alias(
     name = "nvim",
     actual = select({
@@ -13,24 +18,5 @@ alias(
     visibility = ["//visibility:public"],
 )
 
-# Neovim from source — builds outside sandbox (requires network for FetchContent).
-# Usage: bazel build //third_party/nvim:nvim_from_source --spawn_strategy=local
-genrule(
-    name = "nvim_from_source",
-    srcs = [],
-    outs = ["nvim-built.tar.gz"],
-    cmd = """
-        set -e
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$$PATH"
-        OUT=$$(pwd)/$@
-        TMPDIR=$$(mktemp -d)
-        git clone --depth 1 --branch stable https://github.com/neovim/neovim.git $$TMPDIR/src
-        cd $$TMPDIR/src
-        make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX=$$TMPDIR/nvim -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-        make install
-        tar czf $$OUT -C $$TMPDIR nvim
-        rm -rf $$TMPDIR
-    """,
-    tags = ["no-sandbox", "requires-network"],
-    visibility = ["//visibility:public"],
-)
+# Static musl nvim. //linux:nvim_* applies the Zig Linux transition.
+nvim_musl()

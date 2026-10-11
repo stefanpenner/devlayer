@@ -4,7 +4,6 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 exports_files(
     [
         "versions.env",
-        "Dockerfile",
         ".bazelrc",
     ],
     visibility = ["//visibility:public"],
@@ -20,7 +19,6 @@ go_library(
     srcs = ["main.go"],
     embedsrcs = [
         "versions.env",
-        "Dockerfile",
         "config/nvim/nvim-pack-lock.json",
     ],
     importpath = "github.com/stefanpenner/devlayer",

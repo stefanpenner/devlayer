@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/stefanpenner/devlayer/internal/docker"
 )
 
-// Clean removes build artifacts and Docker images.
+// Clean removes build artifacts.
 func Clean(scriptDir string) error {
 	fmt.Println("==> Cleaning up...")
 
@@ -20,11 +18,6 @@ func Clean(scriptDir string) error {
 	}
 	if len(matches) > 0 {
 		fmt.Printf("  Removed %d tarball(s)\n", len(matches))
-	}
-
-	if docker.ImageExists("devlayer") {
-		docker.RemoveImage("devlayer")
-		fmt.Println("  Removed Docker image")
 	}
 
 	fmt.Println("==> Done.")

@@ -16,43 +16,58 @@ use_repo(
     go_deps,
     "com_github_burntsushi_toml",
     "com_github_charmbracelet_lipgloss",
+    "com_github_ulikunitz_xz",
 )
 
 # ─── Hermetic C/C++ toolchain (zig-based) ───────────────────────────────────
-bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
+# The patch pins Zig 0.16.0 and updates the wrapper for that release.
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.3.0")
+single_version_override(
+    module_name = "hermetic_cc_toolchain",
+    patch_strip = 1,
+    patches = ["//third_party/patches:hermetic_cc_zig_0_16.patch"],
+)
 
 toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
-toolchains.exec_platform(os = "linux", arch = "amd64")
-toolchains.exec_platform(os = "linux", arch = "arm64")
-toolchains.exec_platform(os = "macos", arch = "amd64")
-toolchains.exec_platform(os = "macos", arch = "arm64")
+toolchains.exec_platform(
+    arch = "amd64",
+    os = "linux",
+)
+toolchains.exec_platform(
+    arch = "arm64",
+    os = "linux",
+)
+toolchains.exec_platform(
+    arch = "amd64",
+    os = "macos",
+)
+toolchains.exec_platform(
+    arch = "arm64",
+    os = "macos",
+)
 use_repo(toolchains, "zig_sdk")
 
+macos_sdk = use_repo_rule("//tools:macos_sdk.bzl", "macos_sdk")
+
+macos_sdk(name = "macos_sdk")
+
 # Hermetic CC is opt-in via .bazelrc configs (--config=linux-x86_64-musl etc.)
-# Not registered globally because zig-cc lacks macOS SDK headers needed
-# for tools like btop that use CoreFoundation/IOKit frameworks.
+# macOS rules pass the pinned SDK to zig cc.
+# The global toolchain does not receive that SDK.
 
 # ─── Platforms ───────────────────────────────────────────────────────────────
 bazel_dep(name = "platforms", version = "1.0.0")
 
-# ─── OCI container images ────────────────────────────────────────────────────
-bazel_dep(name = "rules_oci", version = "2.3.0")
-
-oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
-
-oci.pull(
-    name = "alpine",
-    digest = "sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709",
-    image = "docker.io/library/alpine",
-    platforms = [
-        "linux/amd64",
-        "linux/arm64/v8",
-    ],
-)
-use_repo(oci, "alpine", "alpine_linux_amd64", "alpine_linux_arm64_v8")
-
 # ─── Foreign CC (cmake/autotools builds) ────────────────────────────────────
 bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
+
+# macOS libSystem glob() does not match GNU glob_t. The stock build.sh links
+# the system glob, and $(wildcard) then crashes. The patch force-loads GNU glob.
+single_version_override(
+    module_name = "rules_foreign_cc",
+    patch_strip = 1,
+    patches = ["//third_party/patches:foreign_cc_make_glob.patch"],
+)
 
 # ─── Versions (single source of truth: versions.env) ───────────────────────
 versions = use_extension("//tools:versions_ext.bzl", "versions_ext")
@@ -68,52 +83,70 @@ use_repo(
     "htop_src",
     "make_src",
     "ncurses_src",
+    "nvim_libuv",
+    "nvim_lpeg",
+    "nvim_lua_compat53",
+    "nvim_luajit",
+    "nvim_luv",
+    "nvim_src",
+    "nvim_treesitter",
+    "nvim_treesitter_c",
+    "nvim_treesitter_lua",
+    "nvim_treesitter_markdown",
+    "nvim_treesitter_query",
+    "nvim_treesitter_vim",
+    "nvim_treesitter_vimdoc",
+    "nvim_unibilium",
+    "nvim_utf8proc",
+    "toybox_src",
+    "zlib_src",
     "zsh_src",
     # Pre-built Rust tools (per platform)
+    "bat_darwin_arm64",
     "bat_linux_amd64",
     "bat_linux_arm64",
-    "bat_darwin_arm64",
+    "delta_darwin_arm64",
     "delta_linux_amd64",
     "delta_linux_arm64",
-    "delta_darwin_arm64",
+    "dust_darwin_arm64",
     "dust_linux_amd64",
     "dust_linux_arm64",
-    "dust_darwin_arm64",
+    "fd_darwin_arm64",
     "fd_linux_amd64",
     "fd_linux_arm64",
-    "fd_darwin_arm64",
+    "rg_darwin_arm64",
     "rg_linux_amd64",
     "rg_linux_arm64",
-    "rg_darwin_arm64",
     # Pre-built Go tools (per platform)
+    "age_darwin_arm64",
     "age_linux_amd64",
     "age_linux_arm64",
-    "age_darwin_arm64",
+    "fzf_darwin_arm64",
     "fzf_linux_amd64",
     "fzf_linux_arm64",
-    "fzf_darwin_arm64",
+    "lazygit_darwin_arm64",
     "lazygit_linux_amd64",
     "lazygit_linux_arm64",
-    "lazygit_darwin_arm64",
+    "shh_darwin_arm64",
     "shh_linux_amd64",
     "shh_linux_arm64",
-    "shh_darwin_arm64",
     # Single-binary tools (per platform)
+    "direnv_darwin_arm64",
     "direnv_linux_amd64",
     "direnv_linux_arm64",
-    "direnv_darwin_arm64",
+    "jq_darwin_arm64",
     "jq_linux_amd64",
     "jq_linux_arm64",
-    "jq_darwin_arm64",
     # SDKs / runtimes (per platform)
+    "go_sdk_darwin_arm64",
     "go_sdk_linux_amd64",
     "go_sdk_linux_arm64",
-    "go_sdk_darwin_arm64",
-    "nvim_linux_amd64",
     "nvim_darwin_arm64",
+    "nvim_linux_amd64",
+    "nvim_linux_arm64",
+    "zig_darwin_arm64",
     "zig_linux_amd64",
     "zig_linux_arm64",
-    "zig_darwin_arm64",
     # Shell assets
     "bat_extras",
     "fast_syntax_highlighting",

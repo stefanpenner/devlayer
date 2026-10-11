@@ -5,13 +5,22 @@ load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 configure_make(
     name = "zsh",
     args = ["-j"],
-    configure_options = [
+    configure_command = "devlayer-configure",
+    configure_in_place = True,
+    configure_options = select({
+        "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
+        "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
+        "//conditions:default": [],
+    }) + [
+        "--with-term-lib=ncursesw",
+        "--disable-dynamic",
         "--enable-multibyte",
+        "--enable-static",
         "--enable-unicode9",
-        "--without-tcsetpgrp",
+        "--with-tcsetpgrp",
     ],
     env = select({
-        "@platforms//os:linux": {
+        "//tools:is_linux": {
             "CFLAGS": "-Os -DNDEBUG",
             "LDFLAGS": "-static",
         },
@@ -23,6 +32,7 @@ configure_make(
             "CFLAGS": "-Os -DNDEBUG",
         },
     }),
+    deps = ["//third_party/ncurses"],
     lib_source = "@zsh_src//:all_srcs",
     out_binaries = ["zsh"],
     # Zsh installs function files to share/zsh/

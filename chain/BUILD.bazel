@@ -1,0 +1,8 @@
+load("//linux:defs.bzl", "linux_chain")
+
+#   bazel build //chain:linux_x86_64
+#   bazel build //chain:linux_aarch64
+
+linux_chain("x86_64")
+
+linux_chain("aarch64")

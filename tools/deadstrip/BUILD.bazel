@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "deadstrip_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/deadstrip",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/deadstrip"],
+)
+
+go_binary(
+    name = "deadstrip",
+    embed = [":deadstrip_lib"],
+    visibility = ["//visibility:public"],
+)

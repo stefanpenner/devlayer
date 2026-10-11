@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/stefanpenner/devlayer/internal/binaries",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/deadstrip",
         "//internal/download",
         "//internal/platform",
         "//internal/sums",
@@ -21,10 +22,18 @@ go_test(
     name = "binaries_test",
     srcs = [
         "binaries_test.go",
+        "path_test.go",
         "pins_test.go",
         "probe_test.go",
     ],
-    data = ["//:versions.env"],
+    data = [
+        "//:versions.env",
+        "//macos:archive.sh",
+        "//macos:host_make.sh",
+        "//macos:luajit.sh",
+        "//third_party/nvim:host_luajit.sh",
+        "//third_party/nvim:host_nlua0.sh",
+    ],
     embed = [":binaries"],
     deps = [
         "//internal/platform",

@@ -31,3 +31,22 @@ func TestParseBuildOptsUnknown(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestBundleSelfName(t *testing.T) {
+	tests := []struct {
+		host, target, name string
+		copy               bool
+	}{
+		{host: "linux", target: "windows", copy: false},
+		{host: "linux", target: "darwin", copy: false},
+		{host: "windows", target: "windows", name: "devlayer.exe", copy: true},
+		{host: "darwin", target: "darwin", name: "devlayer", copy: true},
+		{host: "linux", target: "linux", name: "devlayer", copy: true},
+	}
+	for _, tt := range tests {
+		name, copy := bundleSelfName(tt.host, tt.target)
+		if copy != tt.copy || name != tt.name {
+			t.Errorf("bundleSelfName(%q, %q) = %q, %v; want %q, %v", tt.host, tt.target, name, copy, tt.name, tt.copy)
+		}
+	}
+}

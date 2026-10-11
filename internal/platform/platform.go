@@ -4,21 +4,20 @@ import "fmt"
 
 // Platform holds normalized OS/arch information and target triples.
 type Platform struct {
-	OS             string // "linux", "darwin", or "windows"
-	Arch           string // original arch string
-	RustArch       string // "x86_64" or "aarch64"
-	GoArch         string // "amd64" or "arm64"
-	ArchGeneric    string // "x86_64" or "arm64"
-	RustTarget     string // e.g. "x86_64-unknown-linux-musl"
-	RustTargetGNU  string // for ripgrep/delta aarch64 fallback
-	LazygitOS      string // "Linux", "Darwin", or "Windows"
-	NvimOS         string // "linux", "macos", "win64", "win-arm64"
-	JqOS           string // "linux", "macos", or "windows"
-	GhOS           string // "linux", "macOS", or "windows" — cli/cli asset names
-	ZigOS          string // "linux", "macos", or "windows"
-	DockerPlatform string // e.g. "linux/amd64"
-	ExeSuffix      string // "" on unix, ".exe" on windows
-	BundleExt      string // "tar.gz" or "zip"
+	OS            string // "linux", "darwin", or "windows"
+	Arch          string // original arch string
+	RustArch      string // "x86_64" or "aarch64"
+	GoArch        string // "amd64" or "arm64"
+	ArchGeneric   string // "x86_64" or "arm64"
+	RustTarget    string // e.g. "x86_64-unknown-linux-musl"
+	RustTargetGNU string // for ripgrep/delta aarch64 fallback
+	LazygitOS     string // "Linux", "Darwin", or "Windows"
+	NvimOS        string // "linux", "macos", "win64", "win-arm64"
+	JqOS          string // "linux", "macos", or "windows"
+	GhOS          string // "linux", "macOS", or "windows" — cli/cli asset names
+	ZigOS         string // "linux", "macos", or "windows"
+	ExeSuffix     string // "" on unix, ".exe" on windows
+	BundleExt     string // "tar.gz" or "zip"
 }
 
 // New creates a Platform with all fields normalized.
@@ -75,8 +74,6 @@ func New(os, arch string) (*Platform, error) {
 	default:
 		return nil, fmt.Errorf("unsupported OS: %s", os)
 	}
-
-	p.DockerPlatform = "linux/" + p.GoArch
 
 	return p, nil
 }

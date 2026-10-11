@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "hermeticgraph_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/hermeticgraph",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "hermeticgraph",
+    embed = [":hermeticgraph_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "hermeticgraph_test",
+    srcs = ["main_test.go"],
+    embed = [":hermeticgraph_lib"],
+)

@@ -79,8 +79,8 @@ func TestPublishNeedsTests(t *testing.T) {
 	if strings.Contains(text, "Don't let a hung Windows bazel test") {
 		t.Fatal("publish still documents skipping the Windows test job")
 	}
-	if !strings.Contains(text, "needs: [cli, linux, darwin, windows, test]") {
-		t.Fatal("publish needs must include test")
+	if !strings.Contains(text, "needs: [cli, linux, darwin, windows, smoke-linux-aarch64, smoke-windows, test]") {
+		t.Fatal("publish needs must include test, smoke-linux-aarch64, and smoke-windows")
 	}
 }
 

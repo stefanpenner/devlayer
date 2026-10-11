@@ -9,9 +9,11 @@ func TestEzaBuildEnvDarwinUsesCargoAndSystemPath(t *testing.T) {
 	got := ezaBuildEnv(nil, "darwin", `/Users/stef/.cargo/bin/cargo`, "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 
 	want := map[string]bool{
-		"CC=/usr/bin/clang":    false,
-		"CXX=/usr/bin/clang++": false,
-		"SDKROOT=/sdk":         false,
+		"CC=/usr/bin/clang":                        false,
+		"CXX=/usr/bin/clang++":                     false,
+		"SDKROOT=/sdk":                             false,
+		"LDFLAGS=-Wl,-dead_strip_dylibs":           false,
+		"RUSTFLAGS=-C link-arg=-dead_strip_dylibs": false,
 	}
 
 	var path string

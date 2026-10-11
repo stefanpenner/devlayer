@@ -8,7 +8,7 @@
 #   //third_party/ncurses       — genrule, terminal UI library
 #   //third_party/zsh           — configure_make, Z shell (+ share)
 #   //third_party/eza           — genrule, ls replacement (needs cargo)
-#   //third_party/nvim:nvim_from_source — genrule, neovim (needs cmake + network)
+#   //third_party/nvim:nvim_musl — cmake, static musl neovim
 #
 # Pre-built binaries (downloaded per-platform):
 #   //third_party/fd            — file finder
@@ -40,6 +40,6 @@
 #   //bundle:source_built       — source-compiled tools only
 #   //bundle:shell_assets       — plugins and shell scripts
 #
-# Linux bundle (Docker-based, replaces monolithic Dockerfile):
-#   //linux:bundle_x86_64      — full Linux x86_64 bundle
-#   //linux:bundle_aarch64     — full Linux aarch64 bundle
+# Linux bundle. Zig cross-compiles on the host.
+#   //linux:bundle_x86_64
+#   //linux:bundle_aarch64

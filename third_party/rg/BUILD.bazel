@@ -1,11 +1,11 @@
-# ripgrep — fast regex search (pre-built binary)
-# Note: linux arm64 uses GNU target (no musl build available)
-alias(
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# rg — pre-built binary
+dead_strip_binary(
     name = "rg",
-    actual = select({
-        "//tools:linux_amd64": "@rg_linux_amd64//:rg",
-        "//tools:linux_arm64": "@rg_linux_arm64//:rg",
-        "//tools:darwin_arm64": "@rg_darwin_arm64//:rg",
+    srcs = select({
+        "//tools:linux_amd64": ["@rg_linux_amd64//:rg"],
+        "//tools:linux_arm64": ["@rg_linux_arm64//:rg"],
+        "//tools:darwin_arm64": ["@rg_darwin_arm64//:rg"],
     }),
-    visibility = ["//visibility:public"],
 )

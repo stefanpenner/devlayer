@@ -12,9 +12,6 @@ import (
 //go:embed versions.env
 var versionsEnv string
 
-//go:embed Dockerfile
-var dockerfile string
-
 //go:embed config/nvim/nvim-pack-lock.json
 var nvimPackLock string
 
@@ -25,18 +22,18 @@ func usage() {
 	fmt.Print(`Usage: devlayer <command> [options]
 
 Commands:
-  build [--os OS] [--arch ARCH]   Build bundle + dotfiles + nvim plugins
-  push <host>                     Deploy everything to remote host via SSH
+  build [--os OS] [--arch ARCH]   Build the sysroot, the dotfiles, and the nvim plugins
+  push <host>                     Send the sysroot, the dotfiles, and the nvim plugins
   status [host]                   Show installed tool versions (local or SSH)
-  install                         Install bundle locally (DEVLAYER_PREFIX, default ~/.local)
+  install                         Install the sysroot (DEVLAYER_PREFIX, default ~/.local)
   init [--force]                  Write ~/.config/devlayer/config.toml
   doctor                          Check the local install
   ls                              List installed tools, dotfiles, and nvim plugins
-  clean                           Remove build artifacts and Docker image
+  clean                           Remove build artifacts
   upgrade                         Show notes (if any) and install the latest release
   check-updates [--dry-run]       Fetch latest tool versions; rewrite versions.env
   version                         Print devlayer version
-  versions                        Print bundled tool versions
+  versions                        Print sysroot tool versions
 
 Options:
   OS: linux, darwin, or windows (default: this machine)
@@ -67,7 +64,7 @@ func main() {
 
 	vers := versions.Parse(versionsEnv)
 
-	scriptDir, isTmp, err := cmd.FindScriptDir(dockerfile, versionsEnv, nvimPackLock)
+	scriptDir, isTmp, err := cmd.FindScriptDir(versionsEnv, nvimPackLock)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

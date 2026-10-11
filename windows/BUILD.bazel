@@ -1,0 +1,11 @@
+# Windows tools. Zig cross-compiles both CPUs on the host.
+#
+# Usage:
+#   bazel build //windows:make_x86_64
+#   bazel build //windows:make_aarch64
+
+load(":defs.bzl", "windows_targets")
+
+windows_targets("x86_64")
+
+windows_targets("aarch64")

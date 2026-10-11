@@ -215,19 +215,3 @@ func TestArchiveExt(t *testing.T) {
 		}
 	}
 }
-
-func TestDockerPlatform(t *testing.T) {
-	tests := []struct {
-		arch string
-		want string
-	}{
-		{"x86_64", "linux/amd64"},
-		{"arm64", "linux/arm64"},
-	}
-	for _, tt := range tests {
-		p, _ := New("linux", tt.arch)
-		if p.DockerPlatform != tt.want {
-			t.Errorf("DockerPlatform for %s = %q, want %q", tt.arch, p.DockerPlatform, tt.want)
-		}
-	}
-}

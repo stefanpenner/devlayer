@@ -16,20 +16,11 @@ permissions:
   attestations: write
 
 jobs:
-  # Build + test with Bazel on all platforms
+  # Hermetic Go tests run once. The cli job cross-compiles the binaries.
+  # Target OS runners smoke those binaries. They do not repeat the test suite.
   test:
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            os: linux
-          - runner: macos-15
-            os: darwin
-          - runner: windows-latest
-            os: windows
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -46,39 +37,24 @@ jobs:
             ~/.cache/devlayer/bazel-repository
             ~/.cache/devlayer/bazel-disk
             ~/.cache/devlayer/bazelisk
-          key: bazel-${{ matrix.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: bazel-${{ matrix.os }}-
+          key: bazel-linux-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-linux-
 
       - name: Build CLI
         run: bazel build //:devlayer
 
       # Scope tests to the Go code. `bazel test //...` would also force-build
-      # every //third_party source tool (htop, btop, zsh, …) on all three
-      # platforms — slow, redundant with the bundle jobs, and impossible on a
-      # bare Windows runner.
+      # every //third_party source tool (htop, btop, zsh, …).
       - name: Run tests
         run: bazel test //cmd/... //internal/... //tools/...
 
-      - name: Smoke test
-        shell: bash
+      - name: Smoke host CLI
         run: |
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            ./bazel-bin/devlayer_/devlayer.exe version
-            ./bazel-bin/devlayer_/devlayer.exe versions
-          else
-            ./bazel-bin/devlayer_/devlayer version
-            ./bazel-bin/devlayer_/devlayer versions
-          fi
+          ./bazel-bin/devlayer_/devlayer version
+          ./bazel-bin/devlayer_/devlayer versions
 
       - name: Shut down Bazel
-        if: runner.os != 'Windows'
         run: bazel shutdown || true
-
-      - name: Shut down Bazel
-        if: runner.os == 'Windows'
-        shell: pwsh
-        continue-on-error: true
-        run: bazel shutdown
 
       - name: Cap Bazel disk cache
         shell: bash
@@ -141,20 +117,16 @@ jobs:
         shell: bash
         run: bash .github/workflows/bazel-ci-cache.sh prune
 
-  # Build Linux tool bundles (Bazel + Docker)
+  # Linux C tools cross-compile on ubuntu-latest.
+  # Zig in Alpine emits x86_64 and aarch64 from the runner CPU.
+  # This job executes the x86_64 bundle. smoke-linux-aarch64 executes aarch64.
   linux:
     needs: cli
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: ubuntu-latest
-            arch: x86_64
-            goarch: amd64
-          - runner: ubuntu-24.04-arm
-            arch: aarch64
-            goarch: arm64
-    runs-on: ${{ matrix.runner }}
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -178,6 +150,18 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-linux-${{ matrix.arch }}
+
+      - name: Smoke x86_64 CLI
+        if: matrix.arch == 'x86_64'
+        run: |
+          chmod +x devlayer-linux-${{ matrix.arch }}
+          ./devlayer-linux-${{ matrix.arch }} version
+          ./devlayer-linux-${{ matrix.arch }} versions
+
+      - name: Check aarch64 CLI machine
+        if: matrix.arch == 'aarch64'
+        run: |
+          file devlayer-linux-aarch64 | grep -q 'ARM aarch64'
 
       - name: Build Linux bundle
         run: |
@@ -206,19 +190,30 @@ jobs:
             echo "  bin/$f: wrapper ok"
           done
 
-          echo "==> Verifying static linkage..."
+          echo "==> Verifying ELF machine..."
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            want='x86-64'
+          else
+            want='ARM aarch64'
+          fi
           for f in git/bin/git zsh/bin/zsh bin/htop bin/btop nvim/bin/nvim bin/make; do
-            file "/tmp/devlayer-verify/$f" | grep -q 'statically linked' || { echo "WARN: $f not static"; }
-            echo "  $f: $(file "/tmp/devlayer-verify/$f" | grep -o 'statically linked' || echo 'dynamically linked')"
+            desc=$(file "/tmp/devlayer-verify/$f")
+            echo "$desc" | grep -q "$want" || { echo "FAIL: $f is not $want"; echo "$desc"; exit 1; }
+            # ET_EXEC prints "statically linked". Static PIE prints "static-pie linked".
+            # Both omit PT_INTERP. A dynamic ELF matches neither phrase.
+            echo "$desc" | grep -Eq 'statically linked|static-pie linked' || { echo "FAIL: $f is not a static ELF"; echo "$desc"; exit 1; }
+            echo "  $f: $desc"
           done
 
-          echo "==> Verifying tools execute..."
-          /tmp/devlayer-verify/bin/go version
-          /tmp/devlayer-verify/bin/nvim --version | head -1
-          /tmp/devlayer-verify/bin/htop --version | head -1
-          /tmp/devlayer-verify/bin/btop --version | head -1
-          /tmp/devlayer-verify/bin/zig version
-          /tmp/devlayer-verify/bin/make --version | head -1
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            echo "==> Verifying tools execute..."
+            /tmp/devlayer-verify/bin/go version
+            /tmp/devlayer-verify/bin/nvim --version | head -1
+            /tmp/devlayer-verify/bin/htop --version | head -1
+            /tmp/devlayer-verify/bin/btop --version | head -1
+            /tmp/devlayer-verify/bin/zig version
+            /tmp/devlayer-verify/bin/make --version | head -1
+          fi
 
           echo "==> All checks passed."
 
@@ -240,7 +235,8 @@ jobs:
         shell: bash
         run: bash .github/workflows/bazel-ci-cache.sh prune
 
-  # Build Darwin tool bundle
+  # Darwin source tools need the Apple SDK (nvim, htop, btop, eza, make).
+  # That compile stays on macos. This runner is also the smoke target.
   darwin:
     needs: cli
     strategy:
@@ -263,6 +259,8 @@ jobs:
       - name: Build Darwin bundle
         run: |
           chmod +x devlayer-darwin-${{ matrix.arch }}
+          ./devlayer-darwin-${{ matrix.arch }} version
+          ./devlayer-darwin-${{ matrix.arch }} versions
           ./devlayer-darwin-${{ matrix.arch }} build --os darwin --arch ${{ matrix.arch }}
           ls -lh devlayer-darwin-${{ matrix.arch }}.tar.gz
 
@@ -313,37 +311,63 @@ jobs:
             devlayer-darwin-${{ matrix.arch }}.tar.gz
             devlayer-darwin-${{ matrix.arch }}.tar.gz.sha256
 
-  # Build Windows tool bundle
+  # Windows bundle is a pinned fetch. The linux CLI builds it.
+  # The windows runner only smokes the result.
   windows:
     needs: cli
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Download CLI artifact
+      - name: Download Linux CLI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-linux-x86_64
+
+      - name: Download Windows CLI
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-windows-x86_64
 
       - name: Build Windows bundle
         run: |
-          .\devlayer-windows-x86_64.exe build --os windows --arch x86_64
-          Get-ChildItem devlayer-windows-x86_64.zip
+          set -euo pipefail
+          sudo apt-get install -y zip
+          chmod +x devlayer-linux-x86_64
+          ./devlayer-linux-x86_64 build --os windows --arch x86_64
+          tmp=$(mktemp -d)
+          unzip -qo devlayer-windows-x86_64.zip -d "$tmp"
+          if [ -e "$tmp/bin/devlayer" ]; then
+            echo "FAIL: host devlayer binary is in the windows bundle"
+            exit 1
+          fi
+          mkdir -p "$tmp/bin"
+          cp devlayer-windows-x86_64.exe "$tmp/bin/devlayer.exe"
+          rm -f devlayer-windows-x86_64.zip
+          (cd "$tmp" && zip -qr "$GITHUB_WORKSPACE/devlayer-windows-x86_64.zip" .)
+          rm -rf "$tmp"
+          ls -lh devlayer-windows-x86_64.zip
 
       - name: Verify bundle
-        shell: bash
         run: |
           # Only the members asserted below. A full unzip writes every bundled
-          # .exe, and Windows Defender real-time scan then dominates this step.
+          # .exe. The Windows smoke unzips only the tools it runs.
           mkdir -p /tmp/devlayer-verify
           unzip -qo devlayer-windows-*.zip \
             'bin/git.cmd' \
             'bin/nvim.cmd' \
             'bin/go.cmd' \
             'bin/gofmt.cmd' \
+            'bin/devlayer.exe' \
             'git/cmd/git.exe' \
             -d /tmp/devlayer-verify \
             || { echo "FAIL: zip corrupt or required member missing"; exit 1; }
+
+          if [ -e /tmp/devlayer-verify/bin/devlayer ]; then
+            echo "FAIL: host devlayer binary is in the windows bundle"
+            exit 1
+          fi
+          test -f /tmp/devlayer-verify/bin/devlayer.exe || { echo "FAIL: bin/devlayer.exe not found"; exit 1; }
 
           echo "==> Verifying .cmd wrappers..."
           for f in git nvim go gofmt; do
@@ -363,9 +387,7 @@ jobs:
           echo "==> All checks passed."
 
       - name: Generate checksum
-        run: |
-          $hash = (Get-FileHash -Path devlayer-windows-x86_64.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  devlayer-windows-x86_64.zip" | Out-File -FilePath devlayer-windows-x86_64.zip.sha256 -Encoding ascii -NoNewline
+        run: sha256sum devlayer-windows-x86_64.zip > devlayer-windows-x86_64.zip.sha256
 
       - name: Upload bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -375,11 +397,75 @@ jobs:
             devlayer-windows-x86_64.zip
             devlayer-windows-x86_64.zip.sha256
 
+  # Execute the aarch64 bundle on an arm runner. The compile stays on ubuntu-latest.
+  smoke-linux-aarch64:
+    needs: [cli, linux]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Download aarch64 CLI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-linux-aarch64
+
+      - name: Download aarch64 bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bundle-linux-aarch64
+
+      - name: Smoke CLI and tools
+        run: |
+          set -euo pipefail
+          chmod +x devlayer-linux-aarch64
+          ./devlayer-linux-aarch64 version
+          ./devlayer-linux-aarch64 versions
+
+          dest="${RUNNER_TEMP}/devlayer-smoke"
+          mkdir -p "$dest"
+          tar xzf devlayer-linux-aarch64.tar.gz -C "$dest"
+          "$dest/bin/go" version
+          "$dest/bin/nvim" --version | head -1
+          "$dest/bin/htop" --version | head -1
+          "$dest/bin/btop" --version | head -1
+          "$dest/bin/zig" version
+          "$dest/bin/make" --version | head -1
+
+  # Execute the cross-compiled Windows CLI and two bundle tools.
+  smoke-windows:
+    needs: [cli, windows]
+    runs-on: windows-latest
+    steps:
+      - name: Download Windows CLI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-windows-x86_64
+
+      - name: Download Windows bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bundle-windows-x86_64
+
+      - name: Smoke CLI and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./devlayer-windows-x86_64.exe version
+          ./devlayer-windows-x86_64.exe versions
+
+          dest="${RUNNER_TEMP}/devlayer-smoke"
+          mkdir -p "$dest"
+          unzip -qo devlayer-windows-x86_64.zip \
+            'bin/go.cmd' 'bin/nvim.cmd' 'go/*' 'nvim/*' \
+            -d "$dest" \
+            || { echo "FAIL: zip corrupt or smoke member missing"; exit 1; }
+          win=$(cygpath -w "$dest")
+          cmd.exe /c "call \"${win}\\bin\\go.cmd\" version"
+          cmd.exe /c "call \"${win}\\bin\\nvim.cmd\" --version"
+
   # After master is green: tag, stamp CLIs, attach notes + assets.
   # GitHub release body is the changelog `devlayer upgrade` prints.
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [cli, linux, darwin, windows, test]
+    needs: [cli, linux, darwin, windows, smoke-linux-aarch64, smoke-windows, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

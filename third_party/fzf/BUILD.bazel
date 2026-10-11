@@ -1,12 +1,13 @@
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
 # fzf — fuzzy finder (pre-built binary + shell integration)
-alias(
+dead_strip_binary(
     name = "fzf",
-    actual = select({
-        "//tools:linux_amd64": "@fzf_linux_amd64//:fzf",
-        "//tools:linux_arm64": "@fzf_linux_arm64//:fzf",
-        "//tools:darwin_arm64": "@fzf_darwin_arm64//:fzf",
+    srcs = select({
+        "//tools:linux_amd64": ["@fzf_linux_amd64//:fzf"],
+        "//tools:linux_arm64": ["@fzf_linux_arm64//:fzf"],
+        "//tools:darwin_arm64": ["@fzf_darwin_arm64//:fzf"],
     }),
-    visibility = ["//visibility:public"],
 )
 
 # Shell integration scripts (key-bindings.zsh, completion.zsh)

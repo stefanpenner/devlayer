@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "unpacksdk_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/stefanpenner/devlayer/tools/unpacksdk",
+    visibility = ["//visibility:private"],
+    deps = ["@com_github_ulikunitz_xz//:xz"],
+)
+
+go_binary(
+    name = "unpacksdk",
+    embed = [":unpacksdk_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "unpacksdk_test",
+    srcs = ["main_test.go"],
+    embed = [":unpacksdk_lib"],
+    deps = ["@com_github_ulikunitz_xz//:xz"],
+)

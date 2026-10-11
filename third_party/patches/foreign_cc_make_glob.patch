@@ -1,0 +1,40 @@
+--- a/foreign_cc/built_tools/make_build.bzl
++++ b/foreign_cc/built_tools/make_build.bzl
+@@ -94,6 +94,13 @@
+                 "cp -p make $$INSTALLDIR$$/bin/make",
+             ]
+ 
++        if os_name(ctx) == "macos":
++            # make install relinks without GNU glob. Copy the build.sh binary.
++            install_cmd = [
++                "mkdir -p $$INSTALLDIR$$/bin",
++                "cp -p make $$INSTALLDIR$$/bin/make",
++            ]
++
+         env.update({
+             "AR": absolute_ar,
+             "ARFLAGS": _join_flags_list(ctx.workspace_name, arflags),
+@@ -104,11 +111,22 @@
+         })
+ 
+         configure_env = " ".join(["%s=\"%s\"" % (key, value) for key, value in env.items()])
++        # libSystem defines glob() before -lgnu is scanned. GNU glob_t does not
++        # match that glob, so $(wildcard) crashes. force_load keeps GNU glob.
++        glob_fix = []
++        if os_name(ctx) == "macos":
++            glob_fix = [
++                "sed -i.bak 's|-lgnu |-Wl,-force_load,$$OUTLIB$$/libgnu.a -lgnu |' build.sh",
++            ]
+         script = [
+             "%s ./configure %s" % (configure_env, " ".join(configure_options)),
+             "cat build.cfg",
++        ] + glob_fix + [
+             "./build.sh",
+-        ] + install_cmd
++        ] + install_cmd + [
++            # A Windows target selects bin/make.exe. This copy is the host make.
++            "cp -p $$INSTALLDIR$$/bin/make $$INSTALLDIR$$/bin/make.exe",
++        ]
+ 
+     return built_tool_rule_impl(
+         ctx,
