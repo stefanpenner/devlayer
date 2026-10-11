@@ -40,27 +40,11 @@ func Install(scriptDir string) error {
 	if err != nil {
 		return fmt.Errorf("extract: %w", err)
 	}
-	// Re-sign Mach-O binaries on macOS (extraction invalidates adhoc signatures)
-	if runtime.GOOS == "darwin" {
-		binDir := filepath.Join(prefix, "bin")
-		nvimBin := filepath.Join(prefix, "nvim", "bin", "nvim")
-		for _, bin := range []string{nvimBin, filepath.Join(binDir, "nvim")} {
-			if info, err := os.Lstat(bin); err == nil && info.Mode().IsRegular() {
-				exec.Command("codesign", "--force", "--sign", "-", bin).Run()
-			}
-		}
-	}
 
-	// Install dotfiles (if built)
-	dotfilesTar := filepath.Join(scriptDir, "devlayer-dotfiles.tar.gz")
-	if _, err := os.Stat(dotfilesTar); err == nil {
-		home, _ := os.UserHomeDir()
-		fmt.Println("==> Installing dotfiles...")
-		if err := archive.ExtractTarGz(dotfilesTar, home); err != nil {
-			return fmt.Errorf("dotfiles: %w", err)
-		}
+	resignDarwin(prefix)
+	if err := installDotfiles(scriptDir); err != nil {
+		return err
 	}
-
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -68,22 +52,64 @@ func Install(scriptDir string) error {
 	if err := installPrivate(scriptDir, home); err != nil {
 		return err
 	}
-
-	// Install nvim plugins (if built)
-	nvimTar := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
-	if _, err := os.Stat(nvimTar); err == nil {
-		home, _ := os.UserHomeDir()
-		nvimDataDir := filepath.Join(home, ".local", "share", "nvim")
-		fmt.Println("==> Installing nvim plugins...")
-		if err := os.MkdirAll(nvimDataDir, 0755); err != nil {
-			return err
-		}
-		if err := archive.ExtractTarGz(nvimTar, nvimDataDir); err != nil {
-			return fmt.Errorf("nvim plugins: %w", err)
-		}
+	if err := installNvimPlugins(scriptDir); err != nil {
+		return err
 	}
 
 	fmt.Printf("==> Done. Ensure PATH includes %s%cbin\n", prefix, filepath.Separator)
+	return nil
+}
+
+// resignDarwin signs the two nvim binaries again.
+// Extract clears an ad-hoc Mach-O signature.
+func resignDarwin(prefix string) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	bins := []string{
+		filepath.Join(prefix, "nvim", "bin", "nvim"),
+		filepath.Join(prefix, "bin", "nvim"),
+	}
+	for _, bin := range bins {
+		info, err := os.Lstat(bin)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		exec.Command("codesign", "--force", "--sign", "-", bin).Run()
+	}
+}
+
+// installDotfiles extracts the dotfile archive into the home directory.
+// A missing archive is not an error.
+func installDotfiles(scriptDir string) error {
+	tar := filepath.Join(scriptDir, "devlayer-dotfiles.tar.gz")
+	if _, err := os.Stat(tar); err != nil {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	fmt.Println("==> Installing dotfiles...")
+	if err := archive.ExtractTarGz(tar, home); err != nil {
+		return fmt.Errorf("dotfiles: %w", err)
+	}
+	return nil
+}
+
+// installNvimPlugins extracts the plugin archive into the nvim data directory.
+// A missing archive is not an error.
+func installNvimPlugins(scriptDir string) error {
+	tar := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
+	if _, err := os.Stat(tar); err != nil {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".local", "share", "nvim")
+	fmt.Println("==> Installing nvim plugins...")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	if err := archive.ExtractTarGz(tar, dir); err != nil {
+		return fmt.Errorf("nvim plugins: %w", err)
+	}
 	return nil
 }
 
