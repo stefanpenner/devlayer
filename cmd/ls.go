@@ -78,7 +78,7 @@ func statusToolNames() []string {
 // bundleOnly are installed binaries status does not probe.
 func bundleOnly(osName string) []string {
 	names := []string{
-		"age", "age-keygen", "batman", "btop",
+		"age", "age-keygen", "batman", "btop", "shh",
 		"cc", "c++", "dust", "gofmt",
 	}
 	if osName != "windows" {

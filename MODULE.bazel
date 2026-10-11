@@ -95,6 +95,9 @@ use_repo(
     "lazygit_linux_amd64",
     "lazygit_linux_arm64",
     "lazygit_darwin_arm64",
+    "shh_linux_amd64",
+    "shh_linux_arm64",
+    "shh_darwin_arm64",
     # Single-binary tools (per platform)
     "direnv_linux_amd64",
     "direnv_linux_arm64",

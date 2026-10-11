@@ -9,7 +9,7 @@ import (
 
 func TestBundledBinariesUnix(t *testing.T) {
 	got := bundledBinaries("linux")
-	for _, want := range []string{"fd", "git", "zsh", "batman", "htop", "ls", "devlayer"} {
+	for _, want := range []string{"fd", "git", "zsh", "batman", "htop", "ls", "devlayer", "shh"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("missing %s", want)
 		}
@@ -26,7 +26,7 @@ func TestBundledBinariesWindows(t *testing.T) {
 			t.Errorf("windows catalog has %s", skip)
 		}
 	}
-	if !slices.Contains(got, "git") || !slices.Contains(got, "fd") {
+	if !slices.Contains(got, "git") || !slices.Contains(got, "fd") || !slices.Contains(got, "shh") {
 		t.Errorf("windows missing core tools: %v", got)
 	}
 }

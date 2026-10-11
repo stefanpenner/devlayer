@@ -22,6 +22,7 @@ filegroup(
         "//third_party/lazygit",
         "//third_party/nvim",
         "//third_party/rg",
+        "//third_party/shh",
         "//third_party/zig",
     ],
     visibility = ["//visibility:public"],

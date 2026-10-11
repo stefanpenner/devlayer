@@ -78,6 +78,7 @@ func collectBumps(pins *versions.Versions, get Get) []Bump {
 	add("BTOP", LatestGitHub(get, "aristocratos/btop"))
 	add("DUST", LatestGitHub(get, "bootandy/dust"))
 	add("AGE", LatestGitHub(get, "FiloSottile/age"))
+	add("SHH", LatestGitHub(get, "stefanpenner/shh"))
 
 	add("GIT", LatestGitTags(get))
 	add("GIT_WINDOWS", LatestGitWindows(get))
