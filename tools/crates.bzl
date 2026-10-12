@@ -1,6 +1,6 @@
 """Pinned Rust toolchains and vendored crates.
 
-The Mac runs these repo rules.
+The Go compiler matches the host. Rust archives stay pinned per triple.
 Build actions use the outputs.
 They do not download and they do not call host cargo.
 """
@@ -9,6 +9,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 _VER = "1.90.0"
 _DATE = "2025-09-18"
+_GO_VER = "1.27.1"
 _TRIPLES = [
     "aarch64-apple-darwin",
     "aarch64-unknown-linux-musl",
@@ -30,6 +31,22 @@ def _pin(sums, url):
     if not got:
         fail("no sha256 pin for " + url)
     return got
+
+def _host_go_url(os_name, arch):
+    """Return the Go SDK archive for the machine that runs this repo rule."""
+    if os_name == "mac os x":
+        goos = "darwin"
+    elif os_name == "linux":
+        goos = "linux"
+    else:
+        fail("cratevendor host is " + os_name)
+    if arch == "aarch64" or arch == "arm64":
+        goarch = "arm64"
+    elif arch == "amd64" or arch == "x86_64":
+        goarch = "amd64"
+    else:
+        fail("cratevendor arch is " + arch)
+    return "https://go.dev/dl/go%s.%s-%s.tar.gz" % (_GO_VER, goos, goarch)
 
 def _rust_url(triple):
     return "https://static.rust-lang.org/dist/%s/rust-%s-%s.tar.xz" % (_DATE, _VER, triple)
@@ -147,7 +164,7 @@ crate_vendor = repository_rule(
 
 def _crate_repos_impl(module_ctx):
     sums = _parse_sums(module_ctx.read(Label("//tools:crate_pins.sha256")))
-    go_url = "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz"
+    go_url = _host_go_url(module_ctx.os.name, module_ctx.os.arch)
     http_archive(
         name = "cratevendor_go",
         urls = [go_url],

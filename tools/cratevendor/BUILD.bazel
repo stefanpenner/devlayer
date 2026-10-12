@@ -21,5 +21,9 @@ go_binary(
 go_test(
     name = "cratevendor_test",
     srcs = ["main_test.go"],
+    data = [
+        "//tools:crate_pins.sha256",
+        "//tools:crates.bzl",
+    ],
     embed = [":cratevendor_lib"],
 )

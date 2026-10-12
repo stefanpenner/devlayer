@@ -10,4 +10,6 @@ c36777aec17d617f85f94b7cb87bdd4270eeca30ef38c6f686809d163c881609  https://static
 a603e135d4eb67ababdd193268a69937fa4490bafde592f2c931d17c7567b228  https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-aarch64-unknown-linux-musl.tar.xz
 38490d575786f4688e83b357baeb022d8dde0ace2cb8c1357e060c76644fc56a  https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-x86_64-unknown-linux-musl.tar.xz
 ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12  https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz
+63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
+3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec  https://go.dev/dl/go1.27.1.linux-arm64.tar.gz
 bbf179f2611c904014431740b559e8055276c12fcf978a7e31c271663548337f  https://github.com/eza-community/eza/archive/refs/tags/v0.23.5.tar.gz

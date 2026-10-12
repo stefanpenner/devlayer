@@ -13,6 +13,8 @@ exports_files(
         "extensions.bzl",
         "cargo_link.sh",
         "cargo_link_linux.sh",
+        "crate_pins.sha256",
+        "crates.bzl",
         "glow_build.sh",
         "libiconv/config.h",
         "libiconv/iconv.h",

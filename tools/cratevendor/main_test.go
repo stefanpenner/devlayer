@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,4 +124,54 @@ func crateTar(t *testing.T, name, content string) []byte {
 func sha256Hex(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+func TestHostGoPins(t *testing.T) {
+	pins := readRepoFile(t, "crate_pins.sha256")
+	for _, url := range []string{
+		"https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz",
+		"https://go.dev/dl/go1.27.1.linux-amd64.tar.gz",
+		"https://go.dev/dl/go1.27.1.linux-arm64.tar.gz",
+	} {
+		if !strings.Contains(pins, url) {
+			t.Errorf("missing pin %s", url)
+		}
+	}
+	bzl := readRepoFile(t, "crates.bzl")
+	if strings.Contains(bzl, `go_url = "https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz"`) {
+		t.Fatal("cratevendor Go URL is Darwin on every host")
+	}
+	if !strings.Contains(bzl, "_host_go_url(module_ctx.os.name, module_ctx.os.arch)") {
+		t.Fatal("cratevendor Go URL does not follow the host")
+	}
+}
+
+func readRepoFile(t *testing.T, name string) string {
+	t.Helper()
+	root := os.Getenv("TEST_SRCDIR")
+	if root == "" {
+		t.Fatal("TEST_SRCDIR is empty")
+	}
+	var hit string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || hit != "" {
+			return walkErr
+		}
+		if d.IsDir() || d.Name() != name {
+			return nil
+		}
+		if !strings.Contains(filepath.ToSlash(path), "/tools/"+name) {
+			return nil
+		}
+		hit = path
+		return fs.SkipAll
+	})
+	if hit == "" {
+		t.Fatalf("%s is missing under %s: %v", name, root, err)
+	}
+	body, err := os.ReadFile(hit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
 }
