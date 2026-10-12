@@ -1,0 +1,27 @@
+# ---
+# why: This file names the host stub and its crates.
+# uses: cargo
+# how: Cargo reads this file. The build is offline after the lock exists.
+# ---
+
+[package]
+name = "hoststub"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Download one pinned host app when you run it."
+
+[dependencies]
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+sha2 = "0.10"
+tar = "0.4"
+webpki-roots = "0.26"
+
+[lib]
+name = "hoststub"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hoststub"
+path = "src/main.rs"

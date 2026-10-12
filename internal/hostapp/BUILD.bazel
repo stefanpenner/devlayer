@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "hostapp",
+    srcs = ["hostapp.go"],
+    importpath = "github.com/stefanpenner/devlayer/internal/hostapp",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/sums"],
+)
+
+go_test(
+    name = "hostapp_test",
+    srcs = ["hostapp_test.go"],
+    embed = [":hostapp"],
+    deps = ["//internal/sums"],
+)

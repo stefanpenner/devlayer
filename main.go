@@ -44,6 +44,7 @@ Commands:
   clean                           Remove build artifacts
   upgrade                         Show notes (if any) and install the latest release
   check-updates [--dry-run]       Fetch latest tool versions; rewrite versions.env
+  host terminal-browser [args]    Run the pinned host app. Download it on the first run.
   version                         Print devlayer version
   versions                        Print sysroot tool versions
 
@@ -96,7 +97,7 @@ func main() {
 
 	// Auto-update before running the command (skip for upgrade/version).
 	switch os.Args[1] {
-	case "upgrade", "version", "versions", "init", "doctor", "check-updates":
+	case "upgrade", "version", "versions", "init", "doctor", "check-updates", "host":
 		// no auto-update
 	default:
 		cmd.AutoUpdate(Version)
@@ -140,6 +141,8 @@ func main() {
 		err = cmd.Upgrade(Version)
 	case "check-updates":
 		err = cmd.CheckUpdates(os.Args[2:])
+	case "host":
+		err = cmd.Host(os.Args[2:])
 	case "version":
 		fmt.Println(Version)
 	case "versions":

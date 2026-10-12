@@ -166,6 +166,7 @@ crate_repos = use_extension("//tools:crates.bzl", "crate_repos")
 use_repo(
     crate_repos,
     "bininfo_crates",
+    "hoststub_crates",
     "cratevendor_go",
     "eza_crates",
     "eza_src",

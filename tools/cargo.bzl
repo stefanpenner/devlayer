@@ -17,7 +17,21 @@ _ZIG = {
     "x86_64-unknown-linux-musl": "x86_64-linux-musl",
 }
 
-def offline_cargo(name, anchor, ups, vendor, bin_name, triple, release, srcs, cargo_flags = ""):
+# cc-rs passes a host clang triple. cc-plain already has the pinned zig target.
+_COMPILE_C = """
+cc_drop="$(execpath //tools:cargo_cc.sh)"
+case "$$cc_drop" in /*) ;; *) cc_drop="$$PWD/$$cc_drop" ;; esac
+ar_wrap="$(execpath //tools:cargo_ar.sh)"
+case "$$ar_wrap" in /*) ;; *) ar_wrap="$$PWD/$$ar_wrap" ;; esac
+export CC_PLAIN="$$work/cc-plain"
+export ZIG="$$zig"
+export CC="$$cc_drop"
+export AR="$$ar_wrap"
+"""
+
+_COMPILE_C_SRCS = ["//tools:cargo_cc.sh", "//tools:cargo_ar.sh"]
+
+def offline_cargo(name, anchor, ups, vendor, bin_name, triple, release, srcs, cargo_flags = "", compile_c = False):
     """Build one cargo binary for a fixed target triple."""
     zig_target = _ZIG[triple]
     root = '"$(execpath %s)"' % anchor
@@ -58,6 +72,10 @@ case "$$link" in /*) ;; *) link="$$PWD/$$link" ;; esac
 printf '%%s\\n' '#!/bin/sh' "export ZIG='$$zig'" "export SDK='$$sdk'" "export ICONV='$$work/libiconv.a'" "export TARGET='%s'" "exec '$$link' \\"\\$$@\\"" > "$$work/cc"
 chmod 755 "$$work/cc"
 """ % (zig_target, zig_target)
+        if compile_c:
+            sdk_setup += """
+export MACOSX_DEPLOYMENT_TARGET=11.0
+""" + _COMPILE_C
         sdk_srcs = [
             "@macos_sdk//:sdk.tar",
             "@libiconv_src//:all",
@@ -67,6 +85,8 @@ chmod 755 "$$work/cc"
             "//tools:libiconv/iconv.h",
             "//tools:libiconv/localcharset.h",
         ]
+        if compile_c:
+            sdk_srcs = sdk_srcs + _COMPILE_C_SRCS
         extra_config = ""
         rustc_wrapper = """printf '%s\\n' '#!/bin/sh' 'exec "$$@"' > "$$work/nowrapper"
 chmod 755 "$$work/nowrapper"
@@ -82,7 +102,15 @@ case "$$link" in /*) ;; *) link="$$PWD/$$link" ;; esac
 printf '%%s\\n' '#!/bin/sh' "export ZIG='$$zig'" "export TARGET='%s'" "exec '$$link' \\"\\$$@\\"" > "$$work/cc"
 chmod 755 "$$work/cc"
 """ % zig_target
+        if compile_c:
+            sdk_setup += """
+printf '%%s\\n' '#!/bin/sh' "exec '$$zig' cc -target %s \\"\\$$@\\"" > "$$work/cc-plain"
+chmod 755 "$$work/cc-plain"
+""" % zig_target
+            sdk_setup += _COMPILE_C
         sdk_srcs = ["//tools:cargo_link_linux.sh"]
+        if compile_c:
+            sdk_srcs = sdk_srcs + _COMPILE_C_SRCS
         extra_config = 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=no"]\n'
         rustc_wrapper = """cat > "$$work/nowrapper" << 'EOF'
 #!/bin/sh

@@ -209,7 +209,33 @@ func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions,
 	if err := buildGlow(root, binDir, scriptDir, vers, "darwin", goarch); err != nil {
 		return err
 	}
+	if err := installHostStub(binDir, scriptDir); err != nil {
+		return err
+	}
 	return buildMake(binDir, vers, cc)
+}
+
+// installHostStub copies the Darwin host stub.
+// The file name selects the app. The archive is not a build input.
+func installHostStub(binDir, scriptDir string) error {
+	fmt.Println("  host stub")
+	bin, err := bazelOutput(scriptDir, "//hoststub:hoststub_darwin_arm64")
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"terminal-browser", "grok", "agent"} {
+		out := filepath.Join(binDir, name)
+		if err := copyFile(bin, out); err != nil {
+			return fmt.Errorf("copy host stub: %w", err)
+		}
+		if err := os.Chmod(out, 0o755); err != nil {
+			return err
+		}
+		if err := sealDarwin(out); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeDarwinWrappers(binDir string) error {

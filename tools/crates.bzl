@@ -287,6 +287,10 @@ filegroup(
         lock = "//bininfo:Cargo.lock",
     )
     crate_vendor(
+        name = "hoststub_crates",
+        lock = "//hoststub:Cargo.lock",
+    )
+    crate_vendor(
         name = "eza_crates",
         lock = "@eza_src//:Cargo.lock",
     )

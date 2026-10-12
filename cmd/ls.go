@@ -82,7 +82,7 @@ func bundleOnly(osName string) []string {
 		"cc", "c++", "dust", "gofmt",
 	}
 	if osName != "windows" {
-		names = append(names, "ls")
+		names = append(names, "ls", "terminal-browser", "grok", "agent")
 	}
 	return names
 }

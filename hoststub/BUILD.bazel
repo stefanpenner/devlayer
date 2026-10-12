@@ -1,0 +1,67 @@
+load("//tools:cargo.bzl", "offline_cargo")
+
+# The stub is one binary. The file name selects the host app.
+# The archive is not an input of this build.
+
+exports_files(
+    ["Cargo.lock", "src/catalog.rs"],
+    visibility = ["//visibility:public"],
+)
+
+offline_cargo(
+    name = "hoststub_darwin_arm64",
+    anchor = "//hoststub:src/main.rs",
+    ups = 2,
+    vendor = "@hoststub_crates//:vendor/ANCHOR",
+    bin_name = "hoststub",
+    triple = "aarch64-apple-darwin",
+    release = True,
+    compile_c = True,
+    srcs = glob([
+        "src/**",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+offline_cargo(
+    name = "hoststub_linux_arm64",
+    anchor = "//hoststub:src/main.rs",
+    ups = 2,
+    vendor = "@hoststub_crates//:vendor/ANCHOR",
+    bin_name = "hoststub",
+    triple = "aarch64-unknown-linux-musl",
+    release = True,
+    compile_c = True,
+    srcs = glob([
+        "src/**",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+offline_cargo(
+    name = "hoststub_linux_amd64",
+    anchor = "//hoststub:src/main.rs",
+    ups = 2,
+    vendor = "@hoststub_crates//:vendor/ANCHOR",
+    bin_name = "hoststub",
+    triple = "x86_64-unknown-linux-musl",
+    release = True,
+    compile_c = True,
+    srcs = glob([
+        "src/**",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]),
+)
+
+alias(
+    name = "hoststub",
+    actual = select({
+        "//tools:darwin_arm64": ":hoststub_darwin_arm64",
+        "//tools:linux_arm64": ":hoststub_linux_arm64",
+        "//tools:linux_amd64": ":hoststub_linux_amd64",
+    }),
+    visibility = ["//visibility:public"],
+)

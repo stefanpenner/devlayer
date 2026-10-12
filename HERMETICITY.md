@@ -191,6 +191,7 @@ Those shell functions are not inside the zsh binary.
 - [install.sh](scripts/install.sh) hashes the release only when the hash file and a hash tool both exist. A missing hash file skips the hash. [upgrade.go](cmd/upgrade.go) does not read that file. [install.ps1](scripts/install.ps1) uses the same rule.
 - Publish packs the sysroot again and builds the CLI again ([ci.yml](.github/workflows/ci.yml)). The tools inside stay from the sysroot job. Nothing compares the new hash file to the sysroot archive.
 - Unix install uses `~/.local` when you omit `DEVLAYER_DIR`. Other tools share that `bin` directory. The script writes the sysroot `bin` directory at the front of `PATH` in `~/.profile`.
+- terminal-browser and grok are host apps. Darwin copies one host stub to `bin/terminal-browser`, `bin/grok`, and `bin/agent`. The file name selects the app. The stub downloads the pinned bytes for that OS and CPU on the first run. It stores the tree under `~/.local/share/devlayer/host`. A stamp records the sha256. The Linux bundle does not contain the stub. The download is not in the bundle.
 - Dotfile copy is optional. The copier has no key filter ([build.go](cmd/build.go)). The [example](config/devlayer/config.toml.example) says the sync list is config only, not private keys.
 - [autoupdate.go](cmd/autoupdate.go) calls GitHub `releases/latest` at most once per day. It does not install.
 - [MODULE.bazel.lock](MODULE.bazel.lock) is not an input of `devlayer build`. The lock can record an older tool version than the version file.

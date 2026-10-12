@@ -14,6 +14,8 @@ exports_files(
         "cargo.bzl",
         "cargo_link.sh",
         "cargo_link_linux.sh",
+        "cargo_cc.sh",
+        "cargo_ar.sh",
         "crate_pins.sha256",
         "crates.bzl",
         "glow_build.sh",
