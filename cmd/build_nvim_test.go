@@ -3,10 +3,27 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/stefanpenner/devlayer/internal/binaries"
 	"github.com/stefanpenner/devlayer/internal/nvimplugins"
 )
+
+func TestRewriteNvimDepURLsUsesThePinnedFile(t *testing.T) {
+	remote := binaries.NvimDepURLs()["nvim_treesitter_query"]
+	in := "TREESITTER_QUERY_URL " + remote + "\nTREESITTER_QUERY_SHA256 abc\n"
+	got, err := rewriteNvimDepURLs(in, map[string]string{remote: "/pin/query.tar.gz"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, remote) || !strings.Contains(got, "file:///pin/query.tar.gz") {
+		t.Fatalf("url = %s", got)
+	}
+	if !strings.Contains(got, "TREESITTER_QUERY_SHA256 abc") {
+		t.Fatalf("sha = %s", got)
+	}
+}
 
 func TestBuildNvimPluginsRequiresLock(t *testing.T) {
 	err := buildNvimPlugins(t.TempDir())

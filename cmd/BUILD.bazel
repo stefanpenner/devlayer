@@ -81,6 +81,7 @@ go_test(
     },
     deps = [
         "//internal/archive",
+        "//internal/binaries",
         "//internal/config",
         "//internal/nvimplugins",
     ],

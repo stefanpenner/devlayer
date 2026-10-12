@@ -763,6 +763,9 @@ func buildNvim(outDir, scriptDir string, vers *versions.Versions, head bool, cc 
 	if err := patchNvimTree(srcRoot, scriptDir); err != nil {
 		return err
 	}
+	if err := pinNvimDeps(srcRoot); err != nil {
+		return err
+	}
 
 	installDir := filepath.Join(outDir, "nvim")
 	env := withCompiler(os.Environ(), cc)
@@ -1233,6 +1236,52 @@ func patchNvimLuaAPI(cmakeText string) (string, error) {
 	b.WriteString(luaAPIKeepLink(false))
 	b.WriteString("\")\nendif()\n")
 	return strings.Replace(cmakeText, needle, b.String()+needle, 1), nil
+}
+
+func pinNvimDeps(srcRoot string) error {
+	depsPath := filepath.Join(srcRoot, "cmake.deps", "deps.txt")
+	text, err := os.ReadFile(depsPath)
+	if err != nil {
+		return fmt.Errorf("read nvim deps: %w", err)
+	}
+	dir := filepath.Join(srcRoot, "devlayer-dep-archives")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	local := map[string]string{}
+	for name, url := range binaries.NvimDepURLs() {
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
+		dest := filepath.Join(dir, name+".tar.gz")
+		if err := download.File(url, dest, sum); err != nil {
+			return err
+		}
+		local[url] = dest
+	}
+	next, err := rewriteNvimDepURLs(string(text), local)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(depsPath, []byte(next), 0o644)
+}
+
+func rewriteNvimDepURLs(text string, local map[string]string) (string, error) {
+	for remote, path := range local {
+		if remote == "" || path == "" {
+			return "", fmt.Errorf("nvim dep path is empty")
+		}
+		if !strings.Contains(text, remote) {
+			return "", fmt.Errorf("nvim deps.txt has no %s", remote)
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return "", err
+		}
+		text = strings.ReplaceAll(text, remote, "file://"+abs)
+	}
+	return text, nil
 }
 
 func nvimMakeArgs(installDir, staticPrefix string) []string {

@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/stefanpenner/devlayer/internal/sums"
 )
@@ -374,7 +375,33 @@ func verifiedTemp(url, pattern, sum string) (string, error) {
 	if err := sums.Valid(want); err != nil {
 		return "", fmt.Errorf("download %s: %w", url, err)
 	}
+	var last error
+	for attempt := 1; attempt <= 4; attempt++ {
+		name, err := fetchOnce(url, pattern, want)
+		if err == nil {
+			return name, nil
+		}
+		last = err
+		if attempt == 4 || !retryableDownload(err) {
+			return "", err
+		}
+		time.Sleep(time.Duration(attempt) * 200 * time.Millisecond)
+	}
+	return "", last
+}
 
+func retryableDownload(err error) bool {
+	msg := err.Error()
+	if strings.Contains(msg, "sha256") {
+		return false
+	}
+	if strings.Contains(msg, "HTTP ") {
+		return strings.Contains(msg, "HTTP 502") || strings.Contains(msg, "HTTP 503") || strings.Contains(msg, "HTTP 504")
+	}
+	return true
+}
+
+func fetchOnce(url, pattern, want string) (string, error) {
 	tmp, err := os.CreateTemp("", pattern)
 	if err != nil {
 		return "", err

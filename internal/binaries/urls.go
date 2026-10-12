@@ -197,15 +197,15 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
 	}
 	// These URLs are neovim v0.12.5 cmake.deps/deps.txt. They are not version keys.
-	for k, u := range nvimDepURLs() {
+	for k, u := range NvimDepURLs() {
 		out[k] = u
 	}
 	return out
 }
 
-// nvimDepURLs are the bundled archives the Linux nvim cross compile fetches.
+// NvimDepURLs are the bundled archives the nvim build fetches.
 // Keep them equal to cmake.deps/deps.txt for NVIM_VERSION.
-func nvimDepURLs() map[string]string {
+func NvimDepURLs() map[string]string {
 	return map[string]string{
 		"nvim_libuv":               "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz",
 		"nvim_luajit":              "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz",
