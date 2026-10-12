@@ -238,6 +238,34 @@ func TestDarwinNvimPoliciesRecordTheNamedFiles(t *testing.T) {
 	}
 }
 
+func TestDarwinHtopPolicyRecordsTheNamedFile(t *testing.T) {
+	body := readPolicy(t, "bininfo/policy/bin/htop.toml")
+	if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+		t.Fatalf("htop policy:\n%s", body)
+	}
+	if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+		t.Fatalf("htop names a Homebrew library:\n%s", body)
+	}
+	order := []string{
+		"/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+		"/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+		"/usr/lib/libSystem.B.dylib",
+		"/usr/lib/libobjc.A.dylib",
+	}
+	at := 0
+	for _, name := range order {
+		needle := []byte("name = \"" + name + "\"")
+		i := bytes.Index(body[at:], needle)
+		if i < 0 {
+			t.Fatalf("htop needed %s:\n%s", name, body)
+		}
+		at += i + len(needle)
+	}
+	if bytes.Count(body, []byte("why = ")) < len(order) {
+		t.Fatalf("htop why:\n%s", body)
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()
