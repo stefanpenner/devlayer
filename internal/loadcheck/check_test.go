@@ -354,6 +354,22 @@ func TestDarwinGlowPolicyRecordsTheNamedFile(t *testing.T) {
 	}
 }
 
+func TestDarwinMakePolicyRecordsTheNamedFile(t *testing.T) {
+	body := readPolicy(t, "bininfo/policy/bin/make.toml")
+	if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+		t.Fatalf("make policy:\n%s", body)
+	}
+	if !bytes.Contains(body, []byte("MH_NOUNDEFS")) || !bytes.Contains(body, []byte("MH_TWOLEVEL")) {
+		t.Fatalf("make flags:\n%s", body)
+	}
+	if bytes.Contains(body, []byte("IOKit")) || bytes.Contains(body, []byte("CoreFoundation")) || bytes.Contains(body, []byte("Security")) || bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+		t.Fatalf("make names an extra library:\n%s", body)
+	}
+	if !bytes.Contains(body, []byte("name = \"/usr/lib/libSystem.B.dylib\"")) || !bytes.Contains(body, []byte("why = ")) {
+		t.Fatalf("make dylib:\n%s", body)
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()
