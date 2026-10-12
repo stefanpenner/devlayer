@@ -1,0 +1,7 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "cargo_test",
+    srcs = ["work_test.go"],
+    data = ["//tools:cargo.bzl"],
+)

@@ -11,6 +11,7 @@ exports_files(
         "workspace_status.sh",
         "workspace_status.cmd",
         "extensions.bzl",
+        "cargo.bzl",
         "cargo_link.sh",
         "cargo_link_linux.sh",
         "crate_pins.sha256",

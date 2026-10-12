@@ -82,10 +82,15 @@ chmod 755 "$$work/cc"
     cmd = """
 set -eu
 out="$$PWD/$@"
-# /private/tmp is not under the home directory.
 # Cargo reads .cargo/config.toml from every parent.
-# A parent under the home directory would import the user cargo config.
-work="/private/tmp/devlayer-{name}-$$$$"
+# The work directory stays outside the home directory.
+# macOS has /private/tmp. Linux has /tmp.
+if [ -d /private/tmp ]; then
+  tmp_root=/private/tmp
+else
+  tmp_root=/tmp
+fi
+work="$$tmp_root/devlayer-{name}-$$$$"
 rm -rf "$$work"
 mkdir -p "$$work/tmp" "$$work/home/cargo" "$$work/proj" "$$work/zig-cache"
 export HOME="$$work/home"
