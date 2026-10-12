@@ -143,6 +143,76 @@ func TestMinGitPoliciesRecordTheNamedFiles(t *testing.T) {
 	}
 }
 
+func TestWindowsPoliciesRecordTheNamedFiles(t *testing.T) {
+	for _, rel := range []string{
+		"nvim/lib/nvim/parser/query.dll",
+		"nvim/lib/nvim/parser/lua.dll",
+		"nvim/lib/nvim/parser/vim.dll",
+		"nvim/lib/nvim/parser/markdown.dll",
+		"nvim/lib/nvim/parser/vimdoc.dll",
+		"nvim/lib/nvim/parser/c.dll",
+		"nvim/lib/nvim/parser/markdown_inline.dll",
+		"nvim/bin/nvim.exe",
+		"nvim/bin/lua51.dll",
+		"nvim/bin/tee.exe",
+		"nvim/bin/DbgHelp.dll",
+		"nvim/bin/xxd.exe",
+		"nvim/bin/win32yank.exe",
+		"zig/zig.exe",
+		"bin/delta.exe",
+		"bin/glow.exe",
+		"bin/bat.exe",
+		"bin/jq.exe",
+		"bin/shh.exe",
+		"bin/age-keygen.exe",
+		"bin/eza.exe",
+		"bin/fd.exe",
+		"bin/lazygit.exe",
+		"bin/direnv.exe",
+		"bin/dust.exe",
+		"bin/fzf.exe",
+		"bin/rg.exe",
+		"bin/age.exe",
+	} {
+		path, err := policyPath("bininfo/policy/" + rel + ".toml")
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(body, []byte("format = \"pe\"")) || !bytes.Contains(body, []byte("IMAGE_IMPORT_DESCRIPTOR")) {
+			t.Fatalf("%s is not a PE policy:\n%s", rel, body)
+		}
+		if !bytes.Contains(body, []byte("why = ")) {
+			t.Fatalf("%s has no why:\n%s", rel, body)
+		}
+		base := []byte("IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true")
+		if rel == "bin/eza.exe" {
+			base = []byte("IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = false")
+		}
+		if !bytes.Contains(body, base) {
+			t.Fatalf("%s dynamic base:\n%s", rel, body)
+		}
+	}
+}
+
+func TestTreeChecksABinaryInsideNvim(t *testing.T) {
+	dir := t.TempDir()
+	evil := filepath.Join(dir, "nvim", "bin", "not-shipped.exe")
+	if err := os.MkdirAll(filepath.Dir(evil), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evil, IconvELF(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := Tree(dir)
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("nvim/bin/not-shipped.exe")) || !bytes.Contains([]byte(err.Error()), []byte("no policy")) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestTreeChecksABinaryInsideMinGit(t *testing.T) {
 	dir := t.TempDir()
 	evil := filepath.Join(dir, "git", "usr", "bin", "not-shipped.exe")
@@ -235,7 +305,7 @@ func TestZipNamesTheMember(t *testing.T) {
 	}
 	zw := zip.NewWriter(f)
 	body := IconvELF()
-	hdr := &zip.FileHeader{Name: "bin/delta.exe"}
+	hdr := &zip.FileHeader{Name: "bin/not-shipped.exe"}
 	hdr.SetMode(0o755)
 	w, err := zw.CreateHeader(hdr)
 	if err != nil {
@@ -251,7 +321,7 @@ func TestZipNamesTheMember(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = Archive(path)
-	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("bin/delta.exe")) || !bytes.Contains([]byte(err.Error()), []byte("no policy")) {
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("bin/not-shipped.exe")) || !bytes.Contains([]byte(err.Error()), []byte("no policy")) {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -1,0 +1,9 @@
+# Policy for one pinned release file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "kernel32.dll", why = "The pinned release imports this library." },
+]

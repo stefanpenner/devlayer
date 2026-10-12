@@ -1,0 +1,22 @@
+# Policy for one pinned release file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "KERNEL32.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-convert-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-environment-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-filesystem-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-heap-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-locale-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-math-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-private-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-runtime-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-stdio-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-string-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-time-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-utility-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "SHLWAPI.dll", why = "The pinned release imports this library." },
+]

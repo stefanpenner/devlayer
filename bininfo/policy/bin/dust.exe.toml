@@ -1,0 +1,20 @@
+# Policy for one pinned release file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "kernel32.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-core-synch-l1-2-0.dll", why = "The pinned release imports this library." },
+  { name = "ntdll.dll", why = "The pinned release imports this library." },
+  { name = "bcryptprimitives.dll", why = "The pinned release imports this library." },
+  { name = "KERNEL32.dll", why = "The pinned release imports this library." },
+  { name = "USERENV.dll", why = "The pinned release imports this library." },
+  { name = "VCRUNTIME140.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-runtime-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-math-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-stdio-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-locale-l1-1-0.dll", why = "The pinned release imports this library." },
+  { name = "api-ms-win-crt-heap-l1-1-0.dll", why = "The pinned release imports this library." },
+]
