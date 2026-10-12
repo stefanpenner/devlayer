@@ -35,7 +35,6 @@ func URLs(p *platform.Platform, vers *versions.Versions, skip map[string]bool) (
 
 	put("fzf", fzfURL(p, vers.Get("FZF_VERSION")))
 	put("lazygit", lazygitURL(p, vers.Get("LAZYGIT_VERSION")))
-	put("glow", glowURL(p, vers.Get("GLOW_VERSION")))
 
 	age := ageURL(p, vers.Get("AGE_VERSION"))
 	put("age", age)
@@ -104,11 +103,6 @@ func fzfURL(p *platform.Platform, ver string) string {
 func lazygitURL(p *platform.Platform, ver string) string {
 	asset := fmt.Sprintf("lazygit_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.ArchiveExt())
 	return githubRelease("jesseduffield/lazygit", "v"+ver, asset)
-}
-
-func glowURL(p *platform.Platform, ver string) string {
-	asset := fmt.Sprintf("glow_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.ArchiveExt())
-	return githubRelease("charmbracelet/glow", "v"+ver, asset)
 }
 
 func ageURL(p *platform.Platform, ver string) string {
@@ -186,6 +180,7 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 	zlib := vers.Get("ZLIB_VERSION")
 	nvim := vers.Get("NVIM_VERSION")
 	toybox := vers.Get("TOYBOX_VERSION")
+	glow := vers.Get("GLOW_VERSION")
 	out := map[string]string{
 		"btop":     fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
 		"htop":     fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
@@ -197,6 +192,7 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 		"zlib":     fmt.Sprintf("https://zlib.net/fossils/zlib-%s.tar.gz", zlib),
 		"nvim":                     fmt.Sprintf("https://github.com/neovim/neovim/archive/refs/tags/v%s.tar.gz", nvim),
 		"toybox":                   fmt.Sprintf("https://github.com/landley/toybox/archive/refs/tags/%s.tar.gz", toybox),
+		"glow":                     fmt.Sprintf("https://github.com/charmbracelet/glow/archive/refs/tags/v%s.tar.gz", glow),
 		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
 		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
 	}

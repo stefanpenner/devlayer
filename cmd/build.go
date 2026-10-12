@@ -85,7 +85,7 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 			return err
 		}
 	case "windows":
-		if err := buildWindows(opts.arch, vers, outDir); err != nil {
+		if err := buildWindows(opts.arch, vers, scriptDir, outDir); err != nil {
 			return err
 		}
 	default:
@@ -123,7 +123,7 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir, outDir s
 	if err := fetchPrebuilts(root, p, vers, map[string]bool{"nvim": true}); err != nil {
 		return err
 	}
-	if err := compileDarwinTools(root, binDir, scriptDir, vers, opts.nvimHead, cc); err != nil {
+	if err := compileDarwinTools(root, binDir, scriptDir, vers, opts.nvimHead, cc, p.GoArch); err != nil {
 		return err
 	}
 	if err := writeDarwinWrappers(binDir); err != nil {
@@ -136,7 +136,7 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir, outDir s
 	return finishBundle(root, output, p.BundleExt)
 }
 
-func buildWindows(arch string, vers *versions.Versions, outDir string) error {
+func buildWindows(arch string, vers *versions.Versions, scriptDir, outDir string) error {
 	p, root, binDir, err := stage("windows", arch)
 	if err != nil {
 		return err
@@ -144,6 +144,9 @@ func buildWindows(arch string, vers *versions.Versions, outDir string) error {
 	defer os.RemoveAll(root)
 
 	if err := fetchPrebuilts(root, p, vers, nil); err != nil {
+		return err
+	}
+	if err := buildGlow(root, binDir, scriptDir, vers, p.OS, p.GoArch); err != nil {
 		return err
 	}
 	if err := writeWindowsWrappers(binDir); err != nil {
@@ -180,7 +183,7 @@ func fetchPrebuilts(root string, p *platform.Platform, vers *versions.Versions, 
 	return downloadAll(root, p, vers, skip)
 }
 
-func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions, nvimHead bool, cc []string) error {
+func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions, nvimHead bool, cc []string, goarch string) error {
 	fmt.Println("==> Building tools from source...")
 	if err := buildDarwinStaticLibs(vers, cc, scriptDir); err != nil {
 		return err
@@ -200,6 +203,9 @@ func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions,
 		return fmt.Errorf("mkdir libexec: %w", err)
 	}
 	if err := buildEza(libexecDir, vers, cc); err != nil {
+		return err
+	}
+	if err := buildGlow(root, binDir, scriptDir, vers, "darwin", goarch); err != nil {
 		return err
 	}
 	return buildMake(binDir, vers, cc)
@@ -944,6 +950,120 @@ func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip
 		return err
 	}
 	return installEzaTheme(out)
+}
+
+// buildGlow compiles glow from the pinned tag archive.
+func buildGlow(root, binDir, scriptDir string, vers *versions.Versions, targetOS, goarch string) error {
+	fmt.Println("  glow (building from source)")
+	goBin, cleanup, err := hostGo(root, vers, targetOS)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	srcDir, err := os.MkdirTemp("", "devlayer-glow-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(srcDir)
+
+	url := binaries.SourceArchiveURLs(vers)["glow"]
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.TarGzFull(url, srcDir, 1, sum); err != nil {
+		return fmt.Errorf("download glow source: %w", err)
+	}
+
+	env := glowBuildEnv(os.Environ(), goBin, targetOS, goarch, "https://proxy.golang.org,direct", "sum.golang.org", "")
+	if err := run(srcDir, env, goBin, "mod", "vendor"); err != nil {
+		return fmt.Errorf("glow vendor: %w", err)
+	}
+
+	verPath := filepath.Join(srcDir, "version.txt")
+	ver := vers.Get("GLOW_VERSION")
+	if err := os.WriteFile(verPath, []byte(ver+"\n"), 0o644); err != nil {
+		return err
+	}
+	outName := "glow"
+	if targetOS == "windows" {
+		outName = "glow.exe"
+	}
+	out := filepath.Join(binDir, outName)
+	script := filepath.Join(scriptDir, "tools", "glow_build.sh")
+	if err := run("", nil, script, goBin, srcDir, out, targetOS, goarch, verPath); err != nil {
+		return fmt.Errorf("glow build: %w", err)
+	}
+	if targetOS == "darwin" {
+		return sealDarwin(out)
+	}
+	return nil
+}
+
+func hostGo(root string, vers *versions.Versions, targetOS string) (string, func(), error) {
+	noop := func() {}
+	if runtime.GOOS == targetOS {
+		name := "go"
+		if runtime.GOOS == "windows" {
+			name = "go.exe"
+		}
+		path := filepath.Join(root, "go", "bin", name)
+		if _, err := os.Stat(path); err != nil {
+			return "", nil, fmt.Errorf("go sdk: %w", err)
+		}
+		return path, noop, nil
+	}
+	return fetchHostGo(vers)
+}
+
+func fetchHostGo(vers *versions.Versions) (string, func(), error) {
+	p, err := platform.New(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return "", nil, err
+	}
+	urls, err := binaries.URLs(p, vers, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	url := urls["go"]
+	sum, err := sums.Must(url)
+	if err != nil {
+		return "", nil, err
+	}
+	dir, err := os.MkdirTemp("", "devlayer-hostgo-*")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(dir) }
+	if p.IsWindows() {
+		err = download.ZipFull(url, dir, 0, sum)
+	} else {
+		err = download.TarGzFull(url, dir, 0, sum)
+	}
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("download host go: %w", err)
+	}
+	name := "go"
+	if p.IsWindows() {
+		name = "go.exe"
+	}
+	return filepath.Join(dir, "go", "bin", name), cleanup, nil
+}
+
+func glowBuildEnv(base []string, goBin, goos, goarch, proxy, gosumdb, goflags string) []string {
+	goroot := filepath.Dir(filepath.Dir(goBin))
+	env := withEnv(base, "GOROOT", goroot)
+	env = withEnv(env, "GOOS", goos)
+	env = withEnv(env, "GOARCH", goarch)
+	env = withEnv(env, "CGO_ENABLED", "0")
+	env = withEnv(env, "GOTOOLCHAIN", "local")
+	env = withEnv(env, "GO111MODULE", "on")
+	env = withEnv(env, "GOPROXY", proxy)
+	env = withEnv(env, "GOSUMDB", gosumdb)
+	env = withEnv(env, "GOFLAGS", goflags)
+	return env
 }
 
 // buildEza compiles eza from source using cargo.

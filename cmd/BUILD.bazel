@@ -54,6 +54,7 @@ go_test(
         "build_opts_test.go",
         "doctor_test.go",
         "eza_env_test.go",
+        "glow_env_test.go",
         "eza_theme_test.go",
         "htop_env_test.go",
         "init_test.go",

@@ -1,11 +1,36 @@
-load("//tools:deadstrip.bzl", "dead_strip_binary")
+load("//tools:glow.bzl", "offline_go")
 
-# glow — pre-built binary
-dead_strip_binary(
+# glow — compiled from the pinned tag archive.
+offline_go(
+    name = "glow_linux_amd64",
+    goos = "linux",
+    goarch = "amd64",
+)
+
+offline_go(
+    name = "glow_linux_arm64",
+    goos = "linux",
+    goarch = "arm64",
+)
+
+offline_go(
+    name = "glow_darwin_arm64",
+    goos = "darwin",
+    goarch = "arm64",
+)
+
+offline_go(
+    name = "glow_windows_amd64",
+    goos = "windows",
+    goarch = "amd64",
+)
+
+alias(
     name = "glow",
-    srcs = select({
-        "//tools:linux_amd64": ["@glow_linux_amd64//:glow"],
-        "//tools:linux_arm64": ["@glow_linux_arm64//:glow"],
-        "//tools:darwin_arm64": ["@glow_darwin_arm64//:glow"],
+    actual = select({
+        "//tools:linux_amd64": ":glow_linux_amd64",
+        "//tools:linux_arm64": ":glow_linux_arm64",
+        "//tools:darwin_arm64": ":glow_darwin_arm64",
     }),
+    visibility = ["//visibility:public"],
 )

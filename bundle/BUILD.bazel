@@ -17,7 +17,6 @@ filegroup(
         "//third_party/dust",
         "//third_party/fd",
         "//third_party/fzf",
-        "//third_party/glow",
         "//third_party/go_sdk",
         "//third_party/jq",
         "//third_party/lazygit",
@@ -34,6 +33,7 @@ filegroup(
     srcs = [
         "//third_party/btop",
         "//third_party/eza",
+        "//third_party/glow",
         "//third_party/git",
         "//third_party/htop",
         "//third_party/make:gnumake",

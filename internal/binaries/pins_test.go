@@ -40,6 +40,7 @@ func TestSourceArchiveURLs(t *testing.T) {
 		"nvim_treesitter_vimdoc":   "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
 		"nvim_treesitter_query":    "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
 		"nvim_treesitter_markdown": "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
+		"glow":                     "https://github.com/charmbracelet/glow/archive/refs/tags/v3.0.0.tar.gz",
 		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
 		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
 	}

@@ -8,6 +8,7 @@
 #   //third_party/ncurses       — genrule, terminal UI library
 #   //third_party/zsh           — configure_make, Z shell (+ share)
 #   //third_party/eza           — pinned cargo, git feature off
+#   //third_party/glow          — pinned Go, markdown in the terminal
 #   //third_party/nvim:nvim_musl — cmake, static musl neovim
 #
 # Pre-built binaries (downloaded per-platform):
@@ -18,7 +19,6 @@
 #   //third_party/dust          — disk usage analyzer
 #   //third_party/fzf           — fuzzy finder
 #   //third_party/lazygit       — git TUI
-#   //third_party/glow          — markdown in the terminal
 #   //third_party/age           — file encryption (+ age-keygen)
 #   //third_party/direnv        — per-directory env vars
 #   //third_party/jq            — JSON processor

@@ -13,6 +13,7 @@ exports_files(
         "extensions.bzl",
         "cargo_link.sh",
         "cargo_link_linux.sh",
+        "glow_build.sh",
         "libiconv/config.h",
         "libiconv/iconv.h",
         "libiconv/localcharset.h",

@@ -112,12 +112,6 @@ func fetchGoTools(binDir string, p *platform.Platform, urls map[string]string) e
 		}
 	}
 
-	if url, ok := urls["glow"]; ok {
-		if err := extractBin(url, binDir, "glow"+p.ExeSuffix, p.ArchiveExt()); err != nil {
-			return fmt.Errorf("download glow: %w", err)
-		}
-	}
-
 	if url, ok := urls["shh"]; ok {
 		if err := extractBin(url, binDir, "shh"+p.ExeSuffix, p.ArchiveExt()); err != nil {
 			return fmt.Errorf("download shh: %w", err)

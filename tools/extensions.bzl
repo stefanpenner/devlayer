@@ -6,6 +6,7 @@ No pin → the extension fails closed.
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("@versions//:versions.bzl", "VERSIONS")
+load("//tools:glow.bzl", "glow_src")
 
 # ─── Build file content templates ─────────────────────────────────────────────
 
@@ -371,26 +372,23 @@ chmod 755 devlayer-configure
             build_file_content = _exports(["lazygit"]),
         )
 
-    # glow — the binary is glow_<ver>_<OS>_<arch>/glow
-    for plat, glow_os, arch in [
-        ("linux_amd64", "Linux", "x86_64"),
-        ("linux_arm64", "Linux", "arm64"),
-        ("darwin_arm64", "Darwin", "arm64"),
-    ]:
-        _http_archive(sums,
-            name = "glow_" + plat,
-            urls = ["https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_{os}_{arch}.tar.gz".format(
-                ver = v["GLOW"],
-                os = glow_os,
-                arch = arch,
-            )],
-            strip_prefix = "glow_{ver}_{os}_{arch}".format(
-                ver = v["GLOW"],
-                os = glow_os,
-                arch = arch,
-            ),
-            build_file_content = _exports(["glow"]),
-        )
+    # glow — compiled from the tag archive. See //third_party/glow.
+    glow_url = "https://github.com/charmbracelet/glow/archive/refs/tags/v{}.tar.gz".format(v["GLOW"])
+    go_ver = v["GO"]
+    go_urls = {
+        "darwin_arm64": "https://go.dev/dl/go{}.darwin-arm64.tar.gz".format(go_ver),
+        "linux_amd64": "https://go.dev/dl/go{}.linux-amd64.tar.gz".format(go_ver),
+        "linux_arm64": "https://go.dev/dl/go{}.linux-arm64.tar.gz".format(go_ver),
+    }
+    glow_src(
+        name = "glow_src",
+        url = glow_url,
+        sha256 = _pin(sums, [glow_url]),
+        strip_prefix = "glow-{}".format(v["GLOW"]),
+        version = v["GLOW"],
+        go_urls = go_urls,
+        go_sha256 = {key: _pin(sums, [url]) for key, url in go_urls.items()},
+    )
 
     # age — contains age/ directory with age + age-keygen
     for plat, os_name, goarch in [
