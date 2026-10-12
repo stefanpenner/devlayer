@@ -156,6 +156,13 @@ jobs:
         with:
           name: cli-linux-${{ matrix.arch }}
 
+      # The runner is x86_64. The aarch64 CLI is for the archive only.
+      - name: Download x86_64 CLI
+        if: matrix.arch == 'aarch64'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-linux-x86_64
+
       - name: Smoke x86_64 CLI
         if: matrix.arch == 'x86_64'
         run: |
@@ -172,8 +179,9 @@ jobs:
         run: |
           # devlayer build runs the Bazel bundle, then stamps the nvim config
           # and the lua plugin pack into that archive.
-          chmod +x devlayer-linux-${{ matrix.arch }}
-          ./devlayer-linux-${{ matrix.arch }} build --os linux --arch ${{ matrix.arch }}
+          # The x86_64 CLI cross-builds both arches. The runner cannot execute aarch64.
+          chmod +x devlayer-linux-x86_64
+          ./devlayer-linux-x86_64 build --os linux --arch ${{ matrix.arch }}
           chmod u+w devlayer-linux-${{ matrix.arch }}.tar.gz
           # Inject devlayer CLI into the bundle
           tmpdir=$(mktemp -d)
@@ -551,8 +559,9 @@ jobs:
           TAG="${{ steps.ver.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # A local tag stamps the CLI. The release step creates the remote tag.
+          # git push of this tag fails when the commit edits a workflow file.
           git tag "$TAG"
-          git push origin "refs/tags/$TAG"
 
           stamp_cli() {
             local config="$1" dest="$2"
