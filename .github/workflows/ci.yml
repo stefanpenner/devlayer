@@ -407,7 +407,7 @@ jobs:
           grep -q 'VIMRUNTIME' /tmp/devlayer-verify/bin/nvim.cmd || { echo "FAIL: nvim.cmd missing VIMRUNTIME"; exit 1; }
           grep -q 'XDG_CONFIG_HOME' /tmp/devlayer-verify/bin/nvim.cmd || { echo "FAIL: nvim.cmd missing XDG_CONFIG_HOME"; exit 1; }
           unzip -l devlayer-windows-*.zip | grep -q 'share/devlayer/config/nvim/init.lua' || { echo "FAIL: nvim init.lua missing"; exit 1; }
-          unzip -l devlayer-windows-*.zip | grep -q 'snacks.nvim/init.lua' || { echo "FAIL: nvim plugin pack missing"; exit 1; }
+          unzip -l devlayer-windows-*.zip | grep -q 'snacks.nvim/lua/snacks/init.lua' || { echo "FAIL: nvim plugin pack missing"; exit 1; }
           if unzip -l devlayer-windows-*.zip | grep -q 'share/devlayer/data/nvim/mason/'; then echo "FAIL: host mason is in the bundle"; exit 1; fi
 
           echo "==> Verifying MinGit..."
