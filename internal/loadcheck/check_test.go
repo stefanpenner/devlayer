@@ -370,6 +370,73 @@ func TestDarwinMakePolicyRecordsTheNamedFile(t *testing.T) {
 	}
 }
 
+func TestDarwinPrebuiltPoliciesRecordTheNamedFiles(t *testing.T) {
+	libSystem := "/usr/lib/libSystem.B.dylib"
+	libobjc := "/usr/lib/libobjc.A.dylib"
+	libresolv := "/usr/lib/libresolv.9.dylib"
+	libiconv := "/usr/lib/libiconv.2.dylib"
+	libz := "/usr/lib/libz.1.dylib"
+	core := "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+	security := "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+	foundation := "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation"
+	iokit := "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
+	goLibs := []string{libSystem, libresolv, core, security}
+	cases := []struct {
+		rel    string
+		need   []string
+		absent []string
+	}{
+		{"bin/delta", []string{libiconv, security, core, libz, iokit, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/dust", []string{libSystem, libobjc, foundation, libiconv, core}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/fd", []string{libSystem, libobjc, foundation, libiconv}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/rg", []string{libiconv, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/bat", []string{core, libobjc, iokit, libiconv, security, libz, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/jq", []string{libSystem}, []string{"MH_BINDS_TO_WEAK", "libresolv"}},
+		{"bin/lazygit", goLibs, []string{"MH_TWOLEVEL"}},
+		{"bin/age", goLibs, []string{"MH_TWOLEVEL"}},
+		{"bin/age-keygen", []string{libSystem, libresolv}, []string{"MH_TWOLEVEL"}},
+		{"bin/shh", goLibs, []string{"MH_TWOLEVEL"}},
+		{"bin/direnv", goLibs, []string{"MH_TWOLEVEL"}},
+		{"bin/fzf", []string{libSystem, libresolv}, []string{"MH_TWOLEVEL"}},
+		{"zig/zig", []string{libSystem}, []string{"libresolv", "CoreFoundation"}},
+	}
+	for _, one := range cases {
+		body := readPolicy(t, "bininfo/policy/"+one.rel+".toml")
+		if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+			t.Fatalf("%s policy:\n%s", one.rel, body)
+		}
+		if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+			t.Fatalf("%s names a Homebrew library:\n%s", one.rel, body)
+		}
+		for _, bit := range one.absent {
+			if bytes.Contains(body, []byte(bit)) {
+				t.Fatalf("%s has %s:\n%s", one.rel, bit, body)
+			}
+		}
+		if one.rel == "zig/zig" && (!bytes.Contains(body, []byte("MH_BINDS_TO_WEAK")) || !bytes.Contains(body, []byte("MH_WEAK_DEFINES"))) {
+			t.Fatalf("zig flags:\n%s", body)
+		}
+		switch one.rel {
+		case "bin/delta", "bin/dust", "bin/fd", "bin/rg", "bin/bat", "bin/jq":
+			if !bytes.Contains(body, []byte("MH_HAS_TLV_DESCRIPTORS")) || !bytes.Contains(body, []byte("MH_TWOLEVEL")) {
+				t.Fatalf("%s flags:\n%s", one.rel, body)
+			}
+		}
+		at := 0
+		for _, name := range one.need {
+			needle := []byte("name = \"" + name + "\"")
+			i := bytes.Index(body[at:], needle)
+			if i < 0 {
+				t.Fatalf("%s needed %s:\n%s", one.rel, name, body)
+			}
+			at += i + len(needle)
+		}
+		if bytes.Count(body, []byte("why = ")) < len(one.need) {
+			t.Fatalf("%s why:\n%s", one.rel, body)
+		}
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()
