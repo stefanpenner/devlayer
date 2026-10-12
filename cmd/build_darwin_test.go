@@ -471,6 +471,32 @@ func TestConfigLogKeepsTheCompilerSection(t *testing.T) {
 	}
 }
 
+func TestConfigLogKeepsTheArchitectureError(t *testing.T) {
+	dir := t.TempDir()
+	var body strings.Builder
+	body.WriteString("configure:5360: checking whether the C compiler works\n")
+	body.WriteString("configure:5382: /tmp/cc conftest.c\n")
+	body.WriteString("info: available architectures:\n")
+	for i := 0; i < 70; i++ {
+		fmt.Fprintf(&body, " arch-%02d\n", i)
+	}
+	body.WriteString("error: unknown architecture: 'arm64'\n")
+	body.WriteString("Cache variables:\n")
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&body, "cache-%03d=''\n", i)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.log"), []byte(body.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := configLogTail(dir)
+	if !strings.Contains(got, "unknown architecture: 'arm64'") {
+		t.Fatalf("section dropped the architecture error:\n%s", got)
+	}
+	if strings.Contains(got, "cache-039") {
+		t.Fatalf("section kept the cache dump:\n%s", got)
+	}
+}
+
 func TestConfigLogTailKeepsTheCompilerError(t *testing.T) {
 	dir := t.TempDir()
 	var body strings.Builder

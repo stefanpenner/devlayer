@@ -39,12 +39,6 @@ func parseBuildOpts(args []string, defaultOS, defaultArch string) (buildOptions,
 		os:   defaultOS,
 		arch: defaultArch,
 	}
-	switch opts.arch {
-	case "amd64":
-		opts.arch = "x86_64"
-	case "arm64":
-		opts.arch = "aarch64"
-	}
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -63,6 +57,13 @@ func parseBuildOpts(args []string, defaultOS, defaultArch string) (buildOptions,
 		default:
 			return opts, fmt.Errorf("unknown option: %s", args[i])
 		}
+	}
+	// Zig names the arch aarch64. Apple and Go name it arm64.
+	switch opts.arch {
+	case "amd64":
+		opts.arch = "x86_64"
+	case "arm64":
+		opts.arch = "aarch64"
 	}
 	return opts, nil
 }
@@ -1246,7 +1247,8 @@ func configLogTail(dir string) string {
 		}
 	}
 	if start >= 0 {
-		end := start + 50
+		// Zig prints the error after the architecture list.
+		end := start + 120
 		if end > len(lines) {
 			end = len(lines)
 		}

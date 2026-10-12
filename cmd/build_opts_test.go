@@ -25,6 +25,23 @@ func TestParseBuildOptsOverride(t *testing.T) {
 	}
 }
 
+func TestParseBuildOptsArchFlagUsesZigNames(t *testing.T) {
+	opts, err := parseBuildOpts([]string{"--os", "darwin", "--arch", "arm64"}, "linux", "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.arch != "aarch64" {
+		t.Fatalf("arch = %q, want aarch64", opts.arch)
+	}
+	opts, err = parseBuildOpts([]string{"--os", "linux", "--arch", "amd64"}, "darwin", "arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.arch != "x86_64" {
+		t.Fatalf("arch = %q, want x86_64", opts.arch)
+	}
+}
+
 func TestParseBuildOptsUnknown(t *testing.T) {
 	_, err := parseBuildOpts([]string{"--nope"}, "linux", "amd64")
 	if err == nil {
