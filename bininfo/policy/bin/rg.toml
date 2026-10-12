@@ -1,6 +1,7 @@
 # Policy for the pinned rg file.
 # The archive checksum is the pin.
-# This file records the libraries the link writes.
+# Deadstrip drops the unused libiconv load.
+# This file records the libraries that remain.
 
 format = "macho"
 cputype = ["CPU_TYPE_ARM64"]
@@ -14,6 +15,5 @@ LC_LOAD_WEAK_DYLIB = []
 LC_REEXPORT_DYLIB = []
 LC_LOAD_UPWARD_DYLIB = []
 LC_LOAD_DYLIB = [
-  { name = "/usr/lib/libiconv.2.dylib", why = "rg calls libiconv." },
   { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
 ]

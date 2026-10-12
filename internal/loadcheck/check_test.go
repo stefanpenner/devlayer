@@ -372,32 +372,29 @@ func TestDarwinMakePolicyRecordsTheNamedFile(t *testing.T) {
 
 func TestDarwinPrebuiltPoliciesRecordTheNamedFiles(t *testing.T) {
 	libSystem := "/usr/lib/libSystem.B.dylib"
-	libobjc := "/usr/lib/libobjc.A.dylib"
-	libresolv := "/usr/lib/libresolv.9.dylib"
 	libiconv := "/usr/lib/libiconv.2.dylib"
 	libz := "/usr/lib/libz.1.dylib"
 	core := "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
 	security := "/System/Library/Frameworks/Security.framework/Versions/A/Security"
-	foundation := "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation"
 	iokit := "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
-	goLibs := []string{libSystem, libresolv, core, security}
+	host := []string{libSystem, core, security}
 	cases := []struct {
 		rel    string
 		need   []string
 		absent []string
 	}{
 		{"bin/delta", []string{libiconv, core, libz, iokit, libSystem}, []string{"MH_BINDS_TO_WEAK", "Security.framework"}},
-		{"bin/dust", []string{libSystem, libobjc, foundation, libiconv, core}, []string{"MH_BINDS_TO_WEAK"}},
-		{"bin/fd", []string{libSystem, libobjc, foundation, libiconv}, []string{"MH_BINDS_TO_WEAK"}},
-		{"bin/rg", []string{libiconv, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
-		{"bin/bat", []string{core, libobjc, iokit, libiconv, security, libz, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/dust", []string{libSystem, core}, []string{"MH_BINDS_TO_WEAK", "libobjc.A.dylib", "/Foundation.framework", "libiconv.2.dylib"}},
+		{"bin/fd", []string{libSystem}, []string{"MH_BINDS_TO_WEAK", "libobjc.A.dylib", "/Foundation.framework", "libiconv.2.dylib"}},
+		{"bin/rg", []string{libSystem}, []string{"MH_BINDS_TO_WEAK", "libiconv.2.dylib"}},
+		{"bin/bat", []string{libiconv, libz, libSystem}, []string{"MH_BINDS_TO_WEAK", "CoreFoundation.framework", "libobjc.A.dylib", "IOKit.framework", "Security.framework"}},
 		{"bin/jq", []string{libSystem}, []string{"MH_BINDS_TO_WEAK", "libresolv"}},
-		{"bin/lazygit", goLibs, []string{"MH_TWOLEVEL"}},
-		{"bin/age", goLibs, []string{"MH_TWOLEVEL"}},
-		{"bin/age-keygen", []string{libSystem, libresolv}, []string{"MH_TWOLEVEL"}},
-		{"bin/shh", goLibs, []string{"MH_TWOLEVEL"}},
-		{"bin/direnv", goLibs, []string{"MH_TWOLEVEL"}},
-		{"bin/fzf", []string{libSystem, libresolv}, []string{"MH_TWOLEVEL"}},
+		{"bin/lazygit", host, []string{"MH_TWOLEVEL", "libresolv.9.dylib"}},
+		{"bin/age", []string{libSystem}, []string{"MH_TWOLEVEL", "libresolv.9.dylib", "CoreFoundation.framework", "Security.framework"}},
+		{"bin/age-keygen", []string{libSystem}, []string{"MH_TWOLEVEL", "libresolv.9.dylib"}},
+		{"bin/shh", host, []string{"MH_TWOLEVEL", "libresolv.9.dylib"}},
+		{"bin/direnv", host, []string{"MH_TWOLEVEL", "libresolv.9.dylib"}},
+		{"bin/fzf", []string{libSystem}, []string{"MH_TWOLEVEL", "libresolv.9.dylib"}},
 		{"zig/zig", []string{libSystem}, []string{"libresolv", "CoreFoundation"}},
 	}
 	for _, one := range cases {

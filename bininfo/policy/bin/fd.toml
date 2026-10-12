@@ -1,6 +1,7 @@
 # Policy for the pinned fd file.
 # The archive checksum is the pin.
-# This file records the libraries the link writes.
+# Deadstrip drops the unused Objective-C, Foundation, and libiconv loads.
+# This file records the libraries that remain.
 
 format = "macho"
 cputype = ["CPU_TYPE_ARM64"]
@@ -15,7 +16,4 @@ LC_REEXPORT_DYLIB = []
 LC_LOAD_UPWARD_DYLIB = []
 LC_LOAD_DYLIB = [
   { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
-  { name = "/usr/lib/libobjc.A.dylib", why = "The Objective-C runtime is in this file." },
-  { name = "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", why = "fd calls Foundation." },
-  { name = "/usr/lib/libiconv.2.dylib", why = "fd calls libiconv." },
 ]

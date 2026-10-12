@@ -1,6 +1,7 @@
 # Policy for the pinned bat file.
 # The archive checksum is the pin.
-# This file records the libraries the link writes.
+# Deadstrip drops the unused Core Foundation, Objective-C, IOKit, and Security loads.
+# This file records the libraries that remain.
 
 format = "macho"
 cputype = ["CPU_TYPE_ARM64"]
@@ -14,11 +15,7 @@ LC_LOAD_WEAK_DYLIB = []
 LC_REEXPORT_DYLIB = []
 LC_LOAD_UPWARD_DYLIB = []
 LC_LOAD_DYLIB = [
-  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", why = "bat calls Core Foundation." },
-  { name = "/usr/lib/libobjc.A.dylib", why = "The Objective-C runtime is in this file." },
-  { name = "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit", why = "bat reads host IOKit." },
   { name = "/usr/lib/libiconv.2.dylib", why = "bat calls libiconv." },
-  { name = "/System/Library/Frameworks/Security.framework/Versions/A/Security", why = "bat calls Security." },
   { name = "/usr/lib/libz.1.dylib", why = "bat calls libz." },
   { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
 ]
