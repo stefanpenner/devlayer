@@ -1,0 +1,6 @@
+# Policy for the Linux bin/devlayer CLI.
+# One file is one binary.
+# Pure Go. No C library. No dynamic loader.
+
+format = "elf"
+DT_NEEDED = []

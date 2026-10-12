@@ -10,6 +10,44 @@ import (
 	"testing"
 )
 
+func TestLinuxDevlayerPolicyIsStaticElf(t *testing.T) {
+	path, err := policyPath("bininfo/policy/linux/bin/devlayer.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !bytes.Contains(body, []byte("format = \"elf\"")) || !bytes.Contains(body, []byte("DT_NEEDED = []")) {
+		t.Fatalf("linux CLI policy is not a static ELF:\n%s", text)
+	}
+	if bytes.Contains(body, []byte("libc.so")) || bytes.Contains(body, []byte("PT_INTERP = \"/")) {
+		t.Fatalf("linux CLI policy names a host library:\n%s", text)
+	}
+}
+
+func policyPath(rel string) (string, error) {
+	if _, err := os.Stat(rel); err == nil {
+		return rel, nil
+	}
+	root := os.Getenv("TEST_SRCDIR")
+	if root == "" {
+		return "", os.ErrNotExist
+	}
+	ws := os.Getenv("TEST_WORKSPACE")
+	if ws == "" {
+		ws = "_main"
+	}
+	for _, cand := range []string{filepath.Join(root, ws, rel), filepath.Join(root, rel)} {
+		if _, err := os.Stat(cand); err == nil {
+			return cand, nil
+		}
+	}
+	return "", os.ErrNotExist
+}
+
 func TestDevlayerBinaryMatchesPolicy(t *testing.T) {
 	bin, err := resolve("DEVLAYER_BIN")
 	if err != nil {
@@ -26,6 +64,13 @@ func TestDevlayerBinaryMatchesPolicy(t *testing.T) {
 	}
 	if err := os.WriteFile(dst, body, 0o755); err != nil {
 		t.Fatal(err)
+	}
+	if len(body) >= 4 && string(body[:4]) == "\x7fELF" {
+		policy, err := policyPath("bininfo/policy/linux")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("BININFO_POLICY", policy)
 	}
 	if err := File(dst); err != nil {
 		t.Fatal(err)
