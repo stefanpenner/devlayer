@@ -396,7 +396,7 @@ func retryableDownload(err error) bool {
 		return false
 	}
 	if strings.Contains(msg, "HTTP ") {
-		return strings.Contains(msg, "HTTP 502") || strings.Contains(msg, "HTTP 503") || strings.Contains(msg, "HTTP 504")
+		return strings.Contains(msg, "HTTP 500") || strings.Contains(msg, "HTTP 502") || strings.Contains(msg, "HTTP 503") || strings.Contains(msg, "HTTP 504")
 	}
 	return true
 }

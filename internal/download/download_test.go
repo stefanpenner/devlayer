@@ -33,6 +33,36 @@ func TestFileRejectsMismatch(t *testing.T) {
 	}
 }
 
+func TestFileRetriesInternalError(t *testing.T) {
+	body := []byte("htop-bytes")
+	sum := sha256.Sum256(body)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if hits < 3 {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	dest := filepath.Join(t.TempDir(), "htop.tar.xz")
+	if err := File(srv.URL, dest, hex.EncodeToString(sum[:])); err != nil {
+		t.Fatal(err)
+	}
+	if hits < 3 {
+		t.Fatalf("hits %d", hits)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestFileRetriesGatewayTimeout(t *testing.T) {
 	body := []byte("query-bytes")
 	sum := sha256.Sum256(body)
