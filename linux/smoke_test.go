@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/stefanpenner/devlayer/internal/loadcheck"
+	"github.com/stefanpenner/devlayer/linux"
 )
 
 func findRunfile(t *testing.T, name string) string {
@@ -42,17 +43,17 @@ func TestBundleLoad(t *testing.T) {
 	if err := loadcheck.Archive(bundle); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.GOOS != "linux" {
-		t.Log("loadcheck read the bundle. This host does not run Linux binaries. The worker runs them.")
+	arch := "x86_64"
+	if strings.Contains(bundleName, "aarch64") {
+		arch = "aarch64"
+	}
+	if !linux.HostCanRun(runtime.GOOS, runtime.GOARCH, arch) {
+		t.Log("loadcheck read the bundle. This CPU does not run these binaries.")
 		return
 	}
 	root := t.TempDir()
 	if err := extractTarGz(bundle, root); err != nil {
 		t.Fatal(err)
-	}
-	arch := "x86_64"
-	if strings.Contains(bundleName, "aarch64") {
-		arch = "aarch64"
 	}
 	// These programs are static musl. glibc tools stay out.
 	// Alpine has no glibc, so an exec of delta or rg would fail there.

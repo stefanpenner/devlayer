@@ -4,11 +4,25 @@
 #   bazel build //linux:bundle_x86_64
 #   bazel build //linux:bundle_aarch64
 
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 load(":defs.bzl", "linux_targets")
 
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["defs.bzl"])
+
+go_library(
+    name = "host",
+    srcs = ["host.go"],
+    importpath = "github.com/stefanpenner/devlayer/linux",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "host_test",
+    srcs = ["host_test.go"],
+    embed = [":host"],
+)
 
 linux_targets("x86_64")
 

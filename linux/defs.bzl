@@ -148,7 +148,10 @@ def _bundle(arch):
             "//bininfo",
             "//bininfo:policy",
         ],
-        deps = ["//internal/loadcheck"],
+        deps = [
+            "//internal/loadcheck",
+            "//linux:host",
+        ],
         env = {
             "DEVLAYER_BUNDLE": "$(location :bundle_%s)" % arch,
             "BININFO": "$(rootpath //bininfo)",

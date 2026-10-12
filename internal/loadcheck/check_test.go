@@ -327,6 +327,33 @@ func TestDarwinEzaPolicyRecordsTheNamedFile(t *testing.T) {
 	}
 }
 
+func TestDarwinGlowPolicyRecordsTheNamedFile(t *testing.T) {
+	body := readPolicy(t, "bininfo/policy/bin/glow.toml")
+	if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+		t.Fatalf("glow policy:\n%s", body)
+	}
+	if bytes.Contains(body, []byte("MH_TWOLEVEL")) || bytes.Contains(body, []byte("IOKit")) || bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+		t.Fatalf("glow policy:\n%s", body)
+	}
+	order := []string{
+		"/usr/lib/libSystem.B.dylib",
+		"/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+		"/System/Library/Frameworks/Security.framework/Versions/A/Security",
+	}
+	at := 0
+	for _, name := range order {
+		needle := []byte("name = \"" + name + "\"")
+		i := bytes.Index(body[at:], needle)
+		if i < 0 {
+			t.Fatalf("glow needed %s:\n%s", name, body)
+		}
+		at += i + len(needle)
+	}
+	if bytes.Count(body, []byte("why = ")) < len(order) {
+		t.Fatalf("glow why:\n%s", body)
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()

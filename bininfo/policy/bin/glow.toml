@@ -1,0 +1,20 @@
+# Policy for the source-built glow binary.
+# The source archive checksum is the pin.
+# This file records the libraries the link writes.
+
+format = "macho"
+cputype = ["CPU_TYPE_ARM64"]
+cpusubtype = ["CPU_SUBTYPE_ARM64_ALL"]
+filetype = "MH_EXECUTE"
+flags = ["MH_DYLDLINK", "MH_PIE"]
+MH_PIE = true
+LC_LOAD_DYLINKER = "/usr/lib/dyld"
+LC_RPATH = []
+LC_LOAD_WEAK_DYLIB = []
+LC_REEXPORT_DYLIB = []
+LC_LOAD_UPWARD_DYLIB = []
+LC_LOAD_DYLIB = [
+  { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
+  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", why = "glow calls Core Foundation." },
+  { name = "/System/Library/Frameworks/Security.framework/Versions/A/Security", why = "glow calls Security." },
+]
