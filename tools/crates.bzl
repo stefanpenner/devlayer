@@ -51,6 +51,29 @@ def _host_go_url(os_name, arch):
 def _rust_url(triple):
     return "https://static.rust-lang.org/dist/%s/rust-%s-%s.tar.xz" % (_DATE, _VER, triple)
 
+def _loader_spec(triple):
+    """Return the musl loader pins for a Linux host toolchain.
+
+    The musl rustc records /lib/ld-musl-*.so.1.
+    That file is not in the rust archive.
+    Ubuntu does not have it.
+    These Alpine packages supply the loader and libgcc.
+    The host libc stays unused.
+    """
+    if triple == "x86_64-unknown-linux-musl":
+        return {
+            "ld": "ld-musl-x86_64.so.1",
+            "musl": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/musl-1.2.5-r12.apk",
+            "libgcc": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/libgcc-14.2.0-r6.apk",
+        }
+    if triple == "aarch64-unknown-linux-musl":
+        return {
+            "ld": "ld-musl-aarch64.so.1",
+            "musl": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/aarch64/musl-1.2.5-r12.apk",
+            "libgcc": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/aarch64/libgcc-14.2.0-r6.apk",
+        }
+    return None
+
 def _std_url(triple):
     return "https://static.rust-lang.org/dist/%s/rust-std-%s-%s.tar.xz" % (_DATE, _VER, triple)
 
@@ -94,6 +117,7 @@ def _rust_impl(rctx):
         )
         if res.return_code:
             fail("rust-std install failed: " + res.stderr + res.stdout)
+    _install_musl_loader(rctx)
     rctx.file("BUILD.bazel", """
 filegroup(
     name = "all",
@@ -106,11 +130,55 @@ exports_files(
 )
 """)
 
+def _run(rctx, argv, label):
+    res = rctx.execute(argv)
+    if res.return_code:
+        fail(label + ": " + res.stderr + res.stdout)
+
+def _install_musl_loader(rctx):
+    if not rctx.attr.musl_loader_url:
+        return
+    rctx.download(
+        url = rctx.attr.musl_loader_url,
+        output = "musl.apk",
+        sha256 = rctx.attr.musl_loader_sha256,
+    )
+    rctx.download(
+        url = rctx.attr.libgcc_url,
+        output = "libgcc.apk",
+        sha256 = rctx.attr.libgcc_sha256,
+    )
+    _run(rctx, ["mkdir", "-p", "prefix/musl", "apk-musl", "apk-gcc"], "musl loader mkdir")
+    _run(rctx, ["tar", "-xzf", "musl.apk", "-C", "apk-musl"], "musl apk extract")
+    _run(rctx, ["tar", "-xzf", "libgcc.apk", "-C", "apk-gcc"], "libgcc apk extract")
+    ld = rctx.attr.loader_name
+    _run(rctx, ["cp", "-L", "apk-musl/lib/" + ld, "prefix/musl/" + ld], "musl loader copy")
+    _run(rctx, ["cp", "-L", "apk-gcc/usr/lib/libgcc_s.so.1", "prefix/musl/libgcc_s.so.1"], "libgcc copy")
+    _run(rctx, ["chmod", "755", "prefix/musl/" + ld], "musl loader chmod")
+    # libc.so is this loader. --library-path finds libgcc. RPATH finds rustc.
+    script = """#!/bin/sh
+here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+exec "$here/../musl/%s" --library-path "$here/../musl" "$here/%s.bin" "$@"
+"""
+    for name in ["cargo", "rustc"]:
+        _run(rctx, ["cp", "-L", "prefix/bin/" + name, "prefix/bin/" + name + ".bin"], name + " copy")
+        _run(rctx, ["chmod", "755", "prefix/bin/" + name + ".bin"], name + " chmod")
+        rctx.file("prefix/bin/" + name, script % (ld, name), executable = True)
+    rctx.delete("apk-musl")
+    rctx.delete("apk-gcc")
+    rctx.delete("musl.apk")
+    rctx.delete("libgcc.apk")
+
 rust_toolchain = repository_rule(
     implementation = _rust_impl,
     attrs = {
         "extra_std": attr.string_list(),
         "host_triple": attr.string(mandatory = True),
+        "libgcc_sha256": attr.string(),
+        "libgcc_url": attr.string(),
+        "loader_name": attr.string(),
+        "musl_loader_sha256": attr.string(),
+        "musl_loader_url": attr.string(),
         "sha256": attr.string(mandatory = True),
         "strip_prefix": attr.string(mandatory = True),
         "url": attr.string(mandatory = True),
@@ -183,6 +251,9 @@ exports_files(["bin/go"], visibility = ["//visibility:public"])
             extra.append("%s %s %s" % (url, _pin(sums, url), "rust-std-%s-%s" % (_VER, std_triple)))
         url = _rust_url(triple)
         name = "rust_" + triple.replace("-", "_")
+        loader = _loader_spec(triple)
+        musl_url = loader["musl"] if loader else ""
+        libgcc_url = loader["libgcc"] if loader else ""
         rust_toolchain(
             name = name,
             url = url,
@@ -190,6 +261,11 @@ exports_files(["bin/go"], visibility = ["//visibility:public"])
             strip_prefix = "rust-%s-%s" % (_VER, triple),
             host_triple = triple,
             extra_std = extra,
+            musl_loader_url = musl_url,
+            musl_loader_sha256 = _pin(sums, musl_url) if musl_url else "",
+            libgcc_url = libgcc_url,
+            libgcc_sha256 = _pin(sums, libgcc_url) if libgcc_url else "",
+            loader_name = loader["ld"] if loader else "",
         )
     eza_url = "https://github.com/eza-community/eza/archive/refs/tags/v0.23.5.tar.gz"
     http_archive(

@@ -9,6 +9,10 @@ ea531dbeb35d390e692e3ab02fb14f0771b4d3e301ae2023eb90d99ab726a5e8  https://static
 c36777aec17d617f85f94b7cb87bdd4270eeca30ef38c6f686809d163c881609  https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-aarch64-apple-darwin.tar.xz
 a603e135d4eb67ababdd193268a69937fa4490bafde592f2c931d17c7567b228  https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-aarch64-unknown-linux-musl.tar.xz
 38490d575786f4688e83b357baeb022d8dde0ace2cb8c1357e060c76644fc56a  https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-x86_64-unknown-linux-musl.tar.xz
+ac281d1e7f9e9c447c51e309317b975f48be6edaf3ab91ae73b959cf86703782  https://dl-cdn.alpinelinux.org/alpine/v3.22/main/aarch64/musl-1.2.5-r12.apk
+ba1835eec3ad8a120efd3d5020e561d53553a0513763a08f509e3ce6d4baa9ca  https://dl-cdn.alpinelinux.org/alpine/v3.22/main/aarch64/libgcc-14.2.0-r6.apk
+4990a5e0ba312e478f94cfe431a70efef1538004eb361c8ae424516848be45bb  https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/musl-1.2.5-r12.apk
+04f3467bc967e705221a843fe4d3de5850db826e571686e0c0ed453d38cb5c59  https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/libgcc-14.2.0-r6.apk
 ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12  https://go.dev/dl/go1.27.1.darwin-arm64.tar.gz
 63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
 3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec  https://go.dev/dl/go1.27.1.linux-arm64.tar.gz
