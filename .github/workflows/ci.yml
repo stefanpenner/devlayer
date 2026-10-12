@@ -607,6 +607,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.ver.outputs.tag }}" \
+            --target "${{ github.sha }}" \
             --generate-notes \
             --title "${{ steps.ver.outputs.tag }}" \
             devlayer-linux-x86_64 \
