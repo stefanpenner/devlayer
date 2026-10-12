@@ -19,9 +19,11 @@ import (
 	"github.com/stefanpenner/devlayer/internal/config"
 	"github.com/stefanpenner/devlayer/internal/deadstrip"
 	"github.com/stefanpenner/devlayer/internal/download"
+	"github.com/stefanpenner/devlayer/internal/loadcheck"
 	"github.com/stefanpenner/devlayer/internal/nvimplugins"
 	"github.com/stefanpenner/devlayer/internal/platform"
 	"github.com/stefanpenner/devlayer/internal/sums"
+	"github.com/stefanpenner/devlayer/internal/terminfo"
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
 
@@ -73,9 +75,13 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 		return err
 	}
 
+	if err := ensureBininfo(scriptDir); err != nil {
+		return err
+	}
+
 	switch opts.os {
 	case "darwin":
-		if err := buildDarwin(opts, vers, outDir); err != nil {
+		if err := buildDarwin(opts, vers, scriptDir, outDir); err != nil {
 			return err
 		}
 	case "windows":
@@ -101,7 +107,13 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 	return nil
 }
 
-func buildDarwin(opts buildOptions, vers *versions.Versions, outDir string) error {
+func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir, outDir string) error {
+	cc, cleanup, err := pinnedDarwinCompiler(scriptDir, opts.arch)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
 	p, root, binDir, err := stage("darwin", opts.arch)
 	if err != nil {
 		return err
@@ -111,7 +123,7 @@ func buildDarwin(opts buildOptions, vers *versions.Versions, outDir string) erro
 	if err := fetchPrebuilts(root, p, vers, map[string]bool{"nvim": true}); err != nil {
 		return err
 	}
-	if err := compileDarwinTools(root, binDir, vers, opts.nvimHead); err != nil {
+	if err := compileDarwinTools(root, binDir, scriptDir, vers, opts.nvimHead, cc); err != nil {
 		return err
 	}
 	if err := writeDarwinWrappers(binDir); err != nil {
@@ -168,15 +180,18 @@ func fetchPrebuilts(root string, p *platform.Platform, vers *versions.Versions, 
 	return downloadAll(root, p, vers, skip)
 }
 
-func compileDarwinTools(root, binDir string, vers *versions.Versions, nvimHead bool) error {
+func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions, nvimHead bool, cc []string) error {
 	fmt.Println("==> Building tools from source...")
-	if err := buildNvim(root, vers, nvimHead); err != nil {
+	if err := buildDarwinStaticLibs(vers, cc, scriptDir); err != nil {
 		return err
 	}
-	if err := buildHtop(binDir, vers); err != nil {
+	if err := buildNvim(root, scriptDir, vers, nvimHead, cc); err != nil {
 		return err
 	}
-	if err := buildBtop(binDir, vers); err != nil {
+	if err := buildHtop(binDir, vers, cc); err != nil {
+		return err
+	}
+	if err := buildBtop(binDir, vers, cc); err != nil {
 		return err
 	}
 
@@ -184,10 +199,10 @@ func compileDarwinTools(root, binDir string, vers *versions.Versions, nvimHead b
 	if err := os.MkdirAll(libexecDir, 0755); err != nil {
 		return fmt.Errorf("mkdir libexec: %w", err)
 	}
-	if err := buildEza(libexecDir, vers); err != nil {
+	if err := buildEza(libexecDir, vers, cc); err != nil {
 		return err
 	}
-	return buildMake(binDir, vers)
+	return buildMake(binDir, vers, cc)
 }
 
 func writeDarwinWrappers(binDir string) error {
@@ -261,6 +276,9 @@ func installSelf(binDir, name string) error {
 }
 
 func finishBundle(root, output, ext string) error {
+	if err := loadcheck.Tree(root); err != nil {
+		return err
+	}
 	if err := generateChecksums(root); err != nil {
 		return err
 	}
@@ -296,11 +314,11 @@ func buildLinux(arch, scriptDir, outDir string) error {
 
 func requireBazelCheckout(scriptDir string) error {
 	if _, err := exec.LookPath("bazel"); err != nil {
-		return fmt.Errorf("linux build needs bazel on PATH")
+		return fmt.Errorf("build needs bazel on PATH")
 	}
 	mod := filepath.Join(scriptDir, "MODULE.bazel")
 	if _, err := os.Stat(mod); err != nil {
-		return fmt.Errorf("linux build needs %s", mod)
+		return fmt.Errorf("build needs %s", mod)
 	}
 	return nil
 }
@@ -326,8 +344,330 @@ func bazelLinuxBundle(arch, scriptDir, outDir string) error {
 	return nil
 }
 
+// pinnedDarwinCompiler builds the CC and CXX wrappers.
+// The compiler is the pinned Zig. The SDK is the pinned Apple package.
+// codesign stays outside this helper.
+func pinnedDarwinCompiler(scriptDir, arch string) (cc []string, cleanup func(), err error) {
+	cleanup = func() {}
+	if err = requireBazelCheckout(scriptDir); err != nil {
+		return nil, cleanup, err
+	}
+	zig, err := bazelOutput(scriptDir, "@zig_sdk//:zig")
+	if err != nil {
+		return nil, cleanup, err
+	}
+	tarPath, err := bazelOutput(scriptDir, "@macos_sdk//:sdk.tar")
+	if err != nil {
+		return nil, cleanup, err
+	}
+
+	work, err := os.MkdirTemp("", "devlayer-sdk-*")
+	if err != nil {
+		return nil, cleanup, err
+	}
+	cleanup = func() { os.RemoveAll(work) }
+	cmd := exec.Command("tar", "-xf", tarPath, "-C", work)
+	if err = cmd.Run(); err != nil {
+		return nil, cleanup, fmt.Errorf("extract sdk: %w", err)
+	}
+	sdk := filepath.Join(work, "MacOSX.sdk")
+	info, err := os.Stat(filepath.Join(sdk, "usr", "include"))
+	if err != nil || !info.IsDir() {
+		return nil, cleanup, fmt.Errorf("pinned sdk has no usr/include")
+	}
+
+	staticDir := filepath.Join(work, "static")
+	if err = os.MkdirAll(staticDir, 0755); err != nil {
+		return nil, cleanup, err
+	}
+	ccPath := filepath.Join(work, "cc")
+	cxxPath := filepath.Join(work, "c++")
+	if err = os.WriteFile(ccPath, []byte(darwinCCScript(zig, sdk, arch, "cc", staticDir)), 0755); err != nil {
+		return nil, cleanup, err
+	}
+	if err = os.WriteFile(cxxPath, []byte(darwinCCScript(zig, sdk, arch, "c++", staticDir)), 0755); err != nil {
+		return nil, cleanup, err
+	}
+	return []string{"CC=" + ccPath, "CXX=" + cxxPath, "SDKROOT=" + sdk, "DEVLAYER_STATIC=" + staticDir}, cleanup, nil
+}
+
+func darwinCCScript(zig, sdk, arch, tool, staticLib string) string {
+	// Zig ignores -bundle and then looks for main.
+	// A Mach-O bundle is a dylib with dynamic lookup.
+	// -F is the link search. -iframework is the header search.
+	// -isystem is the SDK C header dir. Zig does not add it from --sysroot.
+	// A .tbd install-name is a host path. Do not search the SDK lib dir.
+	// CMake marks the iconv include as -isystem.
+	// Clang then reads the SDK iconv.h first. Drop that -isystem.
+	fw := sdk + "/System/Library/Frameworks"
+	libdir := filepath.Join(sdk, "usr", "lib")
+	include := ""
+	iconv, wide, narrow, iconvInc := "", "", "", ""
+	if staticLib != "" {
+		iconv = filepath.Join(staticLib, "iconv", "lib", "libiconv.a")
+		wide = filepath.Join(staticLib, "ncurses", "lib", "libncursesw.a")
+		narrow = filepath.Join(staticLib, "ncurses", "lib", "libncurses.a")
+		iconvInc = filepath.Join(staticLib, "iconv", "include")
+		include = fmt.Sprintf("-I %q ", iconvInc)
+	}
+	return fmt.Sprintf(`#!/bin/sh
+# A -l flag may appear before its -L flag. Record the directories first.
+# Do not keep -L. A search path lets the linker record a stub install-name.
+libdir=%q
+iconv=%q
+wide=%q
+narrow=%q
+iconv_inc=%q
+dirs=""
+pendir=0
+for arg in "$@"; do
+  if [ "$pendir" = 1 ]; then
+    pendir=0
+    dirs="$dirs
+$arg"
+    continue
+  fi
+  case "$arg" in
+    -L) pendir=1 ;;
+    -L*)
+      dirs="$dirs
+${arg#-L}"
+      ;;
+  esac
+done
+n=$#
+i=0
+pendir=0
+pendlib=0
+pendsys=0
+while [ "$i" -lt "$n" ]; do
+  arg=$1
+  shift
+  i=$((i + 1))
+  if [ "$pendir" = 1 ]; then
+    pendir=0
+    continue
+  fi
+  if [ "$pendsys" = 1 ]; then
+    pendsys=0
+    if [ -n "$iconv_inc" ] && [ "$arg" = "$iconv_inc" ]; then
+      continue
+    fi
+    set -- "$@" -isystem "$arg"
+    continue
+  fi
+  if [ "$pendlib" = 1 ]; then
+    pendlib=0
+    arg="-l$arg"
+  fi
+  case "$arg" in
+    -bundle) set -- "$@" -dynamiclib -Wl,-undefined,dynamic_lookup ;;
+    -Wl,-export_dynamic) set -- "$@" -rdynamic ;;
+    -Wl,-l*|-Wl,-L*)
+      printf 'refusing %%s\n' "$arg" >&2
+      exit 1
+      ;;
+    --target=*)
+      arg=$(printf '%%s\n' "$arg" | sed 's/arm64/aarch64/;s/-apple//;s/macosx/macos/')
+      set -- "$@" "$arg"
+      ;;
+    -L) pendir=1 ;;
+    -L*) ;;
+    -isystem) pendsys=1 ;;
+    -isystem*)
+      rest=${arg#-isystem}
+      if [ -n "$iconv_inc" ] && [ "$rest" = "$iconv_inc" ]; then
+        :
+      else
+        set -- "$@" "$arg"
+      fi
+      ;;
+    -l) pendlib=1 ;;
+    -liconv)
+      if [ -f "$iconv" ]; then set -- "$@" "$iconv"
+      else printf 'refusing %%s\n' "$arg" >&2; exit 1; fi
+      ;;
+    -lncurses|-lncursesw)
+      if [ -f "$wide" ]; then set -- "$@" "$wide"
+      elif [ -f "$narrow" ]; then set -- "$@" "$narrow"
+      else printf 'refusing %%s\n' "$arg" >&2; exit 1; fi
+      ;;
+    -lutil)
+      # Zig does not search for libutil unless -L is set. Pass the stub file.
+      # libutil is not libSystem, so this does not add a second libSystem load.
+      set -- "$@" "$libdir/libutil.tbd"
+      ;;
+    -lSystem|-lc|-lm|-ldl|-lpthread|-lc++|-lc++abi|-lobjc)
+      # Keep the -l flag. These stubs are libSystem or the C++ runtime.
+      # A .tbd path is a second load of the same install-name. dyld aborts.
+      set -- "$@" "$arg"
+      ;;
+    -l*)
+      name=${arg#-l}
+      found=""
+      oldifs=$IFS
+      IFS='
+'
+      set -f
+      for d in $dirs; do
+        [ -n "$d" ] || continue
+        rest=${d#/opt/homebrew/}
+        if [ "$rest" != "$d" ] || [ "$d" = /opt/homebrew ]; then
+          continue
+        fi
+        rest=${d#/usr/local/}
+        if [ "$rest" != "$d" ] || [ "$d" = /usr/local ]; then
+          continue
+        fi
+        if [ -f "$d/lib$name.a" ]; then
+          found="$d/lib$name.a"
+          break
+        fi
+      done
+      set +f
+      IFS=$oldifs
+      if [ -n "$found" ]; then set -- "$@" "$found"
+      else printf 'refusing %%s\n' "$arg" >&2; exit 1; fi
+      ;;
+    /usr/lib/libSystem.B.dylib|/usr/lib/libobjc.A.dylib|/usr/lib/libc++.1.dylib|/usr/lib/libc++abi.dylib|/usr/lib/libutil.dylib)
+      set -- "$@" "$arg"
+      ;;
+    /opt/homebrew/*|/usr/local/*)
+      case "$arg" in
+        *.dylib|*.tbd|*.so)
+          printf 'refusing %%s\n' "$arg" >&2
+          exit 1
+          ;;
+      esac
+      set -- "$@" "$arg"
+      ;;
+    /usr/lib/*)
+      printf 'refusing %%s\n' "$arg" >&2
+      exit 1
+      ;;
+    *) set -- "$@" "$arg" ;;
+  esac
+done
+if [ "$pendlib" = 1 ]; then
+  printf 'refusing -l\n' >&2
+  exit 1
+fi
+exec %q %s -target %s-macos --sysroot %q %s-isystem %q -iframework %q -F %q -mmacosx-version-min=11.0 "$@"
+`, libdir, iconv, wide, narrow, iconvInc, zig, tool, arch, sdk, include, sdk+"/usr/include", fw, fw)
+}
+
+func ensureBininfo(scriptDir string) error {
+	if os.Getenv("BININFO_POLICY") == "" {
+		policy := filepath.Join(scriptDir, "bininfo", "policy")
+		if st, err := os.Stat(policy); err == nil && st.IsDir() {
+			if err := os.Setenv("BININFO_POLICY", policy); err != nil {
+				return err
+			}
+		}
+	}
+	if os.Getenv("BININFO") != "" {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(scriptDir, "MODULE.bazel")); err != nil {
+		return nil
+	}
+	bin, err := bazelOutput(scriptDir, "//bininfo")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("BININFO", bin)
+}
+
+func bazelOutput(scriptDir, label string) (string, error) {
+	build := exec.Command("bazel", "build", label)
+	build.Dir = scriptDir
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		return "", fmt.Errorf("bazel build %s: %w", label, err)
+	}
+
+	query := exec.Command("bazel", "cquery", label, "--output=files")
+	query.Dir = scriptDir
+	out, err := query.Output()
+	if err != nil {
+		return "", fmt.Errorf("bazel cquery %s: %w", label, err)
+	}
+	rel := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "INFO:") {
+			continue
+		}
+		rel = line
+	}
+	if rel == "" {
+		return "", fmt.Errorf("bazel cquery %s returned no file", label)
+	}
+	execRoot, err := bazelInfo(scriptDir, "execution_root")
+	if err != nil {
+		return "", err
+	}
+	outputBase, err := bazelInfo(scriptDir, "output_base")
+	if err != nil {
+		return "", err
+	}
+	return resolveBazelFile(rel, scriptDir, execRoot, outputBase)
+}
+
+// resolveBazelFile finds a cquery path.
+// A build output sits under the execution root.
+// An external file sits under the output base.
+func resolveBazelFile(rel, scriptDir, execRoot, outputBase string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("bazel cquery returned no file")
+	}
+	if filepath.IsAbs(rel) {
+		if _, err := os.Stat(rel); err != nil {
+			return "", fmt.Errorf("bazel file missing: %s", rel)
+		}
+		return rel, nil
+	}
+	// A later bazel build drops external files from the execution root.
+	// The output base copy stays.
+	roots := []string{execRoot, outputBase, scriptDir}
+	if strings.HasPrefix(rel, "external/") || strings.HasPrefix(rel, "external"+string(filepath.Separator)) {
+		roots = []string{outputBase, scriptDir, execRoot}
+	}
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		full := filepath.Join(root, rel)
+		if _, err := os.Stat(full); err == nil {
+			return full, nil
+		}
+	}
+	return "", fmt.Errorf("bazel file missing: %s", rel)
+}
+
+func bazelInfo(scriptDir, key string) (string, error) {
+	info := exec.Command("bazel", "info", key)
+	info.Dir = scriptDir
+	out, err := info.Output()
+	if err != nil {
+		return "", fmt.Errorf("bazel info %s: %w", key, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func withCompiler(base, cc []string) []string {
+	env := append([]string{}, base...)
+	env = append(env, cc...)
+	env = appendLinkFlag(env, "LDFLAGS", "-Wl,-dead_strip_dylibs")
+	if len(cc) == 0 {
+		return env
+	}
+	return blockHostPkgConfig(env)
+}
+
 // buildBtop builds btop from source using cmake.
-func buildBtop(binDir string, vers *versions.Versions) error {
+func buildBtop(binDir string, vers *versions.Versions, cc []string) error {
 	fmt.Println("  btop (building from source)")
 
 	srcDir, err := os.MkdirTemp("", "devlayer-btop-*")
@@ -350,11 +690,12 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	}
 
 	buildDir := filepath.Join(srcRoot, "build")
-	env := darwinXcodeEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
+	env := withCompiler(os.Environ(), cc)
 	if err := run("", env, "cmake", "-B", buildDir, "-S", srcRoot,
 		"-DCMAKE_BUILD_TYPE=Release",
 		"-DBTOP_GPU=OFF",
-		"-DBTOP_LTO=ON",
+		// Zig fails CMake's LTO check.
+		"-DBTOP_LTO=OFF",
 	); err != nil {
 		return fmt.Errorf("btop cmake configure: %w", err)
 	}
@@ -369,13 +710,13 @@ func buildBtop(binDir string, vers *versions.Versions) error {
 	if err := copyFile(btopBin, filepath.Join(binDir, "btop")); err != nil {
 		return fmt.Errorf("copy btop: %w", err)
 	}
-	return deadstrip.File(filepath.Join(binDir, "btop"))
+	return sealDarwin(filepath.Join(binDir, "btop"))
 }
 
 // buildNvim builds neovim from source using cmake.
 // If head is true, builds from the latest HEAD of the main branch;
 // otherwise builds the stable tag (or pinned NVIM_VERSION).
-func buildNvim(outDir string, vers *versions.Versions, head bool) error {
+func buildNvim(outDir, scriptDir string, vers *versions.Versions, head bool, cc []string) error {
 	branch := "v" + vers.Get("NVIM_VERSION")
 	if head {
 		branch = "HEAD"
@@ -388,25 +729,36 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	cloneArgs := []string{"clone", "--depth", "1"}
+	var srcRoot string
 	if head {
-		cloneArgs = append(cloneArgs, "https://github.com/neovim/neovim.git")
+		srcRoot = filepath.Join(srcDir, "neovim")
+		if err := run("", nil, "git", "clone", "--depth", "1", "https://github.com/neovim/neovim.git", srcRoot); err != nil {
+			return fmt.Errorf("nvim git clone: %w", err)
+		}
 	} else {
-		cloneArgs = append(cloneArgs, "--branch", branch, "https://github.com/neovim/neovim.git")
+		url := binaries.SourceArchiveURLs(vers)["nvim"]
+		sum, err := sums.Must(url)
+		if err != nil {
+			return err
+		}
+		if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
+			return fmt.Errorf("download nvim source: %w", err)
+		}
+		srcRoot, err = tarballRoot(srcDir, "neovim-", "nvim")
+		if err != nil {
+			return err
+		}
 	}
-	srcRoot := filepath.Join(srcDir, "neovim")
-	cloneArgs = append(cloneArgs, srcRoot)
-	if err := run("", nil, "git", cloneArgs...); err != nil {
-		return fmt.Errorf("nvim git clone: %w", err)
+
+	if err := patchNvimTree(srcRoot, scriptDir); err != nil {
+		return err
 	}
 
 	installDir := filepath.Join(outDir, "nvim")
-	env := darwinXcodeEnv(os.Environ(), runtime.GOOS, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	if err := run(srcRoot, env, "make",
-		"CMAKE_BUILD_TYPE=Release",
-		fmt.Sprintf("CMAKE_INSTALL_PREFIX=%s", installDir),
-		fmt.Sprintf("-j%d", runtime.NumCPU()),
-	); err != nil {
+	env := withCompiler(os.Environ(), cc)
+	env = withEnv(env, "DEVLAYER_UNIBI_PATCH", filepath.Join(scriptDir, "third_party", "patches", "unibilium_no_host.patch"))
+	args := append(nvimMakeArgs(installDir, staticPrefix(cc)), fmt.Sprintf("-j%d", runtime.NumCPU()))
+	if err := run(srcRoot, env, "make", args...); err != nil {
 		return fmt.Errorf("nvim build: %w", err)
 	}
 	if err := run(srcRoot, env, "make", "install"); err != nil {
@@ -415,7 +767,7 @@ func buildNvim(outDir string, vers *versions.Versions, head bool) error {
 	if err := deadstrip.Tree(installDir); err != nil {
 		return err
 	}
-	return nil
+	return deadstrip.CheckTree(installDir)
 }
 
 func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
@@ -427,26 +779,6 @@ func darwinXcodeEnv(base []string, goos, clang, clangxx, sdk string) []string {
 	env = append(env, "CXX="+clangxx)
 	env = append(env, "SDKROOT="+sdk)
 	return appendLinkFlag(env, "LDFLAGS", "-Wl,-dead_strip_dylibs")
-}
-
-func findXcodeTool(name string) string {
-	return xcrun("--find", name)
-}
-
-func findXcodeSDK() string {
-	return xcrun("--show-sdk-path")
-}
-
-func xcrun(args ...string) string {
-	path, err := exec.LookPath("xcrun")
-	if err != nil {
-		return ""
-	}
-	out, err := exec.Command(path, args...).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
 }
 
 func touchTree(root string) error {
@@ -533,8 +865,9 @@ func withEnv(env []string, key, value string) []string {
 }
 
 func htopBuildEnv(base []string) []string {
-	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
+	const systemPath = "/usr/bin:/bin:/usr/sbin:/sbin"
 	env := withEnv(base, "PATH", systemPath)
+	env = blockHostPkgConfig(env)
 	if runtime.GOOS == "darwin" {
 		env = appendLinkFlag(env, "LDFLAGS", "-Wl,-dead_strip_dylibs")
 	}
@@ -542,12 +875,16 @@ func htopBuildEnv(base []string) []string {
 }
 
 func ezaBuildEnv(base []string, goos, cargoPath, clang, clangxx, sdk string) []string {
-	const systemPath = "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
+	const systemPath = "/usr/bin:/bin:/usr/sbin:/sbin"
 	if goos != "darwin" {
 		return base
 	}
 	env := darwinXcodeEnv(base, goos, clang, clangxx, sdk)
+	env = blockHostPkgConfig(env)
+	env = withEnv(env, "LIBZ_SYS_STATIC", "1")
 	env = appendLinkFlag(env, "RUSTFLAGS", "-C link-arg=-dead_strip_dylibs")
+	// rustc links with cc on PATH. CC is only the C compiler.
+	env = appendLinkFlag(env, "RUSTFLAGS", "-C linker="+clang)
 	// Darwin PATH even when this test/binary runs on Windows.
 	cargoDir := path.Dir(filepath.ToSlash(cargoPath))
 	if cargoDir == "" || cargoDir == "." {
@@ -564,8 +901,7 @@ func buildMakeTool(goos string) string {
 }
 
 // buildHtop builds htop from source using autotools.
-func buildHtop(binDir string, vers *versions.Versions) error {
-	ver := vers.Get("HTOP_VERSION")
+func buildHtop(binDir string, vers *versions.Versions, cc []string) error {
 	fmt.Println("  htop (building from source)")
 
 	srcDir, err := os.MkdirTemp("", "devlayer-htop-*")
@@ -574,20 +910,24 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	}
 	defer os.RemoveAll(srcDir)
 
-	srcRoot := filepath.Join(srcDir, "htop")
-	if err := run("", nil, "git", "clone", "--depth", "1", "--branch", ver,
-		"https://github.com/htop-dev/htop.git", srcRoot); err != nil {
-		return fmt.Errorf("htop git clone: %w", err)
+	url := binaries.SourceArchiveURLs(vers)["htop"]
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	if err := download.TarXzFull(url, srcDir, 0, sum); err != nil {
+		return fmt.Errorf("download htop source: %w", err)
+	}
+	srcRoot, err := tarballRoot(srcDir, "htop-", "htop")
+	if err != nil {
+		return err
 	}
 
-	env := htopBuildEnv(os.Environ())
-	if err := run(srcRoot, env, "./autogen.sh"); err != nil {
-		return fmt.Errorf("htop autogen: %w", err)
-	}
+	env := htopBuildEnv(withCompiler(os.Environ(), cc))
 	if err := settleTree(srcRoot, "htop"); err != nil {
 		return err
 	}
-	if err := run(srcRoot, env, "./configure", "CFLAGS=-Os -DNDEBUG"); err != nil {
+	if err := run(srcRoot, env, "./configure", htopConfigureArgs(staticPrefix(cc))...); err != nil {
 		return fmt.Errorf("htop configure: %w", err)
 	}
 	if err := run(srcRoot, env, "make", fmt.Sprintf("-j%d", runtime.NumCPU())); err != nil {
@@ -596,7 +936,7 @@ func buildHtop(binDir string, vers *versions.Versions) error {
 	if err := copyFile(filepath.Join(srcRoot, "htop"), filepath.Join(binDir, "htop")); err != nil {
 		return fmt.Errorf("copy htop: %w", err)
 	}
-	return deadstrip.File(filepath.Join(binDir, "htop"))
+	return sealDarwin(filepath.Join(binDir, "htop"))
 }
 
 func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip map[string]bool) error {
@@ -607,7 +947,7 @@ func downloadAll(out string, p *platform.Platform, vers *versions.Versions, skip
 }
 
 // buildEza compiles eza from source using cargo.
-func buildEza(binDir string, vers *versions.Versions) error {
+func buildEza(binDir string, vers *versions.Versions, cc []string) error {
 	ver := vers.Get("EZA_VERSION")
 	fmt.Println("  eza (building from source)")
 
@@ -630,14 +970,36 @@ func buildEza(binDir string, vers *versions.Versions) error {
 	// CARGO_TARGET_DIR beats ~/.cargo/config.toml target-dir, so the binary
 	// stays next to this clone instead of a shared cache.
 	targetDir := filepath.Join(srcRoot, "target")
-	env := ezaCargoEnv(os.Environ(), srcRoot, runtime.GOOS, cargoPath, findXcodeTool("clang"), findXcodeTool("clang++"), findXcodeSDK())
-	if err := run(srcRoot, env, cargoPath, "build", "--release"); err != nil {
+	clang, clangxx, sdk := compilerFields(cc)
+	env := ezaCargoEnv(os.Environ(), srcRoot, runtime.GOOS, cargoPath, clang, clangxx, sdk)
+	if err := run(srcRoot, env, cargoPath, ezaCargoArgs()...); err != nil {
 		return fmt.Errorf("eza cargo build: %w", err)
 	}
 	if err := copyFile(filepath.Join(targetDir, "release", "eza"), filepath.Join(binDir, "eza")); err != nil {
 		return fmt.Errorf("copy eza: %w", err)
 	}
-	return deadstrip.File(filepath.Join(binDir, "eza"))
+	return sealDarwin(filepath.Join(binDir, "eza"))
+}
+
+func sealDarwin(path string) error {
+	if err := deadstrip.File(path); err != nil {
+		return err
+	}
+	return deadstrip.CheckFile(path)
+}
+
+func compilerFields(env []string) (cc, cxx, sdk string) {
+	for _, entry := range env {
+		switch {
+		case strings.HasPrefix(entry, "CC="):
+			cc = strings.TrimPrefix(entry, "CC=")
+		case strings.HasPrefix(entry, "CXX="):
+			cxx = strings.TrimPrefix(entry, "CXX=")
+		case strings.HasPrefix(entry, "SDKROOT="):
+			sdk = strings.TrimPrefix(entry, "SDKROOT=")
+		}
+	}
+	return cc, cxx, sdk
 }
 
 func ezaCargoEnv(base []string, srcRoot, goos, cargoPath, clang, clangxx, sdk string) []string {
@@ -645,8 +1007,192 @@ func ezaCargoEnv(base []string, srcRoot, goos, cargoPath, clang, clangxx, sdk st
 	return withEnv(env, "CARGO_TARGET_DIR", filepath.Join(srcRoot, "target"))
 }
 
+func ezaCargoArgs() []string {
+	return []string{"build", "--release", "--features", "vendored-libgit2"}
+}
+
+func patchNvimTree(srcRoot, scriptDir string) error {
+	cmakePath := filepath.Join(srcRoot, "cmake.deps", "cmake", "BuildUnibilium.cmake")
+	text, err := os.ReadFile(cmakePath)
+	if err != nil {
+		return fmt.Errorf("read BuildUnibilium.cmake: %w", err)
+	}
+	next, err := patchNvimUnibilium(string(text))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(cmakePath, []byte(next), 0644); err != nil {
+		return err
+	}
+	patch := filepath.Join(scriptDir, "third_party", "patches", "unibilium_no_host.patch")
+	if _, err := os.Stat(patch); err != nil {
+		return fmt.Errorf("unibilium patch: %w", err)
+	}
+	return nil
+}
+
+// patchNvimUnibilium makes the unibilium subproject apply the host-search patch.
+// CMAKE_EXTRA_FLAGS does not reach that subproject.
+func patchNvimUnibilium(cmakeText string) (string, error) {
+	const needle = "  CMAKE_ARGS ${DEPS_CMAKE_ARGS}\n"
+	const repl = "  PATCH_COMMAND /usr/bin/patch -p1 -i \"$ENV{DEVLAYER_UNIBI_PATCH}\"\n  CMAKE_ARGS ${DEPS_CMAKE_ARGS} -DTERMINFO_DIRS=\n"
+	if strings.Contains(cmakeText, "DEVLAYER_UNIBI_PATCH") && strings.Contains(cmakeText, "-DTERMINFO_DIRS=") {
+		return cmakeText, nil
+	}
+	if !strings.Contains(cmakeText, needle) {
+		return "", fmt.Errorf("BuildUnibilium.cmake has no CMAKE_ARGS line")
+	}
+	return strings.Replace(cmakeText, needle, repl, 1), nil
+}
+
+func nvimMakeArgs(installDir, staticPrefix string) []string {
+	extra := "-DENABLE_LIBINTL=OFF -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew"
+	if staticPrefix != "" {
+		extra += " -DICONV_LIBRARY=" + filepath.Join(staticPrefix, "iconv", "lib", "libiconv.a")
+		extra += " -DICONV_INCLUDE_DIR=" + filepath.Join(staticPrefix, "iconv", "include")
+	}
+	return []string{
+		"CMAKE_BUILD_TYPE=Release",
+		"CMAKE_INSTALL_PREFIX=" + installDir,
+		"CMAKE_EXTRA_FLAGS=" + extra,
+	}
+}
+
+func htopConfigureArgs(staticPrefix string) []string {
+	args := []string{"CFLAGS=-Os -DNDEBUG"}
+	if staticPrefix == "" {
+		return args
+	}
+	inc := filepath.Join(staticPrefix, "ncurses", "include")
+	wide := filepath.Join(inc, "ncursesw")
+	args[0] = "CFLAGS=-Os -DNDEBUG -I" + wide + " -I" + inc
+	return append(args,
+		"CURSES_CFLAGS=-I"+wide+" -I"+inc,
+		"CURSES_LIBS="+filepath.Join(staticPrefix, "ncurses", "lib", "libncursesw.a"),
+	)
+}
+
+func staticPrefix(env []string) string {
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "DEVLAYER_STATIC=") {
+			return strings.TrimPrefix(entry, "DEVLAYER_STATIC=")
+		}
+	}
+	return ""
+}
+
+func blockHostPkgConfig(env []string) []string {
+	env = dropEnv(env, "LIBGIT2_NO_VENDOR")
+	env = withEnv(env, "PKG_CONFIG", "/usr/bin/false")
+	env = withEnv(env, "PKG_CONFIG_PATH", "")
+	return withEnv(env, "PKG_CONFIG_LIBDIR", "")
+}
+
+func dropEnv(env []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func buildDarwinStaticLibs(vers *versions.Versions, cc []string, scriptDir string) error {
+	prefix := staticPrefix(cc)
+	if prefix == "" {
+		return nil
+	}
+	urls := binaries.SourceArchiveURLs(vers)
+	if err := buildAutotoolsStatic("libiconv", urls["libiconv"], filepath.Join(prefix, "iconv"), cc, []string{
+		"--disable-shared",
+		"--enable-static",
+		"--disable-nls",
+	}, false, nil); err != nil {
+		return err
+	}
+	return buildAutotoolsStatic("ncurses", urls["ncurses"], filepath.Join(prefix, "ncurses"), cc, []string{
+		"--disable-db-install",
+		"--enable-widec",
+		"--without-ada",
+		"--without-cxx",
+		"--without-debug",
+		"--without-manpages",
+		"--without-progs",
+		"--without-shared",
+		"--without-tests",
+	}, true, func(src string) ([]string, func(string) error, error) {
+		tic, infocmp, names, err := terminfo.Prepare(src, scriptDir)
+		if err != nil {
+			return nil, nil, err
+		}
+		return terminfo.StaticOptions(names, tic, infocmp), func(configured string) error {
+			return terminfo.Check(configured, names)
+		}, nil
+	})
+}
+
+func buildAutotoolsStatic(label, url, prefix string, cc, configure []string, serial bool, before func(string) ([]string, func(string) error, error)) error {
+	if url == "" {
+		return fmt.Errorf("%s source url is empty", label)
+	}
+	fmt.Printf("  %s (static)\n", label)
+	sum, err := sums.Must(url)
+	if err != nil {
+		return err
+	}
+	srcDir, err := os.MkdirTemp("", "devlayer-"+label+"-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(srcDir)
+	if err := download.TarGzFull(url, srcDir, 0, sum); err != nil {
+		return fmt.Errorf("download %s: %w", label, err)
+	}
+	srcRoot, err := tarballRoot(srcDir, label+"-", label)
+	if err != nil {
+		return err
+	}
+	if err := settleTree(srcRoot, label); err != nil {
+		return err
+	}
+	var extra []string
+	var check func(string) error
+	if before != nil {
+		extra, check, err = before(srcRoot)
+		if err != nil {
+			return err
+		}
+	}
+	args := append([]string{"--prefix=" + prefix}, configure...)
+	args = append(args, extra...)
+	env := htopBuildEnv(withCompiler(os.Environ(), cc))
+	if err := run(srcRoot, env, "./configure", args...); err != nil {
+		return fmt.Errorf("%s configure: %w", label, err)
+	}
+	if check != nil {
+		if err := check(srcRoot); err != nil {
+			return fmt.Errorf("%s terminfo: %w", label, err)
+		}
+	}
+	makeBin := buildMakeTool(runtime.GOOS)
+	jobs := fmt.Sprintf("-j%d", runtime.NumCPU())
+	if serial {
+		jobs = "-j1"
+	}
+	if err := run(srcRoot, env, makeBin, jobs); err != nil {
+		return fmt.Errorf("%s build: %w", label, err)
+	}
+	if err := run(srcRoot, env, makeBin, "install"); err != nil {
+		return fmt.Errorf("%s install: %w", label, err)
+	}
+	return nil
+}
+
 // buildMake compiles GNU make from source.
-func buildMake(binDir string, vers *versions.Versions) error {
+func buildMake(binDir string, vers *versions.Versions, cc []string) error {
 	fmt.Println("  make (building from source)")
 
 	srcDir, err := os.MkdirTemp("", "devlayer-make-*")
@@ -671,7 +1217,7 @@ func buildMake(binDir string, vers *versions.Versions) error {
 		return err
 	}
 
-	env := htopBuildEnv(os.Environ())
+	env := htopBuildEnv(withCompiler(os.Environ(), cc))
 	if err := run(srcRoot, env, "./configure", "CFLAGS=-Os -DNDEBUG"); err != nil {
 		return fmt.Errorf("make configure: %w", err)
 	}
@@ -681,7 +1227,7 @@ func buildMake(binDir string, vers *versions.Versions) error {
 	if err := copyFile(filepath.Join(srcRoot, "make"), filepath.Join(binDir, "make")); err != nil {
 		return fmt.Errorf("copy make: %w", err)
 	}
-	return deadstrip.File(filepath.Join(binDir, "make"))
+	return sealDarwin(filepath.Join(binDir, "make"))
 }
 
 func createZigCCWrappers(binDir string) error {
@@ -1038,6 +1584,25 @@ func FindScriptDir(embeddedVersionsEnv, nvimPackLock string) (string, bool, erro
 		return "", true, err
 	}
 	return tmp, true, nil
+}
+
+// WriteEmbeddedTree writes files for an installed CLI that has no checkout.
+// A .sh file is executable. A checkout already has these files.
+func WriteEmbeddedTree(dir string, files map[string]string) error {
+	for rel, body := range files {
+		path := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return err
+		}
+		mode := os.FileMode(0644)
+		if strings.HasSuffix(rel, ".sh") {
+			mode = 0755
+		}
+		if err := os.WriteFile(path, []byte(body), mode); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // wrapper defines a tool that needs a wrapper script to set env vars before

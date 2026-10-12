@@ -11,13 +11,11 @@ The hermetic claim stays a separate check.
 //! A binary with no policy fails.
 //! This file does not change the hermetic claim.
 
-use crate::claim;
 use crate::elf::header::is_elf;
-use crate::kind::{self, Kind};
 use crate::macho::header::{is_macho, Image};
-use crate::macho::load::{Commands, Slice as MachSlice};
+use crate::macho::load::{Commands, DylibCmd, Slice as MachSlice};
 use crate::pe::header::is_pe;
-use crate::policy::{FileSnap, Set, SliceSnap};
+use crate::policy::{ElfSnap, FileSnap, MachoDylib, MachoSlice, MachoSnap, PeSnap, Records, Set};
 use crate::{open, Binary};
 use std::fs;
 use std::path::Path;
@@ -121,32 +119,20 @@ fn slash_path(path: &Path) -> String {
 fn file_snap(file: &Binary) -> Result<Option<FileSnap>, String> {
     match file {
         Binary::Elf { load, .. } => Ok(Some(FileSnap {
-            format: "elf",
-            universal: None,
-            cpus: Vec::new(),
-            slices: vec![one_slice(
-                load.kind,
-                load.pie,
-                load.interp.clone(),
-                load.needed.clone(),
-                load.delay.clone(),
-                load.runpath.clone(),
-                load.rpath.clone(),
-            )],
+            records: Records::Elf(ElfSnap {
+                pt_interp: load.interp.clone(),
+                dt_needed: load.needed.clone(),
+                dt_runpath: load.runpath.clone(),
+                dt_rpath: load.rpath.clone(),
+                df_1_pie: load.pie,
+            }),
         })),
         Binary::Pe { load, .. } => Ok(Some(FileSnap {
-            format: "pe",
-            universal: None,
-            cpus: Vec::new(),
-            slices: vec![one_slice(
-                load.kind,
-                load.pie,
-                load.interp.clone(),
-                load.needed.clone(),
-                load.delay.clone(),
-                load.runpath.clone(),
-                load.rpath.clone(),
-            )],
+            records: Records::Pe(PeSnap {
+                image_import_descriptor: load.needed.clone(),
+                img_delay_descr: load.delay.clone(),
+                dynamic_base: load.pie,
+            }),
         })),
         Binary::Macho {
             image,
@@ -154,28 +140,6 @@ fn file_snap(file: &Binary) -> Result<Option<FileSnap>, String> {
             slices,
         } => macho_snap(image, commands, slices),
         Binary::Zip(_) | Binary::Dmg(_) | Binary::Tiff(_) => Ok(None),
-    }
-}
-
-fn one_slice(
-    kind: Kind,
-    pie: bool,
-    interp: Option<String>,
-    needed: Vec<String>,
-    delay: Vec<String>,
-    runpath: Vec<String>,
-    rpath: Vec<String>,
-) -> SliceSnap {
-    let hermetic = claim::is_hermetic(kind, interp.as_deref(), &needed);
-    SliceSnap {
-        kind: kind::name(kind),
-        pie,
-        hermetic,
-        interp,
-        needed,
-        delay,
-        runpath,
-        rpath,
     }
 }
 
@@ -189,40 +153,70 @@ fn macho_snap(
             if slices.is_empty() || slices.iter().any(|slice| slice.thin.is_none()) {
                 return Err("unchecked mach-o".into());
             }
-            let cpus = slices
+            let cputype = slices
                 .iter()
-                .map(|slice| crate::macho::cpu_name(slice.cputype).unwrap_or(""))
+                .map(|slice| crate::macho::cpu_const(slice.cputype))
+                .collect();
+            let cpusubtype = slices
+                .iter()
+                .map(|slice| crate::macho::subtype_const(slice.cputype, slice.cpusubtype))
+                .collect();
+            let filetype = slices
+                .iter()
+                .map(|slice| {
+                    crate::macho::file_type_name(slice.thin.as_ref().unwrap().filetype).to_string()
+                })
                 .collect();
             let rows = slices
                 .iter()
-                .map(|slice| load_slice(&slice.commands.load))
+                .map(|slice| {
+                    let flags = slice.thin.as_ref().unwrap().flags;
+                    load_slice(&slice.commands.load, flags)
+                })
                 .collect();
             Ok(Some(FileSnap {
-                format: "macho",
-                universal: crate::macho::universal_word(slices.iter().map(|slice| slice.cputype)),
-                cpus,
-                slices: rows,
+                records: Records::Macho(MachoSnap {
+                    cputype,
+                    cpusubtype,
+                    filetype,
+                    slices: rows,
+                }),
             }))
         }
         Image::Thin(thin) => Ok(Some(FileSnap {
-            format: "macho",
-            universal: None,
-            cpus: vec![crate::macho::cpu_name(thin.cputype).unwrap_or("")],
-            slices: vec![load_slice(&commands.load)],
+            records: Records::Macho(MachoSnap {
+                cputype: vec![crate::macho::cpu_const(thin.cputype)],
+                cpusubtype: vec![crate::macho::subtype_const(thin.cputype, thin.cpusubtype)],
+                filetype: vec![crate::macho::file_type_name(thin.filetype).to_string()],
+                slices: vec![load_slice(&commands.load, thin.flags)],
+            }),
         })),
     }
 }
 
-fn load_slice(load: &crate::macho::load::Load) -> SliceSnap {
-    one_slice(
-        load.kind,
-        load.pie,
-        load.interp.clone(),
-        load.names(),
-        load.delay.clone(),
-        load.runpath.clone(),
-        load.rpath.clone(),
-    )
+fn load_slice(load: &crate::macho::load::Load, flags: u32) -> MachoSlice {
+    MachoSlice {
+        mh_pie: load.pie,
+        flags: crate::macho::flag_names(flags),
+        lc_load_dylinker: load.interp.clone(),
+        lc_load_dylib: dylibs(load, DylibCmd::Load),
+        lc_load_weak_dylib: dylibs(load, DylibCmd::Weak),
+        lc_reexport_dylib: dylibs(load, DylibCmd::Reexport),
+        lc_load_upward_dylib: dylibs(load, DylibCmd::Upward),
+        lc_rpath: load.rpath.clone(),
+    }
+}
+
+fn dylibs(load: &crate::macho::load::Load, cmd: DylibCmd) -> Vec<MachoDylib> {
+    load.needed
+        .iter()
+        .filter(|row| row.cmd == cmd)
+        .map(|row| MachoDylib {
+            name: row.name.clone(),
+            compatibility_version: row.compat.clone(),
+            current_version: row.current.clone(),
+        })
+        .collect()
 }
 
 fn link_in_tree(root: &Path, path: &Path, link: &Path) -> bool {

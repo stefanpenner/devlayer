@@ -1,5 +1,10 @@
-exports_files([
-    "foreign_cc_make_glob.patch",
-    "hermetic_cc_zig_0_16.patch",
-    "toybox_apple_nproc.patch",
-])
+exports_files(
+    [
+        "foreign_cc_make_glob.patch",
+        "hermetic_cc_zig_0_16.patch",
+        "nvim_unibilium_superstatic.patch",
+        "toybox_apple_nproc.patch",
+        "unibilium_no_host.patch",
+    ],
+    visibility = ["//visibility:public"],
+)

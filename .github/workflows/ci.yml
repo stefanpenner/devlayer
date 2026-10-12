@@ -40,6 +40,11 @@ jobs:
           key: bazel-linux-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: bazel-linux-
 
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.83.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Build CLI
         run: bazel build //:devlayer
 
@@ -216,6 +221,9 @@ jobs:
           fi
 
           echo "==> All checks passed."
+
+      - name: Smoke tools in a pinned container
+        run: bazel test //linux:smoke_${{ matrix.arch }} --test_output=errors
 
       - name: Generate checksum
         run: sha256sum devlayer-linux-${{ matrix.arch }}.tar.gz > devlayer-linux-${{ matrix.arch }}.tar.gz.sha256

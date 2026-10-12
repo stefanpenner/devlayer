@@ -10,11 +10,13 @@ func TestEzaBuildEnvDarwinUsesCargoAndSystemPath(t *testing.T) {
 	got := ezaBuildEnv(nil, "darwin", `/Users/stef/.cargo/bin/cargo`, "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
 
 	want := map[string]bool{
-		"CC=/usr/bin/clang":                        false,
-		"CXX=/usr/bin/clang++":                     false,
-		"SDKROOT=/sdk":                             false,
-		"LDFLAGS=-Wl,-dead_strip_dylibs":           false,
-		"RUSTFLAGS=-C link-arg=-dead_strip_dylibs": false,
+		"CC=/usr/bin/clang":              false,
+		"CXX=/usr/bin/clang++":           false,
+		"SDKROOT=/sdk":                   false,
+		"LDFLAGS=-Wl,-dead_strip_dylibs": false,
+		"RUSTFLAGS=-C link-arg=-dead_strip_dylibs -C linker=/usr/bin/clang": false,
+		"LIBZ_SYS_STATIC=1":         false,
+		"PKG_CONFIG=/usr/bin/false": false,
 	}
 
 	var path string
@@ -33,8 +35,28 @@ func TestEzaBuildEnvDarwinUsesCargoAndSystemPath(t *testing.T) {
 		}
 	}
 
-	if path != "/Users/stef/.cargo/bin:/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin" {
+	if path != "/Users/stef/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin" {
 		t.Fatalf("unexpected PATH: %s", path)
+	}
+	if strings.Contains(path, "homebrew") || strings.Contains(path, "/usr/local") {
+		t.Fatalf("host package path: %s", path)
+	}
+}
+
+func TestEzaBuildEnvDropsVendoredOverride(t *testing.T) {
+	base := []string{"LIBGIT2_NO_VENDOR=1"}
+	got := ezaBuildEnv(base, "darwin", `/Users/stef/.cargo/bin/cargo`, "/usr/bin/clang", "/usr/bin/clang++", "/sdk")
+	for _, entry := range got {
+		if strings.HasPrefix(entry, "LIBGIT2_NO_VENDOR=") {
+			t.Fatalf("kept host libgit2 override: %s", entry)
+		}
+	}
+}
+
+func TestEzaCargoArgsVendorsLibgit2(t *testing.T) {
+	got := strings.Join(ezaCargoArgs(), " ")
+	if got != "build --release --features vendored-libgit2" {
+		t.Fatalf("%s", got)
 	}
 }
 

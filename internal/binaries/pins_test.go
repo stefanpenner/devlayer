@@ -16,11 +16,12 @@ import (
 func TestSourceArchiveURLs(t *testing.T) {
 	got := SourceArchiveURLs(testVers())
 	want := map[string]string{
-		"btop":    "https://github.com/aristocratos/btop/archive/refs/tags/v1.4.7.tar.gz",
-		"htop":    "https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz",
-		"make":    "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
-		"ncurses": "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
-		"git":     "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.55.0.tar.xz",
+		"btop":                     "https://github.com/aristocratos/btop/archive/refs/tags/v1.4.7.tar.gz",
+		"htop":                     "https://github.com/htop-dev/htop/releases/download/3.5.3/htop-3.5.3.tar.xz",
+		"make":                     "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+		"ncurses":                  "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
+		"libiconv":                 "https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz",
+		"git":                      "https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.55.0.tar.xz",
 		"zsh":                      "https://www.zsh.org/pub/zsh-5.9.2.tar.xz",
 		"zlib":                     "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
 		"toybox":                   "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
@@ -39,6 +40,8 @@ func TestSourceArchiveURLs(t *testing.T) {
 		"nvim_treesitter_vimdoc":   "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
 		"nvim_treesitter_query":    "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
 		"nvim_treesitter_markdown": "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
+		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
+		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len %d want %d (%v)", len(got), len(want), got)

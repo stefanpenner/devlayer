@@ -20,8 +20,19 @@ Linux compiles `git`, `zsh`, `nvim`, `htop`, `btop`, and `make` with Zig.
 The pin file records the other Linux archives.
 The macOS sysroot has no `zsh` binary and no `git`.
 The Linux sysroot has no `eza`.
+Bazel can build `eza` for Darwin and for Linux musl.
+That build turns the git feature off.
+The git feature needs libgit2 and openssl.
+Those libraries are not pinned here.
 No build fetches `gh`.
-A Darwin build compiles `nvim`, `htop`, `btop`, `eza`, and `make` on the host.
+A Darwin build compiles with Zig and the pinned SDK.
+`cmake` and `make` for the Darwin CLI still come from the host.
+`cargo` for `bininfo` and for Bazel `eza` is pinned.
+The Apple cargo action copies three libiconv headers from `tools/libiconv`.
+That action compiles them with zig.
+It does not call `configure` or `make`.
+The Darwin CLI still clones `eza` and uses host `cargo`.
+`codesign` stays on the Mac.
 A Windows build uses pinned archives.
 
 Wrappers set `GIT_EXEC_PATH`, `FPATH`, `VIMRUNTIME`, and `GOROOT`.
@@ -55,6 +66,28 @@ devlayer install
 Zig builds both Linux CPUs.
 The command needs `bazel` on `PATH` and `MODULE.bazel` in the checkout.
 A Mac can build that Linux sysroot.
+
+`bazel build //linux:bundle_aarch64 --config=rbe` sends actions to a local Buildbarn worker.
+The address is `grpc://127.0.0.1:8980`.
+The Mac runs repo rules, Starlark, and bzlmod.
+The worker runs the compile.
+The worker image is Alpine 3.22.1.
+`rbe/image.bzl` pins one digest per CPU.
+The digest is the registry manifest.
+This repo does not boot a microVM.
+Firecracker needs Linux KVM.
+This machine is macOS.
+No worker process lives in this repo.
+The build fails at the connection until a worker listens.
+The config sets `--spawn_strategy=remote`.
+The config does not allow a local fallback.
+The worker must advertise `OSFamily=Linux` and the same `container-image`.
+The runner container has no NIC.
+The worker must seal each action with linux-sandbox.
+That seal is private mounts and a private process list.
+This repo cannot check that seal.
+`codesign` stays on the Mac.
+Do not use `--config=rbe` for that step.
 A Linux machine can build the macOS objects.
 The macOS input is the pinned SDK package.
 A Windows build does not compile.
@@ -124,6 +157,9 @@ Add a compiled Linux tool.
 
 `_BUNDLE` names the tools in the sysroot.
 `//linux:bundle_<arch>` is the Linux sysroot target.
+The bundle action copies pinned repo files.
+It does not download.
+Add a prebuilt label in `_bins`, `_trees`, or `_FILES` in `linux/defs.bzl`.
 
 Add a pinned archive.
 

@@ -12,8 +12,8 @@ Another crate calls the same functions.
 //! `facts` feeds a start claim for ELF, Mach-O, and PE.
 //! `zip`, `dmg`, and `tiff` each read one container.
 //! An ARW file is a TIFF file.
-//! `osload` checks host libraries on ELF, Mach-O, and PE.
-//! `policy` reads the allow list for that check.
+//! `osload` checks one binary against its policy file.
+//! `policy` reads the loader records for one binary.
 
 pub mod claim;
 pub mod dmg;

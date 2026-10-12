@@ -15,6 +15,18 @@ var versionsEnv string
 //go:embed config/nvim/nvim-pack-lock.json
 var nvimPackLock string
 
+//go:embed third_party/ncurses/fallbacks.txt
+var terminfoFallbacks string
+
+//go:embed third_party/ncurses/aliases.ti
+var terminfoAliases string
+
+//go:embed third_party/ncurses/configure.sh
+var terminfoConfigure string
+
+//go:embed third_party/patches/unibilium_no_host.patch
+var unibiNoHost string
+
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
@@ -71,6 +83,15 @@ func main() {
 	}
 	if isTmp {
 		defer os.RemoveAll(scriptDir)
+		if err := cmd.WriteEmbeddedTree(scriptDir, map[string]string{
+			"third_party/ncurses/fallbacks.txt":           terminfoFallbacks,
+			"third_party/ncurses/aliases.ti":              terminfoAliases,
+			"third_party/ncurses/configure.sh":            terminfoConfigure,
+			"third_party/patches/unibilium_no_host.patch": unibiNoHost,
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Auto-update before running the command (skip for upgrade/version).

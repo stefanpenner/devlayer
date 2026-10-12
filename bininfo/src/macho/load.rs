@@ -646,10 +646,12 @@ mod tests {
         );
         finish(&mut bytes, Data::Little, 2);
         let file = crate::open(&bytes, false).unwrap();
-        let policy = crate::policy::devlayer().unwrap();
-        assert!(crate::osload::host_libraries(&file, &policy)
-            .unwrap()
-            .is_empty());
+        let set = crate::policy::parse_set(&[(
+            "bin/x",
+            "format = \"macho\"\ncputype = [\"CPU_TYPE_X86_64\"]\nfiletype = \"MH_EXECUTE\"\nMH_PIE = true\nLC_LOAD_DYLINKER = \"/usr/lib/dyld\"\nLC_LOAD_DYLIB = [{ name = \"/usr/lib/libSystem.B.dylib\", why = \"macOS has no static libc.\" }]\n",
+        )])
+        .unwrap();
+        assert!(crate::osload::judge("bin/x", &file, &set).is_ok());
 
         push_text(
             &mut bytes,
@@ -660,10 +662,8 @@ mod tests {
         );
         finish(&mut bytes, Data::Little, 3);
         let file = crate::open(&bytes, false).unwrap();
-        assert_eq!(
-            crate::osload::host_libraries(&file, &policy).unwrap(),
-            vec!["/usr/lib/libiconv.2.dylib".to_string()]
-        );
+        let err = crate::osload::judge("bin/x", &file, &set).unwrap_err();
+        assert!(err.contains("/usr/lib/libiconv.2.dylib"), "{err}");
     }
 
     #[test]

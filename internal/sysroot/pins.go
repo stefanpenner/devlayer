@@ -45,9 +45,9 @@ func sources() map[string]source {
 			sha256:  "ec35b18a6c593cf98c3e30db8b98ff93e8940a8c4e690e66b41dfc011d678110",
 		},
 		"ncurses": {
-			version: "6.5",
-			url:     "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz",
-			sha256:  "136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6",
+			version: "6.6",
+			url:     "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
+			sha256:  "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11",
 		},
 		"curl": {
 			version: "8.15.0",

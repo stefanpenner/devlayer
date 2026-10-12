@@ -19,6 +19,7 @@ EZA_VERSION=0.23.5
 RG_VERSION=15.2.0
 DELTA_VERSION=0.19.2
 LAZYGIT_VERSION=0.65.1
+GLOW_VERSION=3.0.0
 BAT_EXTRAS_VERSION=2024.08.24
 JQ_VERSION=1.8.2
 DIRENV_VERSION=2.37.1
@@ -37,6 +38,7 @@ BTOP_VERSION=1.4.7
 HTOP_VERSION=3.5.3
 MAKE_VERSION=4.4.1
 NCURSES_VERSION=6.6
+ICONV_VERSION=1.18
 GIT_VERSION=2.55.0
 ZSH_VERSION=5.9.2
 ZLIB_VERSION=1.3.1
@@ -94,6 +96,7 @@ func TestURLs(t *testing.T) {
 				"dust":                         "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-unknown-linux-musl.tar.gz",
 				"fzf":                          "https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-linux_amd64.tar.gz",
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_x86_64.tar.gz",
+				"glow":                         "https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Linux_x86_64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz",
 				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_amd64.tar.gz",
@@ -121,6 +124,7 @@ func TestURLs(t *testing.T) {
 				"dust":                         "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-aarch64-unknown-linux-musl.tar.gz",
 				"fzf":                          "https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-linux_arm64.tar.gz",
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Linux_arm64.tar.gz",
+				"glow":                         "https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Linux_arm64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-arm64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-arm64.tar.gz",
 				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_linux_arm64.tar.gz",
@@ -148,6 +152,7 @@ func TestURLs(t *testing.T) {
 				"dust":                         "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-aarch64-apple-darwin.tar.gz",
 				"fzf":                          "https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-darwin_arm64.tar.gz",
 				"lazygit":                      "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Darwin_arm64.tar.gz",
+				"glow":                         "https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Darwin_arm64.tar.gz",
 				"age":                          "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz",
 				"age-keygen":                   "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz",
 				"shh":                          "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_darwin_arm64.tar.gz",
@@ -176,6 +181,7 @@ func TestURLs(t *testing.T) {
 				"eza":        "https://github.com/eza-community/eza/releases/download/v0.23.5/eza.exe_x86_64-pc-windows-gnu.zip",
 				"fzf":        "https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-windows_amd64.zip",
 				"lazygit":    "https://github.com/jesseduffield/lazygit/releases/download/v0.65.1/lazygit_0.65.1_Windows_x86_64.zip",
+				"glow":       "https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Windows_x86_64.zip",
 				"age":        "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-windows-amd64.zip",
 				"age-keygen": "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-windows-amd64.zip",
 				"shh":        "https://github.com/stefanpenner/shh/releases/download/v0.7.1/shh_windows_amd64.zip",
@@ -262,7 +268,7 @@ func TestURLsJqWindowsVsUnix(t *testing.T) {
 
 var allTools = []string{
 	"fd", "bat", "rg", "delta", "dust", "eza",
-	"fzf", "lazygit",
+	"fzf", "lazygit", "glow",
 	"age", "age-keygen", "shh",
 	"direnv", "jq",
 	"batman", "nvim", "go", "zig", "git", "fzf-shell",

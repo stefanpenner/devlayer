@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "loadcheck",
+    srcs = [
+        "check.go",
+        "elfimage.go",
+    ],
+    importpath = "github.com/stefanpenner/devlayer/internal/loadcheck",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "loadcheck_test",
+    srcs = ["check_test.go"],
+    data = [
+        "//bininfo",
+        "//bininfo:policy",
+        "//:devlayer",
+    ],
+    embed = [":loadcheck"],
+    env = {
+        "BININFO": "$(rootpath //bininfo)",
+        "BININFO_POLICY": "bininfo/policy",
+        "DEVLAYER_BIN": "$(rootpath //:devlayer)",
+    },
+)

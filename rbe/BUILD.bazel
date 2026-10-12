@@ -1,0 +1,3 @@
+load(":platforms.bzl", "declare_rbe_platforms")
+
+declare_rbe_platforms()

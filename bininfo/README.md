@@ -98,7 +98,7 @@ Put each flag before the file name.
 ```
 cargo run --quiet -- [--json] [--symbols] [--check] [--expect <claim>] <file>
 cargo run --quiet -- [--json] --claims <file>
-cargo run --quiet -- --policy <file> <path>
+cargo run --quiet -- --policy <directory> <path>
 ```
 
 A common `needed` name has a trailing note.
@@ -123,15 +123,23 @@ Add `--json` to print a check as JSON.
 This check does not read `dlopen`.
 
 `--policy` checks one file or a directory.
-The policy file is TOML.
-The keys are the bininfo field names.
-`allow` and `prefix` are membership.
-Each entry has a name and a why.
-The why says why that name is required.
-A bare value is the exact fact.
-`empty` means that list is empty.
+The policy root is a directory.
+One TOML file is one binary.
+The file path, minus `.toml`, is the binary path.
+Each key is the record name in that file.
+ELF uses `DT_NEEDED` and `PT_INTERP`.
+Mach-O uses `LC_LOAD_DYLIB` and `LC_LOAD_DYLINKER`.
+PE uses `IMAGE_IMPORT_DESCRIPTOR` and `ImgDelayDescr`.
+Each library name has a why.
+A bare name is an error.
+A record key that is absent means that record is empty.
+An absent `flags` key does not check header flags.
+An absent `cpusubtype` key does not check the CPU subtype.
+An absent dylib version does not check that version.
+
 A script passes.
-`libiconv` and `libz` fail under `policy/devlayer.toml`.
+A binary with no policy file fails.
+`policy/bin/devlayer.toml` does not name `libiconv` or `libz`.
 A symlink that leaves the directory fails.
 This check does not change `hermetic`.
 

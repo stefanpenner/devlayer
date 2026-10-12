@@ -174,21 +174,25 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 	htop := vers.Get("HTOP_VERSION")
 	makeVer := vers.Get("MAKE_VERSION")
 	ncurses := vers.Get("NCURSES_VERSION")
+	iconv := vers.Get("ICONV_VERSION")
 	git := vers.Get("GIT_VERSION")
 	zsh := vers.Get("ZSH_VERSION")
 	zlib := vers.Get("ZLIB_VERSION")
 	nvim := vers.Get("NVIM_VERSION")
 	toybox := vers.Get("TOYBOX_VERSION")
 	out := map[string]string{
-		"btop":    fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
-		"htop":    fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
-		"make":    fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", makeVer),
-		"ncurses": fmt.Sprintf("https://ftp.gnu.org/gnu/ncurses/ncurses-%s.tar.gz", ncurses),
-		"git":     fmt.Sprintf("https://mirrors.edge.kernel.org/pub/software/scm/git/git-%s.tar.xz", git),
-		"zsh":     fmt.Sprintf("https://www.zsh.org/pub/zsh-%s.tar.xz", zsh),
-		"zlib":    fmt.Sprintf("https://zlib.net/fossils/zlib-%s.tar.gz", zlib),
-		"nvim":    fmt.Sprintf("https://github.com/neovim/neovim/archive/refs/tags/v%s.tar.gz", nvim),
-		"toybox":  fmt.Sprintf("https://github.com/landley/toybox/archive/refs/tags/%s.tar.gz", toybox),
+		"btop":     fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
+		"htop":     fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
+		"make":     fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", makeVer),
+		"ncurses":  fmt.Sprintf("https://ftp.gnu.org/gnu/ncurses/ncurses-%s.tar.gz", ncurses),
+		"libiconv": fmt.Sprintf("https://ftp.gnu.org/gnu/libiconv/libiconv-%s.tar.gz", iconv),
+		"git":      fmt.Sprintf("https://mirrors.edge.kernel.org/pub/software/scm/git/git-%s.tar.xz", git),
+		"zsh":      fmt.Sprintf("https://www.zsh.org/pub/zsh-%s.tar.xz", zsh),
+		"zlib":     fmt.Sprintf("https://zlib.net/fossils/zlib-%s.tar.gz", zlib),
+		"nvim":                     fmt.Sprintf("https://github.com/neovim/neovim/archive/refs/tags/v%s.tar.gz", nvim),
+		"toybox":                   fmt.Sprintf("https://github.com/landley/toybox/archive/refs/tags/%s.tar.gz", toybox),
+		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
+		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
 	}
 	// These URLs are neovim v0.12.5 cmake.deps/deps.txt. They are not version keys.
 	for k, u := range nvimDepURLs() {
@@ -201,20 +205,20 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 // Keep them equal to cmake.deps/deps.txt for NVIM_VERSION.
 func nvimDepURLs() map[string]string {
 	return map[string]string{
-		"nvim_libuv":                "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz",
-		"nvim_luajit":               "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz",
-		"nvim_lua_compat53":         "https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz",
-		"nvim_luv":                  "https://github.com/luvit/luv/archive/1.52.1-0.tar.gz",
-		"nvim_lpeg":                 "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz",
-		"nvim_unibilium":            "https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz",
-		"nvim_utf8proc":             "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz",
-		"nvim_treesitter":           "https://github.com/tree-sitter/tree-sitter/archive/v0.26.13.tar.gz",
-		"nvim_treesitter_c":         "https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz",
-		"nvim_treesitter_lua":       "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz",
-		"nvim_treesitter_vim":       "https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz",
-		"nvim_treesitter_vimdoc":    "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
-		"nvim_treesitter_query":     "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
-		"nvim_treesitter_markdown":  "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
+		"nvim_libuv":               "https://github.com/libuv/libuv/archive/v1.52.1.tar.gz",
+		"nvim_luajit":              "https://github.com/luajit/luajit/archive/fbb36bb6bfa88716a47c58bcf9ce9f2ef752abac.tar.gz",
+		"nvim_lua_compat53":        "https://github.com/lunarmodules/lua-compat-5.3/archive/v0.13.tar.gz",
+		"nvim_luv":                 "https://github.com/luvit/luv/archive/1.52.1-0.tar.gz",
+		"nvim_lpeg":                "https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz",
+		"nvim_unibilium":           "https://github.com/neovim/unibilium/archive/v2.1.2.tar.gz",
+		"nvim_utf8proc":            "https://github.com/juliastrings/utf8proc/archive/v2.11.3.tar.gz",
+		"nvim_treesitter":          "https://github.com/tree-sitter/tree-sitter/archive/v0.26.13.tar.gz",
+		"nvim_treesitter_c":        "https://github.com/tree-sitter/tree-sitter-c/archive/v0.24.1.tar.gz",
+		"nvim_treesitter_lua":      "https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/v0.5.0.tar.gz",
+		"nvim_treesitter_vim":      "https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz",
+		"nvim_treesitter_vimdoc":   "https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz",
+		"nvim_treesitter_query":    "https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz",
+		"nvim_treesitter_markdown": "https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz",
 	}
 }
 

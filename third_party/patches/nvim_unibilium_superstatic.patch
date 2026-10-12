@@ -1,0 +1,10 @@
+--- a/cmake.deps/cmake/BuildUnibilium.cmake
++++ b/cmake.deps/cmake/BuildUnibilium.cmake
+@@ -1,5 +1,6 @@
+ get_externalproject_options(unibilium ${DEPS_IGNORE_SHA})
+ ExternalProject_Add(unibilium
+   DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/unibilium
+-  CMAKE_ARGS ${DEPS_CMAKE_ARGS}
++  PATCH_COMMAND /usr/bin/patch -p1 -i "$ENV{DEVLAYER_UNIBI_PATCH}"
++  CMAKE_ARGS ${DEPS_CMAKE_ARGS} -DTERMINFO_DIRS=
+   ${EXTERNALPROJECT_OPTIONS})

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/stefanpenner/devlayer/internal/terminfo"
 )
 
 // Arch is a Linux musl target Zig can compile.
@@ -214,9 +216,13 @@ func (b *builder) cmake(src string, extra ...string) error {
 }
 
 func (b *builder) ncurses(src string) error {
-	// macOS /usr/bin/tic is too old for ncurses 6.5's terminfo.src.
-	// Build tic with the host compiler, then let the cross build call it.
-	tic, err := b.hostTic(src)
+	// macOS /usr/bin/tic is too old for ncurses 6.6 terminfo.src.
+	// Prepare builds tic and infocmp from the same source.
+	repo, err := terminfo.RepoRoot()
+	if err != nil {
+		return err
+	}
+	tic, infocmp, names, err := terminfo.Prepare(src, repo)
 	if err != nil {
 		return err
 	}
@@ -232,46 +238,21 @@ func (b *builder) ncurses(src string) error {
 		"--enable-widec",
 		"--enable-overwrite",
 		"--disable-db-install",
-		"--with-fallbacks=xterm-256color,xterm,screen,tmux-256color,linux",
 	}
-	// tic and make_keys must run on this machine. CC is the Linux cross
-	// compiler, so those two programs need the host compiler.
-	hostCC := []string{"BUILD_CC=clang", "PATH=" + filepath.Dir(tic) + string(os.PathListSeparator) + "/usr/bin:/bin"}
+	args = append(args, terminfo.StaticOptions(names, tic, infocmp)...)
+	// make_keys must run on this machine. CC is the Linux cross compiler.
+	hostCC := []string{"BUILD_CC=clang"}
 	if err := b.run(src, hostCC, "./configure", args...); err != nil {
 		return err
 	}
-	// tic writes the terminfo database. Parallel make races those writes.
+	if err := terminfo.Check(src, names); err != nil {
+		return err
+	}
+	// tic writes compiled entries. Parallel make races those writes.
 	if err := b.run(src, hostCC, "make"); err != nil {
 		return err
 	}
 	return b.run(src, hostCC, "make", "install")
-}
-
-func (b *builder) hostTic(src string) (string, error) {
-	host := filepath.Join(b.root, "ncurses-host")
-	if err := b.run(b.root, nil, "cp", "-a", src, host); err != nil {
-		return "", err
-	}
-	hostEnv := []string{"CC=clang", "CXX=clang++", "BUILD_CC=clang"}
-	if err := b.run(host, hostEnv, "./configure",
-		"--prefix="+filepath.Join(b.root, "ncurses-host-prefix"),
-		"--without-shared",
-		"--without-cxx-binding",
-		"--without-debug",
-		"--without-tests",
-		"--without-manpages",
-	); err != nil {
-		return "", err
-	}
-	for _, dir := range []string{"include", "ncurses"} {
-		if err := b.run(host, hostEnv, "make", "-C", dir); err != nil {
-			return "", err
-		}
-	}
-	if err := b.run(host, hostEnv, "make", "-C", "progs", "tic"); err != nil {
-		return "", err
-	}
-	return filepath.Join(host, "progs", "tic"), nil
 }
 
 func (b *builder) run(dir string, extra []string, name string, args ...string) error {

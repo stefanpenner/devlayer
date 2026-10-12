@@ -8,6 +8,8 @@ load(":defs.bzl", "linux_targets")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["defs.bzl"])
+
 linux_targets("x86_64")
 
 linux_targets("aarch64")

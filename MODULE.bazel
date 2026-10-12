@@ -152,6 +152,8 @@ use_repo(
     "bat_extras",
     "fast_syntax_highlighting",
     "fzf_shell",
+    "gitstatusd_linux_aarch64",
+    "gitstatusd_linux_x86_64",
     "powerlevel10k",
     "zsh_autosuggestions",
     "zsh_history_substring_search",

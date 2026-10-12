@@ -1,8 +1,28 @@
 load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
 
-# Static wide ncurses. Fallbacks avoid a host tic binary.
+exports_files(
+    [
+        "BUILD.bazel",
+        "aliases.ti",
+        "configure.sh",
+        "fallbacks.txt",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# Static wide ncurses. configure.sh reads fallbacks.txt, builds host tic,
+# and passes --disable-database. The library does not open a terminfo directory.
 configure_make(
     name = "ncurses",
+    build_data = [
+        "aliases.ti",
+        "configure.sh",
+        "fallbacks.txt",
+        "//third_party/nvim:host_cc.sh",
+        "@macos_sdk//:sdk.tar",
+        "@zig_sdk//:zig",
+    ],
+    configure_in_place = True,
     configure_options = select({
         "//tools:linux_amd64": ["--host=x86_64-unknown-linux-musl"],
         "//tools:linux_arm64": ["--host=aarch64-unknown-linux-musl"],
@@ -11,7 +31,6 @@ configure_make(
         "--disable-db-install",
         "--enable-widec",
         "--without-ada",
-        "--without-database",
         "--without-cxx",
         "--without-debug",
         "--without-manpages",
@@ -19,15 +38,32 @@ configure_make(
         "--without-shared",
         "--without-tests",
     ],
+    configure_prefix = "$(execpath :configure.sh)",
     env = select({
         "//tools:is_linux": {
+            "BUILD_CC": "$(execpath //third_party/nvim:host_cc.sh)",
+            "BUILD_LDFLAGS": "",
+            "CFLAGS": "-Os -DNDEBUG",
+            "DEVLAYER_HOST_CC": "$(execpath //third_party/nvim:host_cc.sh)",
+            "DEVLAYER_HOST_CXX": "$(execpath //third_party/nvim:host_cc.sh)",
+            "DEVLAYER_SDKROOT": "$(execpath @macos_sdk//:sdk.tar)",
+            "LDFLAGS": "-static",
+            "NVIM_ZIG": "$(execpath @zig_sdk//:zig)",
+            "PATH": "/bin:/usr/bin",
+            "ZIG_GLOBAL_CACHE_DIR": "$$$$BUILD_TMPDIR$$$$/zig-cache",
+            "ZIG_LOCAL_CACHE_DIR": "$$$$BUILD_TMPDIR$$$$/zig-cache",
             # Empty cache skips the ar probe. A failed probe writes ARFLAGS "unknown".
             "cf_cv_ar_flags": "",
-            "CFLAGS": "-Os -DNDEBUG",
-            "LDFLAGS": "-static",
         },
         "//conditions:default": {
+            "BUILD_CC": "/usr/bin/clang",
+            "BUILD_LDFLAGS": "",
             "CFLAGS": "-Os -DNDEBUG",
+            "DEVLAYER_HOST_CC": "/usr/bin/clang",
+            "DEVLAYER_HOST_CXX": "/usr/bin/clang++",
+            "PATH": "/bin:/usr/bin",
+            # Apple libtool needs these flags. A failed probe writes ARFLAGS "unknown".
+            "cf_cv_ar_flags": "-static -o",
         },
     }),
     lib_source = "@ncurses_src//:all_srcs",

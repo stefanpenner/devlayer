@@ -461,24 +461,22 @@ mod tests {
     fn os_load_allows_kernel32_and_rejects_iconv() {
         let bytes = image(EXEC, DYNAMIC_BASE, &["KERNEL32.dll"]);
         let file = crate::open(&bytes, false).unwrap();
-        let policy = crate::policy::devlayer().unwrap();
-        assert!(crate::osload::host_libraries(&file, &policy)
-            .unwrap()
-            .is_empty());
+        let set = crate::policy::parse_set(&[(
+            "bin/x",
+            "format = \"pe\"\nIMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true\nIMAGE_IMPORT_DESCRIPTOR = [{ name = \"KERNEL32.dll\", why = \"The Windows base library.\" }]\n",
+        )])
+        .unwrap();
+        assert!(crate::osload::judge("bin/x", &file, &set).is_ok());
 
         let bytes = image(EXEC, DYNAMIC_BASE, &["KERNEL32.dll", "libiconv.dll"]);
         let file = crate::open(&bytes, false).unwrap();
-        assert_eq!(
-            crate::osload::host_libraries(&file, &policy).unwrap(),
-            vec!["libiconv.dll".to_string()]
-        );
+        let err = crate::osload::judge("bin/x", &file, &set).unwrap_err();
+        assert!(err.contains("libiconv.dll"), "{err}");
 
         let bytes = delay_image(&["KERNEL32.dll"], &["libiconv.dll"], true);
         let file = crate::open(&bytes, false).unwrap();
-        assert_eq!(
-            crate::osload::host_libraries(&file, &policy).unwrap(),
-            vec!["libiconv.dll".to_string()]
-        );
+        let err = crate::osload::judge("bin/x", &file, &set).unwrap_err();
+        assert!(err.contains("libiconv.dll"), "{err}");
     }
 
     #[test]

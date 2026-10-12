@@ -19,8 +19,20 @@ func TestHtopBuildEnvPrefersSystemPath(t *testing.T) {
 	if path == "" {
 		t.Fatal("PATH not found")
 	}
-	if path != "/usr/bin:/bin:/opt/homebrew/bin:/usr/sbin:/sbin" {
+	if path != "/usr/bin:/bin:/usr/sbin:/sbin" {
 		t.Fatalf("unexpected PATH: %s", path)
+	}
+	if strings.Contains(path, "homebrew") || strings.Contains(path, "/usr/local") {
+		t.Fatalf("host package path: %s", path)
+	}
+	var pkg string
+	for _, entry := range got {
+		if strings.HasPrefix(entry, "PKG_CONFIG=") {
+			pkg = strings.TrimPrefix(entry, "PKG_CONFIG=")
+		}
+	}
+	if pkg != "/usr/bin/false" {
+		t.Fatalf("PKG_CONFIG: %q", pkg)
 	}
 	var flags string
 	for _, entry := range got {

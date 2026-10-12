@@ -1,5 +1,10 @@
 load("@rules_go//go:def.bzl", "go_library", "go_test")
 
+exports_files(
+    ["build.go"],
+    visibility = ["//visibility:public"],
+)
+
 go_library(
     name = "cmd",
     srcs = [
@@ -26,11 +31,13 @@ go_library(
         "//internal/checkupdates",
         "//internal/config",
         "//internal/deadstrip",
+        "//internal/loadcheck",
         "//internal/download",
         "//internal/nvimplugins",
         "//internal/platform",
         "//internal/ssh",
         "//internal/sums",
+        "//internal/terminfo",
         "//internal/versions",
         "@com_github_charmbracelet_lipgloss//:lipgloss",
         "@com_github_charmbracelet_lipgloss//list",
@@ -41,6 +48,7 @@ go_library(
 go_test(
     name = "cmd_test",
     srcs = [
+        "build_darwin_test.go",
         "build_linux_test.go",
         "build_nvim_test.go",
         "build_opts_test.go",
@@ -53,12 +61,21 @@ go_test(
         "ls_test.go",
         "make_path_test.go",
         "private_test.go",
+        "superstatic_test.go",
         "xcode_env_test.go",
         "touch_tree_test.go",
         "upgrade_test.go",
         "wrapper_test.go",
     ],
+    data = [
+        "//bininfo",
+        "//bininfo:policy",
+    ],
     embed = [":cmd"],
+    env = {
+        "BININFO": "$(rootpath //bininfo)",
+        "BININFO_POLICY": "bininfo/policy",
+    },
     deps = [
         "//internal/archive",
         "//internal/config",

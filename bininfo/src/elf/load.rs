@@ -391,10 +391,12 @@ mod tests {
             &["libc.so.6"],
         );
         let file = crate::open(&good, false).unwrap();
-        let policy = crate::policy::devlayer().unwrap();
-        assert!(crate::osload::host_libraries(&file, &policy)
-            .unwrap()
-            .is_empty());
+        let set = crate::policy::parse_set(&[(
+            "bin/x",
+            "format = \"elf\"\nPT_INTERP = \"/lib/ld-linux-aarch64.so.1\"\nDT_NEEDED = [{ name = \"libc.so.6\", why = \"The C library.\" }]\n",
+        )])
+        .unwrap();
+        assert!(crate::osload::judge("bin/x", &file, &set).is_ok());
 
         let bad = elf_with_dynamic(
             Type::Dyn,
@@ -403,13 +405,8 @@ mod tests {
             &["libiconv.so.2"],
         );
         let file = crate::open(&bad, false).unwrap();
-        assert_eq!(
-            crate::osload::host_libraries(&file, &policy).unwrap(),
-            vec![
-                "/opt/homebrew/lib/libz.so".to_string(),
-                "libiconv.so.2".to_string(),
-            ]
-        );
+        let err = crate::osload::judge("bin/x", &file, &set).unwrap_err();
+        assert!(err.contains("libiconv.so.2"), "{err}");
     }
 
     #[test]

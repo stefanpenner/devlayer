@@ -12,7 +12,7 @@ It calls the bininfo library to print a page or check a claim.
 //! Read an ELF, Mach-O, PE, zip, dmg, or tiff file and print it.
 //! A terminal folds the page. A pipe prints the full page.
 //! `--check` asks whether the header names no other file.
-//! `--policy` asks whether each recorded library is in that policy.
+//! `--policy` reads one file for each binary.
 
 mod fold;
 mod tui;
@@ -25,7 +25,7 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 usage: bininfo [--json] [--symbols] [--check] [--expect <claim>] <file>
 usage: bininfo [--json] --claims <file>
-usage: bininfo --policy <file> <path>
+usage: bininfo --policy <directory> <path>
 A terminal folds the page. A pipe prints the full page.
 --policy checks one file or every file under a directory.";
 
@@ -88,9 +88,8 @@ fn run(args: impl Iterator<Item = String>) -> Result<ExitCode, String> {
         }
         Job::Claims { path, json } => check_file(&path, json),
         Job::Policy { policy, paths } => {
-            let text = fs::read_to_string(&policy)
-                .map_err(|err| format!("cannot read {policy}: {err}"))?;
-            let rules = bininfo::policy::parse(&text).map_err(|err| format!("{policy}: {err}"))?;
+            let rules = bininfo::policy::load_dir(std::path::Path::new(&policy))
+                .map_err(|err| format!("{policy}: {err}"))?;
             let mut failed = false;
             for path in &paths {
                 if let Err(err) = bininfo::osload::check_path(std::path::Path::new(path), &rules) {

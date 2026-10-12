@@ -1,0 +1,3 @@
+# Names that ncurses 6.6 does not ship. append adds the marker below.
+xterm-ghostty|Ghostty terminal,
+	use=ghostty,

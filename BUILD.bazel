@@ -3,6 +3,7 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 exports_files(
     [
+        "HERMETICITY.md",
         "versions.env",
         ".bazelrc",
     ],
@@ -20,6 +21,10 @@ go_library(
     embedsrcs = [
         "versions.env",
         "config/nvim/nvim-pack-lock.json",
+        "//third_party/ncurses:aliases.ti",
+        "//third_party/ncurses:configure.sh",
+        "//third_party/ncurses:fallbacks.txt",
+        "//third_party/patches:unibilium_no_host.patch",
     ],
     importpath = "github.com/stefanpenner/devlayer",
     visibility = ["//visibility:private"],
@@ -29,6 +34,11 @@ go_library(
     ],
 )
 
+# Do not add the netgo tag when this binary targets darwin.
+# Darwin keeps the Apple resolver in libresolv.
+# The Go resolver does not do mDNS, so a .local name fails.
+# A name that exists only in the macOS resolver can fail.
+# Darwin can show a dialog when a program sends its own DNS query.
 go_binary(
     name = "devlayer",
     embed = [":devlayer_lib"],

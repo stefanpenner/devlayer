@@ -1,0 +1,21 @@
+# Terminal names compiled into ncurses. This file is the whole set.
+# xterm-ghostty is not a name in ncurses 6.6. aliases.ti adds it.
+xterm-256color
+xterm
+xterm-direct
+screen-256color
+screen
+tmux-256color
+tmux
+linux
+vt100
+dumb
+ansi
+alacritty
+kitty
+foot
+ghostty
+xterm-ghostty
+st-256color
+putty-256color
+vte-256color

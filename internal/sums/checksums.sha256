@@ -88,3 +88,5 @@ cf01b93f4b61b96a6d27942cf28eeda4cbce7d503c3bef773a8930b3d778a2d9  https://github
 020e8f117f648c8697fca967995c342e92dbd81dab137a115cc7555207fbc84f  https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz
 c2b23b9a54cffcc999ded4a5d3949daf338bebb7945dece229f832332e6e6a7d  https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz
 df845b1ab7c7c163ec57d7fa17170c92b04be199bddab02523636efec5224ab6  https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz
+32b57eb28bf6d80b280e4020a0045184f8ca897b20b570c12948aa6838673225  https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz
+9633816e7832109e530c9e2532b11a1edae08136d63aa7e40246c0339b7db304  https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz

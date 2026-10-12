@@ -1,18 +1,22 @@
 # Policy for bin/devlayer.
 # One file is one binary.
-# needed lists the library names the loader opens.
-# Each name has a why.
+# Each key is the Mach-O record.
+# Each library name has a why.
 
 format = "macho"
-universal = "null"
-cpu = ["AArch64"]
-kind = "dynamic-pie"
-pie = true
-interp = "/usr/lib/dyld"
-rpath = []
-needed = [
-  { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
-  { name = "/usr/lib/libresolv.9.dylib", why = "The Go CLI records this name. The host Go toolchain adds it." },
-  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", why = "The Go CLI calls Core Foundation." },
-  { name = "/System/Library/Frameworks/Security.framework/Versions/A/Security", why = "The Go CLI calls Security for certificates." },
+cputype = ["CPU_TYPE_ARM64"]
+cpusubtype = ["CPU_SUBTYPE_ARM64_ALL"]
+filetype = "MH_EXECUTE"
+flags = ["MH_DYLDLINK", "MH_PIE"]
+MH_PIE = true
+LC_LOAD_DYLINKER = "/usr/lib/dyld"
+LC_RPATH = []
+LC_LOAD_WEAK_DYLIB = []
+LC_REEXPORT_DYLIB = []
+LC_LOAD_UPWARD_DYLIB = []
+LC_LOAD_DYLIB = [
+  { name = "/usr/lib/libSystem.B.dylib", compatibility_version = "0.0.0", current_version = "0.0.0", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
+  { name = "/usr/lib/libresolv.9.dylib", compatibility_version = "0.0.0", current_version = "0.0.0", why = "Darwin keeps the Apple resolver in this file. The netgo tag removes this resolver." },
+  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", compatibility_version = "0.0.0", current_version = "0.0.0", why = "The Go CLI calls Core Foundation." },
+  { name = "/System/Library/Frameworks/Security.framework/Versions/A/Security", compatibility_version = "0.0.0", current_version = "0.0.0", why = "The Go CLI calls Security for certificates." },
 ]

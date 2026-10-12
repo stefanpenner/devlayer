@@ -3,15 +3,28 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "deadstrip",
     srcs = [
+        "allow.go",
         "file.go",
         "strip.go",
     ],
     importpath = "github.com/stefanpenner/devlayer/internal/deadstrip",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/loadcheck"],
 )
 
 go_test(
     name = "deadstrip_test",
-    srcs = ["strip_test.go"],
+    srcs = [
+        "allow_test.go",
+        "strip_test.go",
+    ],
+    data = [
+        "//bininfo",
+        "//bininfo:policy",
+    ],
     embed = [":deadstrip"],
+    env = {
+        "BININFO": "$(rootpath //bininfo)",
+        "BININFO_POLICY": "bininfo/policy",
+    },
 )

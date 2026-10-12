@@ -1,0 +1,66 @@
+--- a/uniutil.c
++++ b/uniutil.c
+@@ -181,9 +181,6 @@
+ }
+ 
+ unibi_term *unibi_from_term(const char *term) {
+-    unibi_term *ut;
+-    const char *env;
+-
+     assert(term != NULL);
+ 
+     if (term[0] == '\0' || term[0] == '.' || strchr(term, '/')) {
+@@ -191,29 +188,6 @@
+         return NULL;
+     }
+ 
+-    if ((env = getenv("TERMINFO"))) {
+-        ut = from_dir(env, NULL, NULL, term);
+-        if (ut) {
+-            return ut;
+-        }
+-    }
+-
+-    if ((env = getenv("HOME"))) {
+-        ut = from_dir(env, NULL, ".terminfo", term);
+-
+-        if (ut) {
+-            return ut;
+-        }
+-
+-        if (errno != ENOENT && errno != EPERM && errno != EACCES) {
+-            return NULL;
+-        }
+-    }
+-
+-    if ((env = getenv("TERMINFO_DIRS"))) {
+-        return from_dirs(env, term);
+-    }
+-
+     return from_dirs(unibi_terminfo_dirs, term);
+ }
+ 
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -6,19 +6,8 @@
+ set_target_properties(unibilium PROPERTIES PUBLIC_HEADER ${PROJECT_SOURCE_DIR}/unibilium.h
+   VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
+ 
+-if(NOT WIN32)
+-  execute_process(COMMAND sh -c "ncursesw6-config --terminfo-dirs 2>/dev/null || \
+-      ncurses6-config  --terminfo-dirs 2>/dev/null || \
+-      ncursesw5-config --terminfo-dirs 2>/dev/null || \
+-      ncurses5-config  --terminfo-dirs 2>/dev/null || \
+-      echo '/etc/terminfo:/lib/terminfo:/usr/share/terminfo:/usr/lib/terminfo:/usr/local/share/terminfo:/usr/local/lib/terminfo'"
+-    OUTPUT_VARIABLE TERMINFO_DIRS_DEFAULT)
+-  # Remove trailing newline
+-  string(STRIP "${TERMINFO_DIRS_DEFAULT}" TERMINFO_DIRS_DEFAULT)
+-else()
+-  set(TERMINFO_DIRS_DEFAULT "")
+-endif()
+-set(TERMINFO_DIRS "${TERMINFO_DIRS_DEFAULT}" CACHE STRING "Colon-separated list of directories where unibilium should look for compiled terminfo files at runtime")
++# No host terminfo directory. The lookup misses. Neovim uses its builtin table.
++set(TERMINFO_DIRS "" CACHE STRING "Colon-separated list of directories where unibilium should look for compiled terminfo files at runtime")
+ target_compile_definitions(unibilium PUBLIC "TERMINFO_DIRS=\"${TERMINFO_DIRS}\"")
+ 
+ include(GNUInstallDirs)

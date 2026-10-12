@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "terminfo",
+    srcs = ["terminfo.go"],
+    importpath = "github.com/stefanpenner/devlayer/internal/terminfo",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "terminfo_test",
+    srcs = ["terminfo_test.go"],
+    data = [
+        "//:HERMETICITY.md",
+        "//cmd:build.go",
+        "//internal/sysroot:build.go",
+        "//internal/sysroot:pins.go",
+        "//macos:archive.sh",
+        "//macos:defs.bzl",
+        "//third_party/ncurses:BUILD.bazel",
+        "//third_party/ncurses:aliases.ti",
+        "//third_party/ncurses:configure.sh",
+        "//third_party/ncurses:fallbacks.txt",
+        "//third_party/nvim:defs.bzl",
+        "//third_party/patches:nvim_unibilium_superstatic.patch",
+        "//third_party/patches:unibilium_no_host.patch",
+        "//tools:extensions.bzl",
+    ],
+    embed = [":terminfo"],
+)

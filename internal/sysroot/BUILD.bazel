@@ -10,6 +10,15 @@ go_library(
     ],
     importpath = "github.com/stefanpenner/devlayer/internal/sysroot",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/terminfo"],
+)
+
+exports_files(
+    [
+        "build.go",
+        "pins.go",
+    ],
+    visibility = ["//visibility:public"],
 )
 
 go_test(

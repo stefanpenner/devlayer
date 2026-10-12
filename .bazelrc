@@ -31,10 +31,21 @@ build:go-linux-arm64 --platforms=@rules_go//go/toolchain:linux_arm64
 build:go-darwin-arm64 --platforms=@rules_go//go/toolchain:darwin_arm64
 build:go-windows-amd64 --platforms=@rules_go//go/toolchain:windows_amd64
 
-# Source builds (htop, git, eza, ncurses, nvim) need unsandboxed execution
-# for access to host tools (autotools, cargo, cmake) and network (git clone).
-# Usage: bazel build //bundle:source_built --config=source-build
-build:source-build --spawn_strategy=local
+# Sealed Linux build. The Mac runs repo rules.
+# Actions run on a local Buildbarn worker.
+# There is no local fallback and no dynamic strategy.
+# An empty RBE_IMAGE fails analysis of //rbe:linux_*.
+# codesign stays on the Mac. Do not use this config for that step.
+# The worker must use linux-sandbox: private mounts, private PIDs, no NIC.
+build:rbe --remote_executor=grpc://127.0.0.1:8980
+build:rbe --spawn_strategy=remote
+build:rbe --noremote_local_fallback
+build:rbe --noincompatible_remote_local_fallback_for_remote_cache
+build:rbe --noremote_upload_local_results
+build:rbe --extra_execution_platforms=//rbe:linux_arm64,//rbe:linux_amd64
+build:rbe --host_platform=//rbe:linux_arm64
+build:rbe --platforms=//rbe:linux_arm64
+build:rbe --remote_timeout=3600s
 
 # Sensible defaults
 build --verbose_failures

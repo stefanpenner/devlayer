@@ -16,9 +16,6 @@ _COMMON = [
 
 _TARGET = "aarch64-macos"
 
-# CMake fallback when ncurses*-config is absent. The host tool stays out.
-_TERMINFO = "/etc/terminfo:/lib/terminfo:/usr/share/terminfo:/usr/lib/terminfo:/usr/local/share/terminfo:/usr/local/lib/terminfo"
-
 # libuv Darwin backend. Linux epoll sources stay out of this list.
 _LIBUV_SRCS = [
     "src/fs-poll.c",
@@ -103,7 +100,9 @@ _TS_FLAGS = [
     "-fvisibility=hidden",
 ]
 
-def _lib(name, out, tar, srcs, incs, defines = [], cflags = [], extra = {}):
+def _lib(name, out, tar, srcs, incs, defines = [], cflags = [], extra = {}, patches = None):
+    if patches == None:
+        patches = []
     return struct(
         name = name,
         out = out,
@@ -113,6 +112,7 @@ def _lib(name, out, tar, srcs, incs, defines = [], cflags = [], extra = {}):
         defines = defines,
         cflags = cflags,
         extra = dict(extra),
+        patches = patches,
     )
 
 def _inc(name, item):
@@ -161,7 +161,11 @@ _LIBS = [
         "@nvim_unibilium//file:archive.tar.gz",
         ["unibilium.c", "uninames.c", "uniutil.c"],
         ["."],
-        ['TERMINFO_DIRS="%s"' % _TERMINFO],
+        # Empty path. unibilium does not open a host terminfo directory.
+        ['TERMINFO_DIRS=""'],
+        [],
+        {},
+        ["//third_party/patches:unibilium_no_host.patch"],
     ),
     _lib(
         "utf8proc",
@@ -201,6 +205,9 @@ def _macho_lib_impl(ctx):
             fail(alias + " must be one archive")
         lines.append("tar\t%s\t%s" % (alias, files[0].path))
         inputs.append(files[0])
+    for patch in ctx.files.patches:
+        lines.append("patch\t%s\t%s" % (ctx.attr.src_name, patch.path))
+        inputs.append(patch)
     for item in ctx.attr.includes:
         alias, rel = _pair(item)
         lines.append("inc\t%s\t%s" % (alias, rel))
@@ -237,6 +244,7 @@ _macho_lib = rule(
         "extra_srcs": attr.label_keyed_string_dict(allow_files = True),
         "includes": attr.string_list(),
         "out": attr.string(mandatory = True),
+        "patches": attr.label_list(allow_files = True),
         "sources": attr.string_list(mandatory = True),
         "src": attr.label(mandatory = True, allow_single_file = True),
         "src_name": attr.string(mandatory = True),
@@ -413,6 +421,7 @@ def nvim_macos_deps():
             includes = lib.incs,
             defines = lib.defines,
             cflags = _COMMON + lib.cflags,
+            patches = lib.patches,
             target = _TARGET,
             visibility = ["//visibility:public"],
         )

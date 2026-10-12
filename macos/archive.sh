@@ -76,6 +76,7 @@ while IFS=$(printf '\t') read -r key a b; do
     "") continue ;;
     target) target=$a ;;
     tar) extract "$a" "$(abs "$b")" ;;
+    patch) /usr/bin/patch -p1 -d "$work/src/$a" < "$(abs "$b")" ;;
     inc) add "-I$work/src/$a/$b" ;;
     def) add "-D$a" ;;
     flag) add "$a" ;;

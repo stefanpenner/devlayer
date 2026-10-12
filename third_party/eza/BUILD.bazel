@@ -1,27 +1,57 @@
-load("@versions//:versions.bzl", "VERSIONS")
+load("//tools:cargo.bzl", "offline_cargo")
 
-# eza — modern ls replacement
-# Built from source using cargo (requires Rust toolchain + network).
-# Usage: bazel build //third_party/eza --spawn_strategy=local
-genrule(
+# eza 0.23.5. The source archive and the crate list are repo rules.
+# Default features include git2, which links a system libgit2.
+# This build turns default features off, so the link has no system library.
+# Zig is the linker. The same rule can target Darwin or Linux musl.
+
+_SRC = [
+    "@eza_src//:all",
+    "@eza_src//:Cargo.toml",
+]
+
+offline_cargo(
+    name = "eza_darwin_arm64",
+    anchor = "@eza_src//:Cargo.toml",
+    ups = 1,
+    vendor = "@eza_crates//:vendor/ANCHOR",
+    bin_name = "eza",
+    triple = "aarch64-apple-darwin",
+    release = True,
+    cargo_flags = "--no-default-features",
+    srcs = _SRC,
+)
+
+offline_cargo(
+    name = "eza_linux_arm64",
+    anchor = "@eza_src//:Cargo.toml",
+    ups = 1,
+    vendor = "@eza_crates//:vendor/ANCHOR",
+    bin_name = "eza",
+    triple = "aarch64-unknown-linux-musl",
+    release = True,
+    cargo_flags = "--no-default-features",
+    srcs = _SRC,
+)
+
+offline_cargo(
+    name = "eza_linux_amd64",
+    anchor = "@eza_src//:Cargo.toml",
+    ups = 1,
+    vendor = "@eza_crates//:vendor/ANCHOR",
+    bin_name = "eza",
+    triple = "x86_64-unknown-linux-musl",
+    release = True,
+    cargo_flags = "--no-default-features",
+    srcs = _SRC,
+)
+
+alias(
     name = "eza",
-    srcs = [],
-    outs = ["eza_bin"],
-    cmd = """
-        set -e
-        CARGO_HOME="$$(echo ~)/.cargo"
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$$CARGO_HOME/bin:$$PATH"
-        OUT=$$(pwd)/$@
-        TMPDIR=$$(mktemp -d)
-        git clone --depth 1 --branch v{ver} https://github.com/eza-community/eza.git $$TMPDIR/src
-        cd $$TMPDIR/src
-        cargo build --release
-        cp target/release/eza $$OUT
-        rm -rf $$TMPDIR
-    """.format(ver = VERSIONS["EZA"]),
-    tags = [
-        "no-sandbox",
-        "requires-network",
-    ],
+    actual = select({
+        "//tools:darwin_arm64": ":eza_darwin_arm64",
+        "//tools:linux_arm64": ":eza_linux_arm64",
+        "//tools:linux_amd64": ":eza_linux_amd64",
+    }),
     visibility = ["//visibility:public"],
 )

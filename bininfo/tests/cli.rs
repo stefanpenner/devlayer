@@ -432,10 +432,11 @@ fn os_load_skips_a_script_and_rejects_an_outside_link() {
     fs::write(&outside, b"x").unwrap();
     std::os::unix::fs::symlink(&outside, dir.join("htop")).unwrap();
 
-    let policy = dir.join("policy.toml");
+    let policy = dir.join("policy");
+    fs::create_dir(&policy).unwrap();
     fs::write(
-        &policy,
-        "[macho.needed]\nallow = [{ name = \"/usr/lib/libSystem.B.dylib\", why = \"macOS has no static libc.\" }]\n",
+        policy.join("ok.toml"),
+        "format = \"macho\"\ncputype = [\"CPU_TYPE_ARM64\"]\nfiletype = \"MH_EXECUTE\"\nLC_LOAD_DYLIB = []\n",
     )
     .unwrap();
     let out = bin()

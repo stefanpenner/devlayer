@@ -1,5 +1,6 @@
 // Package assemble stages the Linux sysroot.
-// The steps are stage, fetch, extract, wrappers, checksums, and pack.
+// The steps are stage, extract, wrappers, load check, checksums, and pack.
+// Place copies pinned files. Fetch downloads them.
 package assemble
 
 import (
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
+	"github.com/stefanpenner/devlayer/internal/loadcheck"
 	"github.com/stefanpenner/devlayer/internal/platform"
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
@@ -30,7 +32,20 @@ func Run(outputTar, arch string, vers *versions.Versions, compiled Compiled, fet
 	if fetch == nil {
 		return fmt.Errorf("assemble: fetch is required")
 	}
+	return run(outputTar, arch, compiled, func(staging string, p *platform.Platform) error {
+		return fetch(staging, p, vers, map[string]bool{"nvim": true})
+	})
+}
 
+// RunPlaced packs compiled tools plus pinned files.
+// It does not download.
+func RunPlaced(outputTar, arch string, compiled Compiled, in Input) error {
+	return run(outputTar, arch, compiled, func(staging string, _ *platform.Platform) error {
+		return Place(staging, in)
+	})
+}
+
+func run(outputTar, arch string, compiled Compiled, stage func(string, *platform.Platform) error) error {
 	p, err := platform.New("linux", arch)
 	if err != nil {
 		return err
@@ -42,7 +57,7 @@ func Run(outputTar, arch string, vers *versions.Versions, compiled Compiled, fet
 	}
 	defer os.RemoveAll(staging)
 
-	if err := fetch(staging, p, vers, map[string]bool{"nvim": true}); err != nil {
+	if err := stage(staging, p); err != nil {
 		return err
 	}
 	if err := extractCompiled(staging, compiled); err != nil {
@@ -55,6 +70,9 @@ func Run(outputTar, arch string, vers *versions.Versions, compiled Compiled, fet
 		return err
 	}
 	if err := verifyWrappers(filepath.Join(staging, "bin")); err != nil {
+		return err
+	}
+	if err := loadcheck.Tree(staging); err != nil {
 		return err
 	}
 	if err := writeChecksums(staging); err != nil {

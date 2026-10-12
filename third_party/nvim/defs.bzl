@@ -108,6 +108,7 @@ _DEPS_ENV = {
     "DEVLAYER_SDKROOT": "$(execpath @macos_sdk//:sdk.tar)",
     "NVIM_DEPS_PREFIX": "$$$$INSTALLDIR$$$$",
     "NVIM_RANLIB": "$(execpath :zig_ranlib.sh)",
+    "DEVLAYER_UNIBI_PATCH": "$(execpath //third_party/patches:unibilium_no_host.patch)",
     "NVIM_ZIG": "$(execpath @zig_sdk//:zig)",
     "ZIG_GLOBAL_CACHE_DIR": "$$$$BUILD_TMPDIR$$$$/zig-cache",
     "ZIG_LOCAL_CACHE_DIR": "$$$$BUILD_TMPDIR$$$$/zig-cache",
@@ -194,12 +195,11 @@ def nvim_musl():
             ":zig_ranlib.sh",
             "@macos_sdk//:sdk.tar",
             "@zig_sdk//:zig",
+            "//third_party/patches:unibilium_no_host.patch",
         ],
         cache_entries = _dep_cache(),
         env = _DEPS_ENV,
         install = False,
-        # minilua links with Xcode ld. Zig 0.15 panics on LuaJIT eh_frame.
-        tags = ["no-sandbox"],
         lib_source = "@nvim_src//:all_srcs",
         # A default libnvim_deps.a would sit inside lib/.
         out_data_dirs = ["lib", "share"],

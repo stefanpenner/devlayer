@@ -7,7 +7,7 @@
 #   //third_party/make:gnumake  — configure_make, GNU make
 #   //third_party/ncurses       — genrule, terminal UI library
 #   //third_party/zsh           — configure_make, Z shell (+ share)
-#   //third_party/eza           — genrule, ls replacement (needs cargo)
+#   //third_party/eza           — pinned cargo, git feature off
 #   //third_party/nvim:nvim_musl — cmake, static musl neovim
 #
 # Pre-built binaries (downloaded per-platform):

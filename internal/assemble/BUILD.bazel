@@ -2,11 +2,15 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "assemble",
-    srcs = ["assemble.go"],
+    srcs = [
+        "assemble.go",
+        "place.go",
+    ],
     importpath = "github.com/stefanpenner/devlayer/internal/assemble",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/archive",
+        "//internal/loadcheck",
         "//internal/platform",
         "//internal/versions",
     ],
@@ -14,10 +18,24 @@ go_library(
 
 go_test(
     name = "assemble_test",
-    srcs = ["assemble_test.go"],
+    srcs = [
+        "assemble_test.go",
+        "prompt_bundle_test.go",
+    ],
+    data = [
+        "//bininfo",
+        "//bininfo:policy",
+        "//linux:defs.bzl",
+        "//tools:extensions.bzl",
+    ],
+    env = {
+        "BININFO": "$(rootpath //bininfo)",
+        "BININFO_POLICY": "bininfo/policy",
+    },
     embed = [":assemble"],
     deps = [
         "//internal/archive",
+        "//internal/loadcheck",
         "//internal/platform",
         "//internal/versions",
     ],

@@ -7,4 +7,4 @@ pub mod page;
 pub(crate) mod symbols;
 mod words;
 
-pub(crate) use words::{cpu_name, universal_word};
+pub(crate) use words::{cpu_const, file_type_name, flag_names, subtype_const};

@@ -3,10 +3,11 @@ load(":defs.bzl", "nvim_macos_deps")
 exports_files(
     [
         "archive.sh",
+        "defs.bzl",
         "host_make.sh",
         "luajit.sh",
     ],
-    visibility = ["//internal/binaries:__pkg__"],
+    visibility = ["//visibility:public"],
 )
 
 # aarch64 Mach-O static libs for the Neovim C dependencies.

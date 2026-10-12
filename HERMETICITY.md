@@ -79,6 +79,12 @@ A container does not build the sysroot.
 [extensions.bzl](tools/extensions.bzl) passes the pin file to `http_archive`.
 `devlayer build` runs `//linux:bundle_<arch>` when `bazel` and [MODULE.bazel](MODULE.bazel) are present.
 That target builds the Linux sysroot.
+The bundle action copies those repo files.
+It does not download.
+`bazel build --config=rbe` sends actions to a local Buildbarn worker.
+An empty image pin fails that build.
+The worker must seal each action.
+The Mac still runs repo rules.
 [hermetic.md](hermetic.md) is that portable hermetic build.
 [hermetic_cc_toolchain](MODULE.bazel) is not the default toolchain.
 Each compile target selects it.
@@ -148,11 +154,38 @@ The sittings in [the hermetic compile](https://github.com/stefanpenner/the-herme
 - Darwin and Windows read that embedded version file. Rebuild the CLI before those builds see a checkout edit.
 - Linux with Bazel reads the checkout version file ([defs.bzl](linux/defs.bzl)).
 
+## Superstatic
+
+A shipped program does not open a host data file.
+This repo holds the bytes.
+Each build stores that file in the program.
+
+Terminfo is [fallbacks.txt](third_party/ncurses/fallbacks.txt).
+Each ncurses build reads that file.
+The build compiles those names into the library.
+The library does not open a terminfo directory.
+Add a terminal by adding one line to that file.
+
+`xterm-ghostty` is not a name in ncurses 6.6.
+[aliases.ti](third_party/ncurses/aliases.ti) adds that name.
+The entry uses the `ghostty` description.
+
+Neovim reads terminals through unibilium.
+That library does not search the host.
+An empty path makes the lookup fail.
+Neovim then uses the builtin table in the pinned Neovim source.
+That table is a second input.
+It is not `fallbacks.txt`.
+
+The `share/zsh` tree is a directory beside the binary.
+Those shell functions are not inside the zsh binary.
+
 ## Limits
 
 - Darwin nvim, htop, and eza clone a tag and compile with the host toolchain ([build.go](cmd/build.go)). Darwin btop and make hash the tarball, then the host compiler builds them.
 - Delta on linux aarch64 uses the gnu triple ([platform.go](internal/platform/platform.go)). Upstream has no musl asset for delta on that arch.
-- [urls.go](internal/binaries/urls.go) fetches eza on Windows only. Darwin eza is a host cargo build. The Linux sysroot has no eza.
+- [urls.go](internal/binaries/urls.go) fetches eza on Windows only. Bazel builds eza from a pinned tag archive and vendored crates. The git feature stays off. The Darwin CLI still clones the tag and uses host cargo with vendored-libgit2. The Linux sysroot has no eza.
+- The Apple cargo action copies the headers in [tools/libiconv](tools/libiconv). It compiles them with zig. It does not run configure or make. GitHub can rebuild the eza tag archive. The pin then fails the fetch.
 - The version file records `GH_VERSION`. No URL fetches gh ([build.go](cmd/build.go)).
 - Plugin revs are commits in the [lock file](config/nvim/nvim-pack-lock.json). [ArchiveURL](internal/nvimplugins/nvimplugins.go) says the archive bytes are not a sha256.
 - [install.sh](scripts/install.sh) hashes the release only when the hash file and a hash tool both exist. A missing hash file skips the hash. [upgrade.go](cmd/upgrade.go) does not read that file. [install.ps1](scripts/install.ps1) uses the same rule.

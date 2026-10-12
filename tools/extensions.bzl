@@ -166,7 +166,6 @@ def _tool_repos_impl(module_ctx):
         patch_args = ["-p1"],
     )
 
-
     _http_archive(sums,
         name = "libiconv_src",
         urls = ["https://ftp.gnu.org/gnu/libiconv/libiconv-{}.tar.gz".format(v["ICONV"])],
@@ -221,7 +220,7 @@ cd "$(dirname "$0")"
 ./configure "$@"
 awk '
 BEGIN {
-  n = split("compctl complete complist computil zle zutil parameter terminfo datetime stat system mathfunc net/socket net/tcp", mods, " ")
+  n = split("compctl complete complist computil zle zutil parameter terminfo datetime stat system mathfunc files regex zpty mapfile langinfo net/socket net/tcp", mods, " ")
 }
 {
   line = $0
@@ -452,6 +451,8 @@ chmod 755 devlayer-configure
         urls = ["https://github.com/neovim/neovim/archive/refs/tags/v{}.tar.gz".format(v["NVIM"])],
         strip_prefix = "neovim-{}".format(v["NVIM"]),
         build_file_content = _ALL_SRCS,
+        patches = ["//third_party/patches:nvim_unibilium_superstatic.patch"],
+        patch_args = ["-p1"],
         patch_cmds = [_NVIM_PATCH],
     )
     for name, url in _NVIM_DEP_URLS:
@@ -502,7 +503,7 @@ exports_files(
                 arch = goarch,
             )],
             strip_prefix = "go",
-            build_file_content = _FILEGROUP_ALL,
+            build_file_content = _FILEGROUP_ALL + _exports(["bin/go"]),
         )
 
     # Zig compiler
@@ -532,7 +533,7 @@ exports_files(
         urls = ["https://github.com/eth-p/bat-extras/releases/download/v{ver}/bat-extras-{ver}.zip".format(
             ver = v["BAT_EXTRAS"],
         )],
-        build_file_content = _FILEGROUP_ALL,
+        build_file_content = _FILEGROUP_ALL + _exports(["bin/batman"]),
     )
 
     # fzf shell integration (key-bindings.zsh, completion.zsh)
@@ -549,7 +550,7 @@ filegroup(
     ],
     visibility = ["//visibility:public"],
 )
-""",
+""" + _exports(["shell/key-bindings.zsh", "shell/completion.zsh"]),
     )
 
     # Zsh plugins
@@ -559,7 +560,7 @@ filegroup(
             v["ZSH_AUTOSUGGESTIONS"],
         )],
         strip_prefix = "zsh-autosuggestions-{}".format(v["ZSH_AUTOSUGGESTIONS"].lstrip("v")),
-        build_file_content = _FILEGROUP_ALL,
+        build_file_content = _FILEGROUP_ALL + _exports(["zsh-autosuggestions.zsh"]),
     )
 
     _http_archive(sums, 
@@ -568,7 +569,7 @@ filegroup(
             v["FAST_SYNTAX_HIGHLIGHTING"],
         )],
         strip_prefix = "fast-syntax-highlighting-{}".format(v["FAST_SYNTAX_HIGHLIGHTING"].lstrip("v")),
-        build_file_content = _FILEGROUP_ALL,
+        build_file_content = _FILEGROUP_ALL + _exports(["fast-syntax-highlighting.plugin.zsh"]),
     )
 
     _http_archive(sums, 
@@ -577,7 +578,7 @@ filegroup(
             v["ZSH_HISTORY_SUBSTRING_SEARCH"],
         )],
         strip_prefix = "zsh-history-substring-search-{}".format(v["ZSH_HISTORY_SUBSTRING_SEARCH"].lstrip("v")),
-        build_file_content = _FILEGROUP_ALL,
+        build_file_content = _FILEGROUP_ALL + _exports(["zsh-history-substring-search.zsh"]),
     )
 
     _http_archive(sums, 
@@ -586,7 +587,15 @@ filegroup(
             v["POWERLEVEL10K"],
         )],
         strip_prefix = "powerlevel10k-{}".format(v["POWERLEVEL10K"].lstrip("v")),
-        build_file_content = _FILEGROUP_ALL,
+        build_file_content = _FILEGROUP_ALL + _exports(["powerlevel10k.zsh-theme"]),
     )
+
+    # romkatv/gitstatus v1.5.4. Matches install.info in powerlevel10k 1.20.0.
+    for arch in ["aarch64", "x86_64"]:
+        _http_file(sums,
+            name = "gitstatusd_linux_" + arch,
+            urls = ["https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-%s.tar.gz" % arch],
+            downloaded_file_path = "gitstatusd.tar.gz",
+        )
 
 tool_repos = module_extension(implementation = _tool_repos_impl)

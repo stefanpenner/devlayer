@@ -8,6 +8,14 @@ exports_files(
     visibility = ["//internal/binaries:__pkg__"],
 )
 
+exports_files(
+    [
+        "defs.bzl",
+        "host_cc.sh",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 # Pre-built runtime. Darwin and the non-Linux bundle use this alias.
 alias(
     name = "nvim",
