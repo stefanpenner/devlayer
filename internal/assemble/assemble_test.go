@@ -340,7 +340,7 @@ func TestRunPlacedRejectsIconv(t *testing.T) {
 	err := RunPlaced(filepath.Join(dir, "out.tar.gz"), "aarch64", compiled, Input{
 		Bins: []Bin{{Name: "fd", Path: fd}},
 	})
-	if err == nil || !strings.Contains(err.Error(), "no policy") {
+	if err == nil || !strings.Contains(err.Error(), "bin/fd") || !strings.Contains(err.Error(), "format: found elf") {
 		t.Fatalf("got %v", err)
 	}
 }
