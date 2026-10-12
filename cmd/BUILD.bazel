@@ -71,6 +71,8 @@ go_test(
     data = [
         "//bininfo",
         "//bininfo:policy",
+        "//third_party/nvim:defs.bzl",
+        "//tools:extensions.bzl",
     ],
     embed = [":cmd"],
     env = {

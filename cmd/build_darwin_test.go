@@ -176,6 +176,41 @@ func TestNvimMakeArgsDropHostLibs(t *testing.T) {
 	}
 }
 
+func TestNvimKeepsLuaAPI(t *testing.T) {
+	got := strings.Join(nvimMakeArgs("/out", ""), "\n")
+	if strings.Contains(got, "lua_tothread") {
+		t.Fatalf("cmake compiler test would require Lua symbols:\n%s", got)
+	}
+	for _, link := range []string{luaAPIKeepLink(true), luaAPIKeepLink(false)} {
+		if strings.Contains(link, " ") {
+			t.Fatalf("linker flag has a space: %s", link)
+		}
+	}
+	in := "target_link_libraries(nvim_bin PRIVATE main_lib PUBLIC libuv)\n"
+	patched, err := patchNvimLuaAPI(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(patched, luaAPIKeepLink(true)) || !strings.Contains(patched, luaAPIKeepLink(false)) {
+		t.Fatalf("nvim link drops unused Lua API symbols:\n%s", patched)
+	}
+	again, err := patchNvimLuaAPI(patched)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != patched {
+		t.Fatal("patch is not idempotent")
+	}
+	cache := nvimRepoText(t, "third_party/nvim/defs.bzl")
+	if strings.Contains(cache, "lua_tothread") {
+		t.Fatal("linux cache linker flags require Lua symbols in every executable")
+	}
+	ext := nvimRepoText(t, "tools/extensions.bzl")
+	if !strings.Contains(ext, luaAPIKeepLink(true)) || !strings.Contains(ext, luaAPIKeepLink(false)) {
+		t.Fatal("linux nvim source patch drops unused Lua API symbols")
+	}
+}
+
 func TestHtopConfigureUsesStaticCurses(t *testing.T) {
 	got := strings.Join(htopConfigureArgs("/static"), "\n")
 	for _, part := range []string{
@@ -416,6 +451,31 @@ func TestDarwinCCScriptUsesStaticLibFromLaterSearchDir(t *testing.T) {
 	}
 }
 
+func TestDarwinCCScriptForwardsLuaKeep(t *testing.T) {
+	dir := t.TempDir()
+	zig := filepath.Join(dir, "zig")
+	argsPath := filepath.Join(dir, "args")
+	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argsPath + "\n"
+	if err := os.WriteFile(zig, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cc := filepath.Join(dir, "cc")
+	if err := os.WriteFile(cc, []byte(darwinCCScript(zig, "/pin/MacOSX.sdk", "aarch64", "cc", "")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	flag := luaAPIKeepLink(true)
+	if err := exec.Command(cc, flag).Run(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), flag+"\n") {
+		t.Fatalf("cc wrapper dropped the Lua keep flag:\n%s", got)
+	}
+}
+
 func TestDarwinCCScriptKeepsSystemLibFlags(t *testing.T) {
 	dir := t.TempDir()
 	zig := filepath.Join(dir, "zig")
@@ -589,6 +649,42 @@ func TestResolveBazelFilePrefersExecRootForBuildOutput(t *testing.T) {
 	if got != full {
 		t.Fatalf("got %s", got)
 	}
+}
+
+func nvimRepoText(t *testing.T, rel string) string {
+	t.Helper()
+	rel = filepath.FromSlash(rel)
+	var dirs []string
+	if src := os.Getenv("TEST_SRCDIR"); src != "" {
+		ws := os.Getenv("TEST_WORKSPACE")
+		if ws == "" {
+			ws = "_main"
+		}
+		dirs = append(dirs, filepath.Join(src, ws))
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		dirs = append(dirs, wd)
+		if _, statErr := os.Stat(filepath.Join(wd, "MODULE.bazel")); statErr == nil {
+			break
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			break
+		}
+		wd = parent
+	}
+	for _, dir := range dirs {
+		b, readErr := os.ReadFile(filepath.Join(dir, rel))
+		if readErr == nil {
+			return string(b)
+		}
+	}
+	t.Fatalf("missing %s", rel)
+	return ""
 }
 
 func TestFinishBundleRejectsOutsideSymlink(t *testing.T) {

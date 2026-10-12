@@ -65,6 +65,12 @@ grep -F 'find_path2(ICONV_INCLUDE_DIR NAMES iconv.h)' cmake/FindIconv.cmake >/de
 awk 'BEGIN{inserted=0} { print; if (!inserted && $0 ~ /find_path2\\(ICONV_INCLUDE_DIR NAMES iconv.h\\)/) { print "if(NOT ICONV_INCLUDE_DIR)"; print "  get_filename_component(_cc_dir \\"${CMAKE_C_COMPILER}\\" DIRECTORY)"; print "  get_filename_component(_cc_tools \\"${_cc_dir}\\" DIRECTORY)"; print "  get_filename_component(_zig_root \\"${_cc_tools}\\" DIRECTORY)"; print "  set(_musl_inc \\"${_zig_root}/lib/libc/include/generic-musl\\")"; print "  if(EXISTS \\"${_musl_inc}/iconv.h\\")"; print "    set(ICONV_INCLUDE_DIR \\"${_musl_inc}\\")"; print "  endif()"; print "endif()"; inserted=1 } }' cmake/FindIconv.cmake > cmake/FindIconv.cmake.new
 mv cmake/FindIconv.cmake.new cmake/FindIconv.cmake
 grep -F 'include/generic-musl' cmake/FindIconv.cmake >/dev/null
+grep -F 'target_link_libraries(nvim_bin PRIVATE main_lib PUBLIC libuv)' src/nvim/CMakeLists.txt >/dev/null
+if ! grep -F 'lua_tothread' src/nvim/CMakeLists.txt >/dev/null; then
+awk 'BEGIN{done=0} { if (!done && $0 == "target_link_libraries(nvim_bin PRIVATE main_lib PUBLIC libuv)") { print "if(APPLE)"; print "  target_link_options(nvim_bin PRIVATE \\042-Wl,-u,_lua_atpanic,-u,_lua_cpcall,-u,_lua_isyieldable,-u,_lua_load,-u,_lua_resume,-u,_lua_setallocf,-u,_lua_status,-u,_lua_tointegerx,-u,_lua_tonumberx,-u,_lua_tothread,-u,_lua_upvalueid,-u,_lua_upvaluejoin,-u,_lua_version,-u,_lua_yield\\042)"; print "else()"; print "  target_link_options(nvim_bin PRIVATE \\042-Wl,-u,lua_atpanic,-u,lua_cpcall,-u,lua_isyieldable,-u,lua_load,-u,lua_resume,-u,lua_setallocf,-u,lua_status,-u,lua_tointegerx,-u,lua_tonumberx,-u,lua_tothread,-u,lua_upvalueid,-u,lua_upvaluejoin,-u,lua_version,-u,lua_yield\\042)"; print "endif()"; done=1 } print }' src/nvim/CMakeLists.txt > src/nvim/CMakeLists.txt.new
+mv src/nvim/CMakeLists.txt.new src/nvim/CMakeLists.txt
+fi
+grep -F 'lua_tothread' src/nvim/CMakeLists.txt >/dev/null
 """
 
 def _exports(names):

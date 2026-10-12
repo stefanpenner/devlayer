@@ -1148,6 +1148,18 @@ func patchNvimTree(srcRoot, scriptDir string) error {
 	if err := os.WriteFile(cmakePath, []byte(next), 0644); err != nil {
 		return err
 	}
+	luaPath := filepath.Join(srcRoot, "src", "nvim", "CMakeLists.txt")
+	luaText, err := os.ReadFile(luaPath)
+	if err != nil {
+		return fmt.Errorf("read nvim CMakeLists.txt: %w", err)
+	}
+	luaNext, err := patchNvimLuaAPI(string(luaText))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(luaPath, []byte(luaNext), 0644); err != nil {
+		return err
+	}
 	patch := filepath.Join(scriptDir, "third_party", "patches", "unibilium_no_host.patch")
 	if _, err := os.Stat(patch); err != nil {
 		return fmt.Errorf("unibilium patch: %w", err)
@@ -1167,6 +1179,60 @@ func patchNvimUnibilium(cmakeText string) (string, error) {
 		return "", fmt.Errorf("BuildUnibilium.cmake has no CMAKE_ARGS line")
 	}
 	return strings.Replace(cmakeText, needle, repl, 1), nil
+}
+
+// luaAPIKeep lists Lua C API symbols that nvim does not call.
+// zig cc -O2 passes -dead_strip on Darwin and --gc-sections on Linux.
+// blink.cmp resolves lua_tothread when it loads the fuzzy library.
+var luaAPIKeep = []string{
+	"lua_atpanic",
+	"lua_cpcall",
+	"lua_isyieldable",
+	"lua_load",
+	"lua_resume",
+	"lua_setallocf",
+	"lua_status",
+	"lua_tointegerx",
+	"lua_tonumberx",
+	"lua_tothread",
+	"lua_upvalueid",
+	"lua_upvaluejoin",
+	"lua_version",
+	"lua_yield",
+}
+
+func luaAPIKeepLink(macho bool) string {
+	var b strings.Builder
+	b.WriteString("-Wl")
+	for _, name := range luaAPIKeep {
+		b.WriteString(",-u,")
+		if macho {
+			b.WriteByte('_')
+		}
+		b.WriteString(name)
+	}
+	return b.String()
+}
+
+// patchNvimLuaAPI keeps Lua C API symbols on nvim_bin only.
+// CMAKE_EXE_LINKER_FLAGS also reaches the compiler test, tee, and xxd.
+func patchNvimLuaAPI(cmakeText string) (string, error) {
+	const needle = "target_link_libraries(nvim_bin PRIVATE main_lib PUBLIC libuv)\n"
+	if strings.Contains(cmakeText, "lua_tothread") {
+		return cmakeText, nil
+	}
+	if !strings.Contains(cmakeText, needle) {
+		return "", fmt.Errorf("src/nvim/CMakeLists.txt has no nvim_bin link line")
+	}
+	var b strings.Builder
+	b.WriteString("if(APPLE)\n")
+	b.WriteString("  target_link_options(nvim_bin PRIVATE \"")
+	b.WriteString(luaAPIKeepLink(true))
+	b.WriteString("\")\nelse()\n")
+	b.WriteString("  target_link_options(nvim_bin PRIVATE \"")
+	b.WriteString(luaAPIKeepLink(false))
+	b.WriteString("\")\nendif()\n")
+	return strings.Replace(cmakeText, needle, b.String()+needle, 1), nil
 }
 
 func nvimMakeArgs(installDir, staticPrefix string) []string {
