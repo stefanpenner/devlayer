@@ -431,11 +431,15 @@ jobs:
           mkdir -p "$dest"
           tar xzf devlayer-linux-aarch64.tar.gz -C "$dest"
           "$dest/bin/go" version
-          "$dest/bin/nvim" --version | head -1
-          "$dest/bin/htop" --version | head -1
-          "$dest/bin/btop" --version | head -1
+          "$dest/bin/nvim" --version >"${RUNNER_TEMP}/nvim.version"
+          head -1 "${RUNNER_TEMP}/nvim.version"
+          "$dest/bin/htop" --version >"${RUNNER_TEMP}/htop.version"
+          head -1 "${RUNNER_TEMP}/htop.version"
+          "$dest/bin/btop" --version >"${RUNNER_TEMP}/btop.version"
+          head -1 "${RUNNER_TEMP}/btop.version"
           "$dest/bin/zig" version
-          "$dest/bin/make" --version | head -1
+          "$dest/bin/make" --version >"${RUNNER_TEMP}/make.version"
+          head -1 "${RUNNER_TEMP}/make.version"
 
   # Execute the cross-compiled Windows CLI and two bundle tools.
   smoke-windows:

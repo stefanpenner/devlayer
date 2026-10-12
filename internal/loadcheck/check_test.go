@@ -386,7 +386,7 @@ func TestDarwinPrebuiltPoliciesRecordTheNamedFiles(t *testing.T) {
 		need   []string
 		absent []string
 	}{
-		{"bin/delta", []string{libiconv, security, core, libz, iokit, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
+		{"bin/delta", []string{libiconv, core, libz, iokit, libSystem}, []string{"MH_BINDS_TO_WEAK", "Security.framework"}},
 		{"bin/dust", []string{libSystem, libobjc, foundation, libiconv, core}, []string{"MH_BINDS_TO_WEAK"}},
 		{"bin/fd", []string{libSystem, libobjc, foundation, libiconv}, []string{"MH_BINDS_TO_WEAK"}},
 		{"bin/rg", []string{libiconv, libSystem}, []string{"MH_BINDS_TO_WEAK"}},
