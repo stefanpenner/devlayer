@@ -1236,11 +1236,29 @@ func configLogTail(dir string) string {
 	if err != nil {
 		return ""
 	}
-	const maxLines = 80
 	const maxBytes = 12000
 	lines := strings.Split(string(data), "\n")
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
+	start := -1
+	for i, line := range lines {
+		if strings.Contains(line, "checking whether the C compiler works") {
+			start = i
+			break
+		}
+	}
+	if start >= 0 {
+		end := start + 50
+		if end > len(lines) {
+			end = len(lines)
+		}
+		for i := start; i < end; i++ {
+			if strings.Contains(lines[i], "Cache variables") {
+				end = i
+				break
+			}
+		}
+		lines = lines[start:end]
+	} else if len(lines) > 80 {
+		lines = lines[len(lines)-80:]
 	}
 	text := strings.TrimSpace(strings.Join(lines, "\n"))
 	if len(text) > maxBytes {

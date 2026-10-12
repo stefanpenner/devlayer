@@ -448,6 +448,29 @@ func TestDarwinCCScriptKeepsSystemLibFlags(t *testing.T) {
 	}
 }
 
+func TestConfigLogKeepsTheCompilerSection(t *testing.T) {
+	dir := t.TempDir()
+	var body strings.Builder
+	body.WriteString("configure:5360: checking whether the C compiler works\n")
+	body.WriteString("configure:5382: /tmp/cc conftest.c\n")
+	body.WriteString("zig: error: unable to find libSystem\n")
+	body.WriteString("configure:5386: $? = 1\n")
+	for i := 0; i < 120; i++ {
+		fmt.Fprintf(&body, "cache-%03d=''\n", i)
+	}
+	body.WriteString("configure: exit 77\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.log"), []byte(body.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := configLogTail(dir)
+	if !strings.Contains(got, "unable to find libSystem") {
+		t.Fatalf("section dropped the compiler error:\n%s", got)
+	}
+	if strings.Contains(got, "cache-119") {
+		t.Fatalf("section kept the cache dump:\n%s", got)
+	}
+}
+
 func TestConfigLogTailKeepsTheCompilerError(t *testing.T) {
 	dir := t.TempDir()
 	var body strings.Builder
