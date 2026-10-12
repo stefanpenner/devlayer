@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,8 @@ func TestDarwinCCScriptUsesZigAndSDK(t *testing.T) {
 		"-iframework \"/pin/MacOSX.sdk/System/Library/Frameworks\"",
 		"-F \"/pin/MacOSX.sdk/System/Library/Frameworks\"",
 		"-mmacosx-version-min=11.0",
+		"-fno-sanitize=undefined",
+		"DEVELOPER_DIR=/tmp/devlayer-no-xcrun",
 	} {
 		if !strings.Contains(got, part) {
 			t.Fatalf("script missing %q:\n%s", part, got)
@@ -27,7 +30,7 @@ func TestDarwinCCScriptUsesZigAndSDK(t *testing.T) {
 	if strings.Contains(got, "-L/usr/lib") {
 		t.Fatalf("script searches the SDK lib dir:\n%s", got)
 	}
-	if strings.Contains(got, "xcrun") {
+	if strings.Contains(got, "/usr/bin/xcrun") || strings.Contains(got, "\nxcrun ") {
 		t.Fatalf("script calls xcrun:\n%s", got)
 	}
 }
@@ -442,6 +445,28 @@ func TestDarwinCCScriptKeepsSystemLibFlags(t *testing.T) {
 	}
 	if strings.Contains(text, ".tbd") {
 		t.Fatalf("system lib became a stub file:\n%s", text)
+	}
+}
+
+func TestConfigLogTailKeepsTheCompilerError(t *testing.T) {
+	dir := t.TempDir()
+	var body strings.Builder
+	for i := 0; i < 200; i++ {
+		fmt.Fprintf(&body, "line-%03d\n", i)
+	}
+	body.WriteString("zig: error: the sdk has no libSystem\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.log"), []byte(body.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := configLogTail(dir)
+	if !strings.Contains(got, "the sdk has no libSystem") {
+		t.Fatalf("tail dropped the compiler error:\n%s", got)
+	}
+	if strings.Contains(got, "line-000") {
+		t.Fatalf("tail kept the log head:\n%s", got)
+	}
+	if !strings.Contains(got, "line-199") {
+		t.Fatalf("tail dropped the lines near the error:\n%s", got)
 	}
 }
 

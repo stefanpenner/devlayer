@@ -417,6 +417,8 @@ func darwinCCScript(zig, sdk, arch, tool, staticLib string) string {
 		include = fmt.Sprintf("-I %q ", iconvInc)
 	}
 	return fmt.Sprintf(`#!/bin/sh
+# Do not call xcrun. The host SDK stays out.
+export DEVELOPER_DIR=/tmp/devlayer-no-xcrun
 # A -l flag may appear before its -L flag. Record the directories first.
 # Do not keep -L. A search path lets the linker record a stub install-name.
 libdir=%q
@@ -558,7 +560,8 @@ if [ "$pendlib" = 1 ]; then
   printf 'refusing -l\n' >&2
   exit 1
 fi
-exec %q %s -target %s-macos --sysroot %q %s-isystem %q -iframework %q -F %q -mmacosx-version-min=11.0 "$@"
+# Zig 0.15 instruments C unless the sanitize flag is off.
+exec %q %s -target %s-macos --sysroot %q %s-isystem %q -iframework %q -F %q -mmacosx-version-min=11.0 -fno-sanitize=undefined "$@"
 `, libdir, iconv, wide, narrow, iconvInc, zig, tool, arch, sdk, include, sdk+"/usr/include", fw, fw)
 }
 
@@ -934,7 +937,7 @@ func buildHtop(binDir string, vers *versions.Versions, cc []string) error {
 		return err
 	}
 	if err := run(srcRoot, env, "./configure", htopConfigureArgs(staticPrefix(cc))...); err != nil {
-		return fmt.Errorf("htop configure: %w", err)
+		return configureErr("htop", srcRoot, err)
 	}
 	if err := run(srcRoot, env, "make", fmt.Sprintf("-j%d", runtime.NumCPU())); err != nil {
 		return fmt.Errorf("htop build: %w", err)
@@ -1220,6 +1223,32 @@ func dropEnv(env []string, key string) []string {
 	return out
 }
 
+func configureErr(label, dir string, err error) error {
+	tail := configLogTail(dir)
+	if tail == "" {
+		return fmt.Errorf("%s configure: %w", label, err)
+	}
+	return fmt.Errorf("%s configure: %w\n%s", label, err, tail)
+}
+
+func configLogTail(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "config.log"))
+	if err != nil {
+		return ""
+	}
+	const maxLines = 80
+	const maxBytes = 12000
+	lines := strings.Split(string(data), "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	text := strings.TrimSpace(strings.Join(lines, "\n"))
+	if len(text) > maxBytes {
+		text = text[len(text)-maxBytes:]
+	}
+	return text
+}
+
 func buildDarwinStaticLibs(vers *versions.Versions, cc []string, scriptDir string) error {
 	prefix := staticPrefix(cc)
 	if prefix == "" {
@@ -1290,7 +1319,7 @@ func buildAutotoolsStatic(label, url, prefix string, cc, configure []string, ser
 	args = append(args, extra...)
 	env := htopBuildEnv(withCompiler(os.Environ(), cc))
 	if err := run(srcRoot, env, "./configure", args...); err != nil {
-		return fmt.Errorf("%s configure: %w", label, err)
+		return configureErr(label, srcRoot, err)
 	}
 	if check != nil {
 		if err := check(srcRoot); err != nil {
@@ -1339,7 +1368,7 @@ func buildMake(binDir string, vers *versions.Versions, cc []string) error {
 
 	env := htopBuildEnv(withCompiler(os.Environ(), cc))
 	if err := run(srcRoot, env, "./configure", "CFLAGS=-Os -DNDEBUG"); err != nil {
-		return fmt.Errorf("make configure: %w", err)
+		return configureErr("make", srcRoot, err)
 	}
 	if err := run(srcRoot, env, buildMakeTool(runtime.GOOS), fmt.Sprintf("-j%d", runtime.NumCPU())); err != nil {
 		return fmt.Errorf("make build: %w", err)
