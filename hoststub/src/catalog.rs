@@ -31,6 +31,8 @@ pub struct App {
     pub pack: Pack,
     /// arg0 keeps the name the user typed.
     pub arg0: bool,
+    /// install runs the program setup once, then runs the installed copy.
+    pub install: bool,
     pub pins: &'static [Pin],
 }
 
@@ -104,6 +106,35 @@ const GROK: &[Pin] = &[
     },
 ];
 
+const TERMIUM: &[Pin] = &[
+    Pin {
+        os: "darwin",
+        arch: "arm64",
+        url:
+            "https://github.com/codr1/termium/releases/download/v0.2.4/termium-darwin-arm64.tar.gz",
+        sha256: "1230a1956163bf66ed29de551434245fd8bc7f24e102c46517be4d5b0364a64f",
+        size: 50_684_482,
+        plain: 0,
+    },
+    Pin {
+        os: "darwin",
+        arch: "x64",
+        url:
+            "https://github.com/codr1/termium/releases/download/v0.2.4/termium-darwin-amd64.tar.gz",
+        sha256: "f73a92f9904570fe1913469e6cc478d85af473b30491481d7ae812d8e306bd1b",
+        size: 52_225_792,
+        plain: 0,
+    },
+    Pin {
+        os: "linux",
+        arch: "x64",
+        url: "https://github.com/codr1/termium/releases/download/v0.2.4/termium-linux-amd64.tar.gz",
+        sha256: "1f4d9ef2b19533d1429be98df6020af2f149ef20e685db77e7402f7544fad175",
+        size: 179_532_692,
+        plain: 0,
+    },
+];
+
 /// APPS is the catalog. The file name selects one row.
 pub static APPS: &[App] = &[
     App {
@@ -113,6 +144,7 @@ pub static APPS: &[App] = &[
         exec: "bin/terminal-browser",
         pack: Pack::TarGz { strip: 1 },
         arg0: false,
+        install: false,
         pins: TERMINAL_BROWSER,
     },
     App {
@@ -122,7 +154,18 @@ pub static APPS: &[App] = &[
         exec: "grok",
         pack: Pack::Gzip,
         arg0: true,
+        install: false,
         pins: GROK,
+    },
+    App {
+        name: "termium",
+        aliases: &[],
+        version: "v0.2.4",
+        exec: "bin/termium",
+        pack: Pack::TarGz { strip: 0 },
+        arg0: true,
+        install: true,
+        pins: TERMIUM,
     },
 ];
 

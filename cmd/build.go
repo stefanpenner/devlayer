@@ -223,7 +223,7 @@ func installHostStub(binDir, scriptDir string) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"terminal-browser", "grok", "agent"} {
+	for _, name := range []string{"terminal-browser", "grok", "agent", "termium"} {
 		out := filepath.Join(binDir, name)
 		if err := copyFile(bin, out); err != nil {
 			return fmt.Errorf("copy host stub: %w", err)

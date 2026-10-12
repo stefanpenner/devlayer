@@ -7,11 +7,11 @@ use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use hoststub::{
-    decide, extract, find, inflate, machine, pin, progress_line, sha256_file, write_stamp, Action,
-    App, Pack,
+    decide, extract, find, inflate, installed_exec, machine, park_launcher, pin, progress_line,
+    sha256_file, write_stamp, Action, App, Pack,
 };
 
 fn main() {
@@ -27,9 +27,14 @@ fn run() -> Result<(), String> {
     let (os, arch) = machine();
     let pin = pin(app, os, arch)?;
     let data = data_home()?;
-    let path = match decide(&data, app, pin.sha256) {
+    let extracted = match decide(&data, app, pin.sha256) {
         Action::Run(path) => path,
         Action::Fetch { cache } => fetch(app, pin, &cache)?,
+    };
+    let path = if app.install {
+        install_app(&data, app, pin.sha256, &extracted)?
+    } else {
+        extracted
     };
     let mut cmd = Command::new(&path);
     if app.arg0 {
@@ -70,6 +75,46 @@ fn fetch(app: &App, pin: &hoststub::Pin, cache: &Path) -> Result<PathBuf, String
     let _ = fs::remove_file(&part);
     write_stamp(cache, pin.sha256, app.exec)?;
     Ok(cache.join(app.exec))
+}
+
+fn install_app(data: &Path, app: &App, sum: &str, extracted: &Path) -> Result<PathBuf, String> {
+    let home = app_home(data, app.name);
+    let dest = installed_exec(&home, app.exec);
+    if dest.is_file() {
+        return Ok(dest);
+    }
+    let user = env::var_os("HOME").ok_or_else(|| "hoststub: HOME is empty".to_string())?;
+    let bin = PathBuf::from(&user).join(".local").join("bin");
+    let launcher = bin.join(app.name);
+    let aside = bin.join(format!("{}.hoststub", app.name));
+    park_launcher(&launcher, &aside, || {
+        let status = Command::new(extracted)
+            .arg("--install-bundle")
+            .env("TERMIUM_NO_MODIFY_PATH", "1")
+            .env("TERMIUM_INSTALL_SHA256", sum)
+            .stdin(Stdio::null())
+            .status()
+            .map_err(|err| err.to_string())?;
+        if !status.success() {
+            return Err(format!("hoststub: setup status {status}"));
+        }
+        Ok(())
+    })?;
+    if !dest.is_file() {
+        return Err("hoststub: setup did not write the program".to_string());
+    }
+    Ok(dest)
+}
+
+fn app_home(data: &Path, name: &str) -> PathBuf {
+    if name == "termium" {
+        if let Some(value) = env::var_os("TERMIUM_HOME") {
+            if !value.is_empty() {
+                return PathBuf::from(value);
+            }
+        }
+    }
+    data.join(name)
 }
 
 fn select(args: &[String]) -> Result<(&'static App, String, Vec<String>), String> {

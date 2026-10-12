@@ -167,6 +167,42 @@ pub fn inflate(src: &Path, dest: &Path, plain: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// installed_exec is the program Termium setup leaves in its home.
+pub fn installed_exec(home: &Path, exec_rel: &str) -> PathBuf {
+    home.join("current").join(exec_rel)
+}
+
+/// park_launcher moves a regular file aside for `body`, then puts that file back.
+/// A symlink that `body` writes at the same path is removed first.
+pub fn park_launcher(
+    launcher: &Path,
+    aside: &Path,
+    body: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let occupied = fs::symlink_metadata(launcher)
+        .map(|meta| meta.is_file())
+        .unwrap_or(false);
+    if occupied {
+        if let Some(parent) = aside.parent() {
+            fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        }
+        fs::rename(launcher, aside).map_err(|err| err.to_string())?;
+    }
+    let result = body();
+    if occupied {
+        if fs::symlink_metadata(launcher)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_file(launcher);
+        }
+        if let Err(err) = fs::rename(aside, launcher) {
+            return Err(format!("hoststub: the command did not return: {err}"));
+        }
+    }
+    result
+}
+
 /// progress_line is one status line. The numbers are decimal megabytes.
 pub fn progress_line(name: &str, version: &str, got: u64, total: u64) -> String {
     format!("{name} {version}  {} / {} MB", mb(got), mb(total))
@@ -636,6 +672,73 @@ mod tests {
             pin(app, "darwin", "arm64").unwrap().url,
             pin(app, "linux", "x64").unwrap().url
         );
+    }
+
+    #[test]
+    fn termium_pin_matches_the_machine() {
+        let app = find("termium").unwrap();
+        assert!(app.install);
+        assert!(matches!(app.pack, Pack::TarGz { strip: 0 }));
+        assert_eq!(app.exec, "bin/termium");
+        assert_eq!(app.version, "v0.2.4");
+        let want = [
+            (
+                "darwin",
+                "arm64",
+                "darwin-arm64",
+                "1230a1956163bf66ed29de551434245fd8bc7f24e102c46517be4d5b0364a64f",
+                50_684_482,
+            ),
+            (
+                "darwin",
+                "x64",
+                "darwin-amd64",
+                "f73a92f9904570fe1913469e6cc478d85af473b30491481d7ae812d8e306bd1b",
+                52_225_792,
+            ),
+            (
+                "linux",
+                "x64",
+                "linux-amd64",
+                "1f4d9ef2b19533d1429be98df6020af2f149ef20e685db77e7402f7544fad175",
+                179_532_692,
+            ),
+        ];
+        for (os, arch, token, sum, size) in want {
+            let pin = pin(app, os, arch).unwrap();
+            assert_eq!(pin.sha256, sum);
+            assert_eq!(pin.size, size);
+            assert_eq!(pin.plain, 0);
+            assert_eq!(
+                pin.url,
+                format!("https://github.com/codr1/termium/releases/download/v0.2.4/termium-{token}.tar.gz")
+            );
+        }
+        assert!(pin(app, "linux", "arm64").is_err());
+        assert!(pin(app, "windows", "x64").is_err());
+        assert!(!find("terminal-browser").unwrap().install);
+        assert!(!find("grok").unwrap().install);
+    }
+
+    #[test]
+    fn park_launcher_puts_the_stub_back() {
+        let dir = scratch("park");
+        let launcher = dir.join("termium");
+        let aside = dir.join("termium.hoststub");
+        fs::write(&launcher, b"stub").unwrap();
+        park_launcher(&launcher, &aside, || {
+            std::os::unix::fs::symlink("real", &launcher).unwrap();
+            Err("hoststub: setup failed".to_string())
+        })
+        .unwrap_err();
+        assert_eq!(fs::read(&launcher).unwrap(), b"stub");
+        assert!(!aside.exists());
+        let home = dir.join("home");
+        assert_eq!(
+            installed_exec(&home, "bin/termium"),
+            home.join("current/bin/termium")
+        );
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -1,0 +1,18 @@
+# Policy for the host stub when the file name is termium.
+# The crate bytes are the pin.
+# This file records the libraries the link writes.
+
+format = "macho"
+cputype = ["CPU_TYPE_ARM64"]
+cpusubtype = ["CPU_SUBTYPE_ARM64_ALL"]
+filetype = "MH_EXECUTE"
+flags = ["MH_NOUNDEFS", "MH_DYLDLINK", "MH_TWOLEVEL", "MH_NO_REEXPORTED_DYLIBS", "MH_PIE", "MH_HAS_TLV_DESCRIPTORS"]
+MH_PIE = true
+LC_LOAD_DYLINKER = "/usr/lib/dyld"
+LC_RPATH = []
+LC_LOAD_WEAK_DYLIB = []
+LC_REEXPORT_DYLIB = []
+LC_LOAD_UPWARD_DYLIB = []
+LC_LOAD_DYLIB = [
+  { name = "/usr/lib/libSystem.B.dylib", compatibility_version = "1.0.0", current_version = "1356.0.0", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
+]
