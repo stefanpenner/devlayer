@@ -18,6 +18,10 @@ f48d8f8f9ebe903ab5027ed067652f2cc1db94bc206976430133b905dcd8e8c7  https://github
 a51cf42a4654864837cc116eaca914271d7a09a9c2a60de90ecc2187b8d855a7  https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-aarch64-unknown-linux-musl.tar.gz
 6a73222902d6960ce7183cd833a5d3ea99a3e3ff3cfb33720c1939a41cb7744d  https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-pc-windows-msvc.zip
 cbf2cb5c9d6227e46fc4b29c03dc43b8632020dfc5cf269d263d6e29c399e044  https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-unknown-linux-musl.tar.gz
+4b8a9a32412c0525e4c239e65171706fc5beb6d423608d99fe16788d47b345d3  https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Darwin_arm64.tar.gz
+810c39f4691feb75e675a5f5f54b9fa091354e7599d9cf9c9fc9b97e47a99759  https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Linux_arm64.tar.gz
+13e05e4b2acc18d2aee44291aefe6325b077ec321b631a0cfa780e8e3bc33f78  https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Linux_x86_64.tar.gz
+d8907e07436ecbb6738bc0e3bbf8aa6159e351f95082e9db3c3fc4200086f809  https://github.com/charmbracelet/glow/releases/download/v3.0.0/glow_3.0.0_Windows_x86_64.zip
 9be36612a5a13e9e386dc498fb8e50dc87c72ee42b63db0ea05b32f99a72a69a  https://github.com/dandavison/delta/releases/download/0.19.2/delta-0.19.2-aarch64-apple-darwin.tar.gz
 0bfce159a5cddd5feb3d6db4a616d883ff51253ce08ac7ec11cb1d208cfaab9e  https://github.com/dandavison/delta/releases/download/0.19.2/delta-0.19.2-aarch64-unknown-linux-gnu.tar.gz
 ac8ebb4a9f1cbee8b9ea897ba119808a244181adae6f3bed1f3b6b923c50b557  https://github.com/dandavison/delta/releases/download/0.19.2/delta-0.19.2-x86_64-pc-windows-msvc.zip

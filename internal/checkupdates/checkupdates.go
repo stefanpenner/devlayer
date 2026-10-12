@@ -70,6 +70,7 @@ func collectBumps(pins *versions.Versions, get Get) []Bump {
 	add("RG", LatestGitHub(get, "BurntSushi/ripgrep"))
 	add("DELTA", LatestGitHub(get, "dandavison/delta"))
 	add("LAZYGIT", LatestGitHub(get, "jesseduffield/lazygit"))
+	add("GLOW", LatestGitHub(get, "charmbracelet/glow"))
 	add("BAT_EXTRAS", LatestGitHub(get, "eth-p/bat-extras"))
 	add("JQ", LatestGitHub(get, "jqlang/jq"))
 	add("DIRENV", LatestGitHub(get, "direnv/direnv"))

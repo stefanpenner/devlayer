@@ -18,6 +18,7 @@
 #   //third_party/dust          — disk usage analyzer
 #   //third_party/fzf           — fuzzy finder
 #   //third_party/lazygit       — git TUI
+#   //third_party/glow          — markdown in the terminal
 #   //third_party/age           — file encryption (+ age-keygen)
 #   //third_party/direnv        — per-directory env vars
 #   //third_party/jq            — JSON processor

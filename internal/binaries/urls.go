@@ -35,6 +35,7 @@ func URLs(p *platform.Platform, vers *versions.Versions, skip map[string]bool) (
 
 	put("fzf", fzfURL(p, vers.Get("FZF_VERSION")))
 	put("lazygit", lazygitURL(p, vers.Get("LAZYGIT_VERSION")))
+	put("glow", glowURL(p, vers.Get("GLOW_VERSION")))
 
 	age := ageURL(p, vers.Get("AGE_VERSION"))
 	put("age", age)
@@ -103,6 +104,11 @@ func fzfURL(p *platform.Platform, ver string) string {
 func lazygitURL(p *platform.Platform, ver string) string {
 	asset := fmt.Sprintf("lazygit_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.ArchiveExt())
 	return githubRelease("jesseduffield/lazygit", "v"+ver, asset)
+}
+
+func glowURL(p *platform.Platform, ver string) string {
+	asset := fmt.Sprintf("glow_%s_%s_%s.%s", ver, p.LazygitOS, p.ArchGeneric, p.ArchiveExt())
+	return githubRelease("charmbracelet/glow", "v"+ver, asset)
 }
 
 func ageURL(p *platform.Platform, ver string) string {

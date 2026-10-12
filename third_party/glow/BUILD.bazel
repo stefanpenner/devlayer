@@ -1,0 +1,11 @@
+load("//tools:deadstrip.bzl", "dead_strip_binary")
+
+# glow — pre-built binary
+dead_strip_binary(
+    name = "glow",
+    srcs = select({
+        "//tools:linux_amd64": ["@glow_linux_amd64//:glow"],
+        "//tools:linux_arm64": ["@glow_linux_arm64//:glow"],
+        "//tools:darwin_arm64": ["@glow_darwin_arm64//:glow"],
+    }),
+)

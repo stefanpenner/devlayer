@@ -17,6 +17,7 @@ filegroup(
         "//third_party/dust",
         "//third_party/fd",
         "//third_party/fzf",
+        "//third_party/glow",
         "//third_party/go_sdk",
         "//third_party/jq",
         "//third_party/lazygit",

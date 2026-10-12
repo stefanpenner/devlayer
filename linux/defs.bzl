@@ -56,6 +56,7 @@ def _bins(repo):
         ("dust", "@dust_%s//:dust" % repo),
         ("fzf", "@fzf_%s//:fzf" % repo),
         ("lazygit", "@lazygit_%s//:lazygit" % repo),
+        ("glow", "@glow_%s//:glow" % repo),
         ("age", "@age_%s//:age" % repo),
         ("age-keygen", "@age_%s//:age-keygen" % repo),
         ("shh", "@shh_%s//:shh" % repo),

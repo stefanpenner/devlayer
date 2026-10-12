@@ -1665,7 +1665,7 @@ func VersionSummary(vers *versions.Versions) string {
 	keys := []struct{ label, key string }{
 		{"fzf", "FZF_VERSION"}, {"fd", "FD_VERSION"}, {"bat", "BAT_VERSION"},
 		{"eza", "EZA_VERSION"}, {"rg", "RG_VERSION"}, {"delta", "DELTA_VERSION"},
-		{"lazygit", "LAZYGIT_VERSION"}, {"gh", "GH_VERSION"}, {"jq", "JQ_VERSION"},
+		{"lazygit", "LAZYGIT_VERSION"}, {"glow", "GLOW_VERSION"}, {"gh", "GH_VERSION"}, {"jq", "JQ_VERSION"},
 		{"direnv", "DIRENV_VERSION"},
 		{"nvim", "NVIM_VERSION"}, {"go", "GO_VERSION"}, {"git", "GIT_VERSION"},
 		{"git-win", "GIT_WINDOWS_VERSION"}, {"zsh", "ZSH_VERSION"},

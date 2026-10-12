@@ -371,6 +371,27 @@ chmod 755 devlayer-configure
             build_file_content = _exports(["lazygit"]),
         )
 
+    # glow — the binary is glow_<ver>_<OS>_<arch>/glow
+    for plat, glow_os, arch in [
+        ("linux_amd64", "Linux", "x86_64"),
+        ("linux_arm64", "Linux", "arm64"),
+        ("darwin_arm64", "Darwin", "arm64"),
+    ]:
+        _http_archive(sums,
+            name = "glow_" + plat,
+            urls = ["https://github.com/charmbracelet/glow/releases/download/v{ver}/glow_{ver}_{os}_{arch}.tar.gz".format(
+                ver = v["GLOW"],
+                os = glow_os,
+                arch = arch,
+            )],
+            strip_prefix = "glow_{ver}_{os}_{arch}".format(
+                ver = v["GLOW"],
+                os = glow_os,
+                arch = arch,
+            ),
+            build_file_content = _exports(["glow"]),
+        )
+
     # age — contains age/ directory with age + age-keygen
     for plat, os_name, goarch in [
         ("linux_amd64", "linux", "amd64"),

@@ -37,6 +37,7 @@ var statusCatalog = []statusTool{
 	{name: "jq", arg: "--version"},
 	{name: "direnv", arg: "--version"},
 	{name: "lazygit", arg: "--version"},
+	{name: "glow", arg: "--version"},
 	{name: "gh", arg: "--version"},
 	{name: "htop", arg: "--version", shellOnly: true},
 	{name: "devlayer", arg: "version", full: true},
