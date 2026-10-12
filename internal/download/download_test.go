@@ -63,6 +63,36 @@ func TestFileRetriesInternalError(t *testing.T) {
 	}
 }
 
+func TestFileRetriesRepeatedInternalError(t *testing.T) {
+	body := []byte("shh-bytes")
+	sum := sha256.Sum256(body)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if hits <= 4 {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	dest := filepath.Join(t.TempDir(), "shh.zip")
+	if err := File(srv.URL, dest, hex.EncodeToString(sum[:])); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 5 {
+		t.Fatalf("hits %d", hits)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestFileRetriesGatewayTimeout(t *testing.T) {
 	body := []byte("query-bytes")
 	sum := sha256.Sum256(body)

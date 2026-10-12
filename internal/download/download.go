@@ -376,16 +376,16 @@ func verifiedTemp(url, pattern, sum string) (string, error) {
 		return "", fmt.Errorf("download %s: %w", url, err)
 	}
 	var last error
-	for attempt := 1; attempt <= 4; attempt++ {
+	for attempt := 1; attempt <= 8; attempt++ {
 		name, err := fetchOnce(url, pattern, want)
 		if err == nil {
 			return name, nil
 		}
 		last = err
-		if attempt == 4 || !retryableDownload(err) {
+		if attempt == 8 || !retryableDownload(err) {
 			return "", err
 		}
-		time.Sleep(time.Duration(attempt) * 200 * time.Millisecond)
+		time.Sleep(time.Duration(attempt) * time.Second)
 	}
 	return "", last
 }
