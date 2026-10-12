@@ -71,6 +71,11 @@ fn walk(root: &Path, dir: &Path, policy: &Set, errs: &mut Vec<String>) -> Result
             .file_type()
             .map_err(|err| format!("cannot read {}: {err}", path.display()))?;
         if kind.is_dir() {
+            // The Go SDK is one pinned archive. The checksum is the pin.
+            // Testdata files in that archive are not separate products.
+            if rel_path(root, &path) == "go" {
+                continue;
+            }
             walk(root, &path, policy, errs)?;
             continue;
         }

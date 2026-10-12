@@ -77,6 +77,35 @@ func TestDevlayerBinaryMatchesPolicy(t *testing.T) {
 	}
 }
 
+func TestTreeSkipsThePinnedGoSDK(t *testing.T) {
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "go", "pkg", "tool", "link.exe")
+	if err := os.MkdirAll(filepath.Dir(tool), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tool, IconvELF(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Tree(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTreeChecksABinaryNextToTheGoSDK(t *testing.T) {
+	dir := t.TempDir()
+	evil := filepath.Join(dir, "bin", "evil")
+	if err := os.MkdirAll(filepath.Dir(evil), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evil, IconvELF(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := Tree(dir)
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("bin/evil")) || !bytes.Contains([]byte(err.Error()), []byte("no policy")) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestTreeSkipsScripts(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "cc"), []byte("#!/bin/sh\n"), 0o755); err != nil {
