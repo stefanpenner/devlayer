@@ -1,0 +1,23 @@
+# Policy for one MinGit file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "ADVAPI32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "bcrypt.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libbrotlidec.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "CRYPT32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libidn2-0.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "IPHLPAPI.DLL", why = "The pinned MinGit archive imports this library." },
+  { name = "KERNEL32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msvcrt.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libpsl-5.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "Secur32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libssh2-1.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "WLDAP32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "WS2_32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "zlib1.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libzstd.dll", why = "The pinned MinGit archive imports this library." },
+]

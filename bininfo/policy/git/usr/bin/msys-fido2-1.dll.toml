@@ -1,0 +1,17 @@
+# Policy for one MinGit file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = false
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "msys-cbor-0.11.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msys-crypto-3.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msys-2.0.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msys-z.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msys-gcc_s-seh-1.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "HID.DLL", why = "The pinned MinGit archive imports this library." },
+  { name = "KERNEL32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "SETUPAPI.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "USER32.dll", why = "The pinned MinGit archive imports this library." },
+]

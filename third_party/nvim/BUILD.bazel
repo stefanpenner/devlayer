@@ -1,3 +1,4 @@
+load("@rules_go//go:def.bzl", "go_test")
 load(":defs.bzl", "nvim_musl")
 
 exports_files(
@@ -28,3 +29,9 @@ alias(
 
 # Static musl nvim. //linux:nvim_* applies the Zig Linux transition.
 nvim_musl()
+
+go_test(
+    name = "host_cc_test",
+    srcs = ["host_cc_test.go"],
+    data = ["host_cc.sh"],
+)

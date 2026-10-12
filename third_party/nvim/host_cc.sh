@@ -66,4 +66,18 @@ if [ "$(uname -s)" = Darwin ]; then
   export DEVELOPER_DIR=/tmp/devlayer-no-xcrun
   exec "$NVIM_ZIG" cc -target "$target" --sysroot "$DEVLAYER_SDKROOT" -mmacosx-version-min=11.0 "$@"
 fi
+# GNU libc has no static link in this Zig.
+# The host tool is not a shipped binary.
+# The musl target link still uses -static.
+n=$#
+i=0
+while [ "$i" -lt "$n" ]; do
+  arg=$1
+  shift
+  i=$((i + 1))
+  case "$arg" in
+    -static) ;;
+    *) set -- "$@" "$arg" ;;
+  esac
+done
 exec "$NVIM_ZIG" cc -target "$target" "$@"

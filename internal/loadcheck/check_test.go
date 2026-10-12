@@ -91,6 +91,73 @@ func TestTreeSkipsThePinnedGoSDK(t *testing.T) {
 	}
 }
 
+func TestMinGitPoliciesRecordTheNamedFiles(t *testing.T) {
+	for _, rel := range []string{
+		"git/usr/lib/ssh/ssh-pkcs11-helper.exe",
+		"git/usr/lib/ssh/ssh-sk-helper.exe",
+		"git/usr/lib/ssh/ssh-keysign.exe",
+		"git/usr/libexec/getprocaddr64.exe",
+		"git/usr/libexec/getprocaddr32.exe",
+		"git/usr/bin/ssh-add.exe",
+		"git/usr/bin/basename.exe",
+		"git/usr/bin/cygwin-console-helper.exe",
+		"git/usr/bin/wc.exe",
+		"git/usr/bin/cut.exe",
+		"git/usr/bin/rebase.exe",
+		"git/usr/bin/msys-intl-8.dll",
+		"git/usr/bin/tr.exe",
+		"git/usr/bin/diff.exe",
+		"git/usr/bin/grep.exe",
+		"git/usr/bin/msys-ncursesw6.dll",
+		"git/usr/bin/msys-com_err-1.dll",
+		"git/usr/bin/msys-gmp-10.dll",
+		"git/usr/bin/newgrp.exe",
+		"git/usr/bin/basenc.exe",
+		"git/usr/bin/cp.exe",
+		"git/usr/bin/sdiff.exe",
+		"git/usr/bin/msys-krb5-26.dll",
+		"git/usr/bin/env.exe",
+		"git/usr/bin/pwd.exe",
+		"git/usr/bin/tail.exe",
+		"git/usr/bin/readlink.exe",
+		"git/usr/bin/ssh.exe",
+		"git/usr/bin/msys-wind-0.dll",
+		"git/usr/bin/sh.exe",
+		"git/usr/bin/msys-sqlite3-0.dll",
+		"git/usr/bin/sort.exe",
+	} {
+		path, err := policyPath("bininfo/policy/" + rel + ".toml")
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(body, []byte("format = \"pe\"")) || !bytes.Contains(body, []byte("IMAGE_IMPORT_DESCRIPTOR")) {
+			t.Fatalf("%s is not a PE policy:\n%s", rel, body)
+		}
+		if !bytes.Contains(body, []byte("why = ")) {
+			t.Fatalf("%s has no why:\n%s", rel, body)
+		}
+	}
+}
+
+func TestTreeChecksABinaryInsideMinGit(t *testing.T) {
+	dir := t.TempDir()
+	evil := filepath.Join(dir, "git", "usr", "bin", "not-shipped.exe")
+	if err := os.MkdirAll(filepath.Dir(evil), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evil, IconvELF(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := Tree(dir)
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("git/usr/bin/not-shipped.exe")) || !bytes.Contains([]byte(err.Error()), []byte("no policy")) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestTreeChecksABinaryNextToTheGoSDK(t *testing.T) {
 	dir := t.TempDir()
 	evil := filepath.Join(dir, "bin", "evil")

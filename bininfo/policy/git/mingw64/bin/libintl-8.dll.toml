@@ -1,0 +1,12 @@
+# Policy for one MinGit file.
+# The archive checksum is the pin.
+# This file records the imports.
+
+format = "pe"
+IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = true
+IMAGE_IMPORT_DESCRIPTOR = [
+  { name = "ADVAPI32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "libiconv-2.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "KERNEL32.dll", why = "The pinned MinGit archive imports this library." },
+  { name = "msvcrt.dll", why = "The pinned MinGit archive imports this library." },
+]
