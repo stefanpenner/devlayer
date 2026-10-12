@@ -17,6 +17,14 @@ func TestCargoWorkRootExistsOnLinux(t *testing.T) {
 	}
 }
 
+func TestLinuxBuildScriptsUseZigCrt(t *testing.T) {
+	body := readToolsFile(t, "cargo.bzl")
+	const wrapper = `exec "$$rustc" -C target-feature=+crt-static -C link-self-contained=no "$$@"`
+	if !strings.Contains(body, wrapper) {
+		t.Fatal("a build script can still link the Rust musl crt")
+	}
+}
+
 func TestLinuxRustStartsWithPinnedLoader(t *testing.T) {
 	bzl := readToolsFile(t, "crates.bzl")
 	pins := readToolsFile(t, "crate_pins.sha256")

@@ -68,8 +68,13 @@ chmod 755 "$$work/cc"
             "//tools:libiconv/localcharset.h",
         ]
         extra_config = ""
+        rustc_wrapper = """printf '%s\\n' '#!/bin/sh' 'exec "$$@"' > "$$work/nowrapper"
+chmod 755 "$$work/nowrapper"
+"""
     else:
         # Rust also ships musl crt objects. Zig must be the only crt.
+        # Cargo skips target rustflags for a build script when --target is set.
+        # The wrapper adds the same flags to every rustc call.
         # -static omits the dynamic loader. -no-pie would cancel static PIE.
         sdk_setup = """
 link="$(execpath //tools:cargo_link_linux.sh)"
@@ -79,6 +84,14 @@ chmod 755 "$$work/cc"
 """ % zig_target
         sdk_srcs = ["//tools:cargo_link_linux.sh"]
         extra_config = 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=no"]\n'
+        rustc_wrapper = """cat > "$$work/nowrapper" << 'EOF'
+#!/bin/sh
+rustc=$$1
+shift
+exec "$$rustc" -C target-feature=+crt-static -C link-self-contained=no "$$@"
+EOF
+chmod 755 "$$work/nowrapper"
+"""
     cmd = """
 set -eu
 out="$$PWD/$@"
@@ -108,8 +121,7 @@ case "$$zig" in /*) ;; *) zig="$$PWD/$$zig" ;; esac
 cargo="$(execpath //third_party/rust:cargo)"
 case "$$cargo" in /*) ;; *) cargo="$$PWD/$$cargo" ;; esac
 {sdk_setup}
-printf '%s\\n' '#!/bin/sh' 'exec "$$@"' > "$$work/nowrapper"
-chmod 755 "$$work/nowrapper"
+{rustc_wrapper}
 cat > "$$work/home/cargo/config.toml" << EOF
 [source.crates-io]
 replace-with = "vendored-sources"
@@ -149,6 +161,7 @@ rm -rf "$$work"
         vendor = vendor,
         sdk_setup = sdk_setup,
         extra_config = extra_config,
+        rustc_wrapper = rustc_wrapper,
         zig_target = zig_target,
         triple = triple,
         relflag = relflag,
