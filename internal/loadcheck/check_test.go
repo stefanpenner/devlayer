@@ -297,6 +297,36 @@ func TestDarwinBtopPolicyRecordsTheNamedFile(t *testing.T) {
 	}
 }
 
+func TestDarwinEzaPolicyRecordsTheNamedFile(t *testing.T) {
+	body := readPolicy(t, "bininfo/policy/libexec/eza.toml")
+	if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+		t.Fatalf("eza policy:\n%s", body)
+	}
+	if !bytes.Contains(body, []byte("MH_HAS_TLV_DESCRIPTORS")) || bytes.Contains(body, []byte("MH_WEAK_DEFINES")) || bytes.Contains(body, []byte("IOKit")) {
+		t.Fatalf("eza flags:\n%s", body)
+	}
+	if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+		t.Fatalf("eza names a Homebrew library:\n%s", body)
+	}
+	order := []string{
+		"/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+		"/usr/lib/libSystem.B.dylib",
+		"/usr/lib/libobjc.A.dylib",
+	}
+	at := 0
+	for _, name := range order {
+		needle := []byte("name = \"" + name + "\"")
+		i := bytes.Index(body[at:], needle)
+		if i < 0 {
+			t.Fatalf("eza needed %s:\n%s", name, body)
+		}
+		at += i + len(needle)
+	}
+	if bytes.Count(body, []byte("why = ")) < len(order) {
+		t.Fatalf("eza why:\n%s", body)
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()
