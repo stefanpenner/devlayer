@@ -198,6 +198,46 @@ func TestWindowsPoliciesRecordTheNamedFiles(t *testing.T) {
 	}
 }
 
+func TestDarwinNvimPoliciesRecordTheNamedFiles(t *testing.T) {
+	for _, rel := range []string{
+		"nvim/bin/nvim",
+		"nvim/lib/nvim/parser/c.so",
+		"nvim/lib/nvim/parser/vim.so",
+		"nvim/lib/nvim/parser/markdown.so",
+		"nvim/lib/nvim/parser/vimdoc.so",
+		"nvim/lib/nvim/parser/lua.so",
+		"nvim/lib/nvim/parser/query.so",
+		"nvim/lib/nvim/parser/markdown_inline.so",
+	} {
+		path, err := policyPath("bininfo/policy/" + rel + ".toml")
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("LC_LOAD_DYLIB")) {
+			t.Fatalf("%s is not a Mach-O policy:\n%s", rel, body)
+		}
+		if !bytes.Contains(body, []byte("why = ")) {
+			t.Fatalf("%s has no why:\n%s", rel, body)
+		}
+		if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+			t.Fatalf("%s names a Homebrew library:\n%s", rel, body)
+		}
+		if rel == "nvim/bin/nvim" {
+			if !bytes.Contains(body, []byte("CoreServices")) || !bytes.Contains(body, []byte("libSystem.B.dylib")) || !bytes.Contains(body, []byte("libobjc.A.dylib")) {
+				t.Fatalf("%s dylibs:\n%s", rel, body)
+			}
+			continue
+		}
+		if bytes.Contains(body, []byte("CoreServices")) || !bytes.Contains(body, []byte("libSystem.B.dylib")) {
+			t.Fatalf("%s dylibs:\n%s", rel, body)
+		}
+	}
+}
+
 func TestLinuxGitPoliciesRecordTheNamedFiles(t *testing.T) {
 	for _, rel := range []string{
 		"share/powerlevel10k/gitstatus/usrbin/gitstatusd-linux-aarch64",
