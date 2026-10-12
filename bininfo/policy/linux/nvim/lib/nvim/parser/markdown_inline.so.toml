@@ -1,0 +1,9 @@
+# Policy for one source-built Neovim parser.
+# The source archive checksum is the pin.
+# This file has no dynamic loader.
+
+format = "elf"
+DT_NEEDED = [
+  { name = "libc.so", why = "The parser calls libc." },
+]
+DF_1_PIE = false

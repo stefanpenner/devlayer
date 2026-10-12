@@ -200,14 +200,14 @@ func TestWindowsPoliciesRecordTheNamedFiles(t *testing.T) {
 
 func TestDarwinNvimPoliciesRecordTheNamedFiles(t *testing.T) {
 	for _, rel := range []string{
-		"nvim/bin/nvim",
-		"nvim/lib/nvim/parser/c.so",
-		"nvim/lib/nvim/parser/vim.so",
-		"nvim/lib/nvim/parser/markdown.so",
-		"nvim/lib/nvim/parser/vimdoc.so",
-		"nvim/lib/nvim/parser/lua.so",
-		"nvim/lib/nvim/parser/query.so",
-		"nvim/lib/nvim/parser/markdown_inline.so",
+		"bin/nvim",
+		"lib/nvim/parser/c.so",
+		"lib/nvim/parser/vim.so",
+		"lib/nvim/parser/markdown.so",
+		"lib/nvim/parser/vimdoc.so",
+		"lib/nvim/parser/lua.so",
+		"lib/nvim/parser/query.so",
+		"lib/nvim/parser/markdown_inline.so",
 	} {
 		path, err := policyPath("bininfo/policy/" + rel + ".toml")
 		if err != nil {
@@ -226,7 +226,7 @@ func TestDarwinNvimPoliciesRecordTheNamedFiles(t *testing.T) {
 		if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
 			t.Fatalf("%s names a Homebrew library:\n%s", rel, body)
 		}
-		if rel == "nvim/bin/nvim" {
+		if rel == "bin/nvim" {
 			if !bytes.Contains(body, []byte("CoreServices")) || !bytes.Contains(body, []byte("libSystem.B.dylib")) || !bytes.Contains(body, []byte("libobjc.A.dylib")) {
 				t.Fatalf("%s dylibs:\n%s", rel, body)
 			}
@@ -236,6 +236,151 @@ func TestDarwinNvimPoliciesRecordTheNamedFiles(t *testing.T) {
 			t.Fatalf("%s dylibs:\n%s", rel, body)
 		}
 	}
+}
+
+func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
+	base := t.TempDir()
+	overlay := t.TempDir()
+	for _, dir := range []string{base, overlay} {
+		if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wrong := "format = \"elf\"\nDT_NEEDED = []\nDF_1_PIE = false\n"
+	right := "format = \"elf\"\nDT_NEEDED = [{ name = \"libiconv.so.2\", why = \"The test records this library.\" }]\nDF_1_PIE = false\n"
+	if err := os.WriteFile(filepath.Join(base, "bin", "tool.toml"), []byte(wrong), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(overlay, "bin", "tool.toml"), []byte(right), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "bin", "tool")
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, IconvELF(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BININFO_POLICY", base)
+	t.Setenv("BININFO_POLICY_OVERLAY", overlay)
+	if err := Tree(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinuxBundlePoliciesRecordTheNamedFiles(t *testing.T) {
+	static := []string{
+		"bin/age",
+		"bin/age-keygen",
+		"bin/btop",
+		"bin/direnv",
+		"bin/fzf",
+		"bin/glow",
+		"bin/htop",
+		"bin/jq",
+		"bin/lazygit",
+		"bin/make",
+		"bin/shh",
+		"nvim/bin/nvim",
+		"zig/zig",
+		"zsh/bin/zsh",
+		"nvim/lib/nvim/parser/c.so",
+		"nvim/lib/nvim/parser/query.so",
+		"nvim/lib/nvim/parser/vimdoc.so",
+	}
+	for _, rel := range static {
+		body := readPolicy(t, "bininfo/policy/linux/"+rel+".toml")
+		if !staticElfPolicy(body, false) {
+			t.Fatalf("%s is not a static ELF policy:\n%s", rel, body)
+		}
+	}
+	for _, rel := range []string{
+		"nvim/lib/nvim/parser/lua.so",
+		"nvim/lib/nvim/parser/markdown.so",
+		"nvim/lib/nvim/parser/markdown_inline.so",
+		"nvim/lib/nvim/parser/vim.so",
+	} {
+		body := readPolicy(t, "bininfo/policy/linux/"+rel+".toml")
+		if !bytes.Contains(body, []byte("format = \"elf\"")) || !bytes.Contains(body, []byte("name = \"libc.so\"")) || !bytes.Contains(body, []byte("why = ")) || !bytes.Contains(body, []byte("DF_1_PIE = false")) {
+			t.Fatalf("%s parser policy:\n%s", rel, body)
+		}
+		if bytes.Contains(body, []byte("PT_INTERP = \"/")) || bytes.Contains(body, []byte("DF_1_PIE = true")) {
+			t.Fatalf("%s names a loader:\n%s", rel, body)
+		}
+	}
+	for _, rel := range []string{"bin/bat", "bin/dust", "bin/fd", "bin/rg", "bin/delta"} {
+		if _, err := policyPath("bininfo/policy/linux/" + rel + ".toml"); err == nil {
+			t.Fatalf("%s is in the shared policy", rel)
+		}
+	}
+	for _, rel := range []string{"bin/bat", "bin/dust", "bin/fd", "bin/rg"} {
+		arm := readPolicy(t, "bininfo/policy/linux-aarch64/"+rel+".toml")
+		if !staticElfPolicy(arm, false) {
+			t.Fatalf("aarch64 %s:\n%s", rel, arm)
+		}
+		x86 := readPolicy(t, "bininfo/policy/linux-x86_64/"+rel+".toml")
+		if !staticElfPolicy(x86, true) {
+			t.Fatalf("x86_64 %s:\n%s", rel, x86)
+		}
+	}
+	armDelta := readPolicy(t, "bininfo/policy/linux-aarch64/bin/delta.toml")
+	if !bytes.Contains(armDelta, []byte("PT_INTERP = \"/lib/ld-linux-aarch64.so.1\"")) || !bytes.Contains(armDelta, []byte("DF_1_PIE = true")) {
+		t.Fatalf("aarch64 delta:\n%s", armDelta)
+	}
+	order := []string{
+		"libgcc_s.so.1",
+		"libpthread.so.0",
+		"libm.so.6",
+		"libdl.so.2",
+		"libc.so.6",
+		"ld-linux-aarch64.so.1",
+	}
+	at := 0
+	for _, name := range order {
+		needle := []byte("name = \"" + name + "\"")
+		i := bytes.Index(armDelta[at:], needle)
+		if i < 0 {
+			t.Fatalf("aarch64 delta needed %s:\n%s", name, armDelta)
+		}
+		at += i + len(needle)
+	}
+	if bytes.Count(armDelta, []byte("why = ")) < len(order) {
+		t.Fatalf("aarch64 delta why:\n%s", armDelta)
+	}
+	x86Delta := readPolicy(t, "bininfo/policy/linux-x86_64/bin/delta.toml")
+	if !staticElfPolicy(x86Delta, true) {
+		t.Fatalf("x86_64 delta:\n%s", x86Delta)
+	}
+}
+
+func readPolicy(t *testing.T, rel string) []byte {
+	t.Helper()
+	path, err := policyPath(rel)
+	if err != nil {
+		t.Fatalf("%s: %v", rel, err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func staticElfPolicy(body []byte, pie bool) bool {
+	if !bytes.Contains(body, []byte("format = \"elf\"")) || !bytes.Contains(body, []byte("DT_NEEDED = []")) {
+		return false
+	}
+	if bytes.Contains(body, []byte("libc.so")) || bytes.Contains(body, []byte("PT_INTERP = \"/")) {
+		return false
+	}
+	want := []byte("DF_1_PIE = false")
+	other := []byte("DF_1_PIE = true")
+	if pie {
+		want = []byte("DF_1_PIE = true")
+		other = []byte("DF_1_PIE = false")
+	}
+	return bytes.Contains(body, want) && !bytes.Contains(body, other)
 }
 
 func TestLinuxGitPoliciesRecordTheNamedFiles(t *testing.T) {

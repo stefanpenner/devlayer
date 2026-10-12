@@ -1,0 +1,7 @@
+# Policy for one pinned file.
+# The archive checksum is the pin.
+# This file has no dynamic loader.
+
+format = "elf"
+DT_NEEDED = []
+DF_1_PIE = false

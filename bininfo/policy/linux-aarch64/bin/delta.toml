@@ -1,0 +1,16 @@
+# Policy for the pinned delta file.
+# The archive checksum is the pin.
+# This archive is the glibc build.
+# Delta has no aarch64 musl archive.
+
+format = "elf"
+PT_INTERP = "/lib/ld-linux-aarch64.so.1"
+DT_NEEDED = [
+  { name = "libgcc_s.so.1", why = "This archive is the glibc build. It needs libgcc." },
+  { name = "libpthread.so.0", why = "This archive is the glibc build. It needs libpthread." },
+  { name = "libm.so.6", why = "This archive is the glibc build. It needs libm." },
+  { name = "libdl.so.2", why = "This archive is the glibc build. It needs libdl." },
+  { name = "libc.so.6", why = "This archive is the glibc build. It needs libc." },
+  { name = "ld-linux-aarch64.so.1", why = "This archive is the glibc build. The loader is also a needed name." },
+]
+DF_1_PIE = true

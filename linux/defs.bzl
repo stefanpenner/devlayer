@@ -132,7 +132,7 @@ def _bundle(arch):
             "//bininfo:policy",
         ],
         outs = ["devlayer-linux-%s.tar.gz" % arch],
-        cmd = "BININFO=$(location //bininfo) BININFO_POLICY=bininfo/policy/linux " + " ".join(cmd),
+        cmd = "BININFO=$(location //bininfo) BININFO_POLICY=bininfo/policy/linux BININFO_POLICY_OVERLAY=bininfo/policy/linux-%s " % arch + " ".join(cmd),
         tags = ["manual"],
         visibility = ["//visibility:public"],
     )
@@ -153,5 +153,6 @@ def _bundle(arch):
             "DEVLAYER_BUNDLE": "$(location :bundle_%s)" % arch,
             "BININFO": "$(rootpath //bininfo)",
             "BININFO_POLICY": "bininfo/policy/linux",
+            "BININFO_POLICY_OVERLAY": "bininfo/policy/linux-%s" % arch,
         },
     )

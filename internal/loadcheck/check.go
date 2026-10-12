@@ -55,7 +55,10 @@ func run(path string) error {
 	if err != nil {
 		return err
 	}
-	policy, err := policyFile()
+	policy, cleanup, err := policyFile()
+	if cleanup != nil {
+		defer cleanup()
+	}
 	if err != nil {
 		return err
 	}
@@ -82,11 +85,67 @@ func bininfoBin() (string, error) {
 	return resolve("BININFO")
 }
 
-func policyFile() (string, error) {
+func policyFile() (string, func(), error) {
 	if os.Getenv("BININFO_POLICY") == "" {
-		return "", fmt.Errorf("loadcheck: policy is missing")
+		return "", nil, fmt.Errorf("loadcheck: policy is missing")
 	}
-	return resolve("BININFO_POLICY")
+	base, err := resolve("BININFO_POLICY")
+	if err != nil {
+		return "", nil, err
+	}
+	if os.Getenv("BININFO_POLICY_OVERLAY") == "" {
+		return base, nil, nil
+	}
+	over, err := resolve("BININFO_POLICY_OVERLAY")
+	if err != nil {
+		return "", nil, err
+	}
+	dir, err := mergePolicy(base, over)
+	if err != nil {
+		return "", nil, err
+	}
+	return dir, func() { os.RemoveAll(dir) }, nil
+}
+
+// mergePolicy copies base, then overlay. An overlay file replaces one base file.
+func mergePolicy(base, overlay string) (string, error) {
+	dir, err := os.MkdirTemp("", "loadcheck-policy-")
+	if err != nil {
+		return "", err
+	}
+	if err := copyPolicyFiles(base, dir); err != nil {
+		os.RemoveAll(dir)
+		return "", err
+	}
+	if err := copyPolicyFiles(overlay, dir); err != nil {
+		os.RemoveAll(dir)
+		return "", err
+	}
+	return dir, nil
+}
+
+func copyPolicyFiles(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out := filepath.Join(dst, rel)
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(out, body, 0o644)
+	})
 }
 
 func resolve(key string) (string, error) {
