@@ -1,0 +1,21 @@
+# Policy for the source-built btop binary.
+# The source archive checksum is the pin.
+# This file records the libraries the link writes.
+
+format = "macho"
+cputype = ["CPU_TYPE_ARM64"]
+cpusubtype = ["CPU_SUBTYPE_ARM64_ALL"]
+filetype = "MH_EXECUTE"
+flags = ["MH_NOUNDEFS", "MH_DYLDLINK", "MH_TWOLEVEL", "MH_WEAK_DEFINES", "MH_BINDS_TO_WEAK", "MH_NO_REEXPORTED_DYLIBS", "MH_PIE", "MH_HAS_TLV_DESCRIPTORS"]
+MH_PIE = true
+LC_LOAD_DYLINKER = "/usr/lib/dyld"
+LC_RPATH = []
+LC_LOAD_WEAK_DYLIB = []
+LC_REEXPORT_DYLIB = []
+LC_LOAD_UPWARD_DYLIB = []
+LC_LOAD_DYLIB = [
+  { name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", why = "btop calls Core Foundation." },
+  { name = "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit", why = "btop reads host IOKit." },
+  { name = "/usr/lib/libSystem.B.dylib", why = "macOS has no static libc. libc, libm, and pthread are in this file." },
+  { name = "/usr/lib/libobjc.A.dylib", why = "The Objective-C runtime is in this file." },
+]

@@ -266,6 +266,37 @@ func TestDarwinHtopPolicyRecordsTheNamedFile(t *testing.T) {
 	}
 }
 
+func TestDarwinBtopPolicyRecordsTheNamedFile(t *testing.T) {
+	body := readPolicy(t, "bininfo/policy/bin/btop.toml")
+	if !bytes.Contains(body, []byte("format = \"macho\"")) || !bytes.Contains(body, []byte("filetype = \"MH_EXECUTE\"")) || !bytes.Contains(body, []byte("MH_PIE = true")) {
+		t.Fatalf("btop policy:\n%s", body)
+	}
+	if !bytes.Contains(body, []byte("MH_WEAK_DEFINES")) || !bytes.Contains(body, []byte("MH_BINDS_TO_WEAK")) || !bytes.Contains(body, []byte("MH_HAS_TLV_DESCRIPTORS")) {
+		t.Fatalf("btop flags:\n%s", body)
+	}
+	if bytes.Contains(body, []byte("/opt/homebrew")) || bytes.Contains(body, []byte("/usr/local/")) {
+		t.Fatalf("btop names a Homebrew library:\n%s", body)
+	}
+	order := []string{
+		"/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+		"/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+		"/usr/lib/libSystem.B.dylib",
+		"/usr/lib/libobjc.A.dylib",
+	}
+	at := 0
+	for _, name := range order {
+		needle := []byte("name = \"" + name + "\"")
+		i := bytes.Index(body[at:], needle)
+		if i < 0 {
+			t.Fatalf("btop needed %s:\n%s", name, body)
+		}
+		at += i + len(needle)
+	}
+	if bytes.Count(body, []byte("why = ")) < len(order) {
+		t.Fatalf("btop why:\n%s", body)
+	}
+}
+
 func TestPolicyOverlayReplacesTheBaseFile(t *testing.T) {
 	base := t.TempDir()
 	overlay := t.TempDir()
