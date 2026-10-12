@@ -170,10 +170,10 @@ jobs:
 
       - name: Build Linux bundle
         run: |
-          bazel build //linux:bundle_${{ matrix.arch }}
-          cp bazel-bin/linux/devlayer-linux-${{ matrix.arch }}.tar.gz .
-          # Bazel outputs are read-only (0444); clear the bit so the re-tar
-          # below can overwrite this same filename.
+          # devlayer build runs the Bazel bundle, then stamps the nvim config
+          # and the lua plugin pack into that archive.
+          chmod +x devlayer-linux-${{ matrix.arch }}
+          ./devlayer-linux-${{ matrix.arch }} build --os linux --arch ${{ matrix.arch }}
           chmod u+w devlayer-linux-${{ matrix.arch }}.tar.gz
           # Inject devlayer CLI into the bundle
           tmpdir=$(mktemp -d)
@@ -194,6 +194,12 @@ jobs:
             head -1 "/tmp/devlayer-verify/bin/$f" | grep -q '#!/bin/sh' || { echo "FAIL: bin/$f not a wrapper"; exit 1; }
             echo "  bin/$f: wrapper ok"
           done
+
+          echo "==> Verifying nvim config..."
+          test -f /tmp/devlayer-verify/share/devlayer/config/nvim/init.lua || { echo "FAIL: nvim init.lua missing"; exit 1; }
+          test -d /tmp/devlayer-verify/share/devlayer/data/nvim/site/pack/core/opt/snacks.nvim || { echo "FAIL: nvim plugin pack missing"; exit 1; }
+          grep -q 'XDG_CONFIG_HOME' /tmp/devlayer-verify/bin/nvim || { echo "FAIL: nvim wrapper missing XDG_CONFIG_HOME"; exit 1; }
+          test ! -e /tmp/devlayer-verify/share/devlayer/data/nvim/mason || { echo "FAIL: host mason is in the bundle"; exit 1; }
 
           echo "==> Verifying ELF machine..."
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
@@ -286,7 +292,11 @@ jobs:
 
           echo "==> Verifying env vars..."
           grep -q 'VIMRUNTIME' /tmp/devlayer-verify/bin/nvim || { echo "FAIL: nvim missing VIMRUNTIME"; exit 1; }
+          grep -q 'XDG_CONFIG_HOME' /tmp/devlayer-verify/bin/nvim || { echo "FAIL: nvim wrapper missing XDG_CONFIG_HOME"; exit 1; }
           grep -q 'GOROOT' /tmp/devlayer-verify/bin/go || { echo "FAIL: go missing GOROOT"; exit 1; }
+          test -f /tmp/devlayer-verify/share/devlayer/config/nvim/init.lua || { echo "FAIL: nvim init.lua missing"; exit 1; }
+          test -d /tmp/devlayer-verify/share/devlayer/data/nvim/site/pack/core/opt/snacks.nvim || { echo "FAIL: nvim plugin pack missing"; exit 1; }
+          test ! -e /tmp/devlayer-verify/share/devlayer/data/nvim/mason || { echo "FAIL: host mason is in the bundle"; exit 1; }
 
           echo "==> Verifying source-built tools..."
           test -x /tmp/devlayer-verify/bin/htop || { echo "FAIL: htop not found"; exit 1; }
@@ -387,6 +397,10 @@ jobs:
           grep -q 'GIT_EXEC_PATH' /tmp/devlayer-verify/bin/git.cmd || { echo "FAIL: git.cmd missing GIT_EXEC_PATH"; exit 1; }
           grep -q 'GOROOT' /tmp/devlayer-verify/bin/go.cmd || { echo "FAIL: go.cmd missing GOROOT"; exit 1; }
           grep -q 'VIMRUNTIME' /tmp/devlayer-verify/bin/nvim.cmd || { echo "FAIL: nvim.cmd missing VIMRUNTIME"; exit 1; }
+          grep -q 'XDG_CONFIG_HOME' /tmp/devlayer-verify/bin/nvim.cmd || { echo "FAIL: nvim.cmd missing XDG_CONFIG_HOME"; exit 1; }
+          unzip -l devlayer-windows-*.zip | grep -q 'share/devlayer/config/nvim/init.lua' || { echo "FAIL: nvim init.lua missing"; exit 1; }
+          unzip -l devlayer-windows-*.zip | grep -q 'snacks.nvim/init.lua' || { echo "FAIL: nvim plugin pack missing"; exit 1; }
+          if unzip -l devlayer-windows-*.zip | grep -q 'share/devlayer/data/nvim/mason/'; then echo "FAIL: host mason is in the bundle"; exit 1; fi
 
           echo "==> Verifying MinGit..."
           test -f "/tmp/devlayer-verify/git/cmd/git.exe" || { echo "FAIL: git/cmd/git.exe not found"; exit 1; }

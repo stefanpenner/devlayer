@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/stefanpenner/devlayer/internal/archive"
+	"github.com/stefanpenner/devlayer/internal/assemble"
 	"github.com/stefanpenner/devlayer/internal/binaries"
 	"github.com/stefanpenner/devlayer/internal/config"
 	"github.com/stefanpenner/devlayer/internal/deadstrip"
@@ -104,8 +105,7 @@ func Build(args []string, vers *versions.Versions, scriptDir, outDir string) err
 	if err := buildNvimPlugins(outDir); err != nil {
 		return err
 	}
-
-	return nil
+	return stampNvimSysroots(scriptDir, outDir)
 }
 
 func buildDarwin(opts buildOptions, vers *versions.Versions, scriptDir, outDir string) error {
@@ -1722,6 +1722,125 @@ func buildNvimPlugins(scriptDir string) error {
 	return nil
 }
 
+// stampNvimSysroots puts the repo nvim config and the lua plugin pack
+// into each sysroot archive in outDir.
+// Config text is rung 4. The lua pack is rung 3.
+// Mason bins and treesitter parsers stay in the side archive. They are rung 6.
+func stampNvimSysroots(scriptDir, outDir string) error {
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return err
+	}
+	var paths []string
+	for _, e := range entries {
+		if e.IsDir() || !isNvimSysrootArchive(e.Name()) {
+			continue
+		}
+		paths = append(paths, filepath.Join(outDir, e.Name()))
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	pluginTar := filepath.Join(outDir, "devlayer-nvim-plugins.tar.gz")
+	if _, err := os.Stat(pluginTar); err != nil {
+		return fmt.Errorf("nvim plugin pack: %w", err)
+	}
+	for _, path := range paths {
+		fmt.Printf("==> Stamping nvim into %s\n", filepath.Base(path))
+		if err := stampNvimSysroot(path, scriptDir, pluginTar); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isNvimSysrootArchive(name string) bool {
+	switch {
+	case strings.HasPrefix(name, "devlayer-linux-") && strings.HasSuffix(name, ".tar.gz"):
+		return true
+	case strings.HasPrefix(name, "devlayer-darwin-") && strings.HasSuffix(name, ".tar.gz"):
+		return true
+	case strings.HasPrefix(name, "devlayer-windows-") && strings.HasSuffix(name, ".zip"):
+		return true
+	default:
+		return false
+	}
+}
+
+func stampNvimSysroot(archivePath, scriptDir, pluginTar string) error {
+	root, err := os.MkdirTemp("", "devlayer-nvim-stamp-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+
+	windows := strings.HasSuffix(archivePath, ".zip")
+	if windows {
+		err = archive.ExtractZip(archivePath, root)
+	} else {
+		err = archive.ExtractTarGz(archivePath, root)
+	}
+	if err != nil {
+		return err
+	}
+	if err := placeNvimConfig(scriptDir, root); err != nil {
+		return err
+	}
+	if err := placeNvimPack(pluginTar, root); err != nil {
+		return err
+	}
+	if err := writeStampedNvimWrapper(root, windows); err != nil {
+		return err
+	}
+
+	tmp := archivePath + ".stamp"
+	defer os.Remove(tmp)
+	if windows {
+		err = archive.CreateZip(tmp, root)
+	} else {
+		err = archive.CreateTarGz(tmp, root)
+	}
+	if err != nil {
+		return err
+	}
+	return os.Rename(tmp, archivePath)
+}
+
+func placeNvimPack(pluginTar, prefix string) error {
+	stage, err := os.MkdirTemp("", "devlayer-nvim-pack-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	if err := archive.ExtractTarGz(pluginTar, stage); err != nil {
+		return err
+	}
+	src := filepath.Join(stage, "site", "pack")
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("nvim plugin pack: site/pack missing")
+	}
+	dst := filepath.Join(prefix, "share", "devlayer", "data", "nvim", "site", "pack")
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	return copyDirSimple(src, dst)
+}
+
+func writeStampedNvimWrapper(root string, windows bool) error {
+	bin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0755); err != nil {
+		return err
+	}
+	if windows {
+		return createWindowsWrappers(bin, []wrapper{{
+			"nvim",
+			`nvim\bin\nvim.exe`,
+			map[string]string{"VIMRUNTIME": `%PREFIX%\nvim\share\nvim\runtime`},
+		}})
+	}
+	return os.WriteFile(filepath.Join(bin, "nvim"), []byte(assemble.NvimWrapper()), 0755)
+}
+
 // copyPresentDir copies a host tree. A missing tree is not an error.
 func copyPresentDir(src, dst string) (bool, error) {
 	if _, err := os.Stat(src); err != nil {
@@ -1928,6 +2047,13 @@ type wrapper struct {
 // exec's the real binary.
 func createUnixWrappers(binDir string, wrappers []wrapper) error {
 	for _, w := range wrappers {
+		if w.name == "nvim" {
+			path := filepath.Join(binDir, w.name)
+			if err := os.WriteFile(path, []byte(assemble.NvimWrapper()), 0755); err != nil {
+				return fmt.Errorf("wrapper %s: %w", w.name, err)
+			}
+			continue
+		}
 		var b strings.Builder
 		b.WriteString("#!/bin/sh\n")
 		b.WriteString(`PREFIX="$(cd "$(dirname "$0")/.." && pwd)"` + "\n")
@@ -1960,6 +2086,13 @@ func createWindowsWrappers(binDir string, wrappers []wrapper) error {
 			fmt.Fprintf(&b, "set \"%s=%s\"\r\n", k, expanded)
 		}
 		realPath := strings.ReplaceAll(w.realPath, `%PREFIX%`, `%~dp0..`)
+		if w.name == "nvim" {
+			b.WriteString("set \"PREFIX=%~dp0..\"\r\n")
+			b.WriteString("if exist \"%PREFIX%\\share\\devlayer\\config\\nvim\\init.lua\" if exist \"%PREFIX%\\share\\devlayer\\data\\nvim\\site\\pack\\core\\opt\\snacks.nvim\" (\r\n")
+			b.WriteString("  set \"XDG_CONFIG_HOME=%PREFIX%\\share\\devlayer\\config\"\r\n")
+			b.WriteString("  set \"XDG_DATA_HOME=%PREFIX%\\share\\devlayer\\data\"\r\n")
+			b.WriteString(")\r\n")
+		}
 		fmt.Fprintf(&b, "\"%%~dp0..\\%s\" %%*\r\n", realPath)
 
 		path := filepath.Join(binDir, w.name+".cmd")

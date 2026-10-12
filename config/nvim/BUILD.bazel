@@ -1,0 +1,13 @@
+exports_files(
+    [
+        "init.lua",
+        "nvim-pack-lock.json",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "config",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)

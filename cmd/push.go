@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/stefanpenner/devlayer/internal/archive"
 	"github.com/stefanpenner/devlayer/internal/ssh"
 	"github.com/stefanpenner/devlayer/internal/versions"
 )
@@ -36,6 +37,9 @@ func Push(host, scriptDir string, vers *versions.Versions) error {
 		return err
 	}
 	if err := deployNvimPlugins(host, scriptDir); err != nil {
+		return err
+	}
+	if err := deployNvimSysroot(host, scriptDir, prefix); err != nil {
 		return err
 	}
 	if err := ensureRemoteProfile(host, prefix); err != nil {
@@ -104,6 +108,49 @@ func deployDotfiles(host, scriptDir string) error {
 	fmt.Println("==> Deploying dotfiles...")
 	if err := ssh.PipeFile(host, dotfilesTar, "tar xzf - -C $HOME"); err != nil {
 		return fmt.Errorf("dotfiles: %w", err)
+	}
+	return nil
+}
+
+// deployNvimSysroot copies the repo config and the lua plugin pack into the remote prefix.
+// Mason bins and treesitter parsers stay out. They are host files.
+func deployNvimSysroot(host, scriptDir, prefix string) error {
+	if err := deployNvimConfig(host, scriptDir, prefix); err != nil {
+		return err
+	}
+	tar := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
+	if _, err := os.Stat(tar); err != nil {
+		return nil
+	}
+	dest := prefix + "/share/devlayer/data/nvim"
+	fmt.Println("==> Deploying nvim plugins into the sysroot...")
+	cmd := fmt.Sprintf("mkdir -p '%s' && tar xzf - -C '%s' ./site/pack", dest, dest)
+	if err := ssh.PipeFile(host, tar, cmd); err != nil {
+		return fmt.Errorf("nvim sysroot plugins: %w", err)
+	}
+	return nil
+}
+
+func deployNvimConfig(host, scriptDir, prefix string) error {
+	src := filepath.Join(scriptDir, "config", "nvim")
+	if _, err := os.Stat(filepath.Join(src, "init.lua")); err != nil {
+		return nil
+	}
+	tmp, err := os.CreateTemp("", "devlayer-nvim-config-*.tar.gz")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	tmp.Close()
+	defer os.Remove(name)
+	if err := archive.CreateTarGz(name, src); err != nil {
+		return err
+	}
+	dest := prefix + "/share/devlayer/config/nvim"
+	fmt.Println("==> Deploying nvim config...")
+	cmd := fmt.Sprintf("mkdir -p '%s' && tar xzf - -C '%s'", dest, dest)
+	if err := ssh.PipeFile(host, name, cmd); err != nil {
+		return fmt.Errorf("nvim config: %w", err)
 	}
 	return nil
 }

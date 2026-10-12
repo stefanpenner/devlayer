@@ -30,6 +30,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//internal/archive",
+        "//internal/assemble",
         "//internal/binaries",
         "//internal/checkupdates",
         "//internal/config",

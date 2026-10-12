@@ -61,6 +61,14 @@ func TestZshPromptModulesAreStatic(t *testing.T) {
 	}
 }
 
+func TestLinuxBundleShipsNvimConfig(t *testing.T) {
+	text := repoFile(t, "linux/defs.bzl")
+	const dest = "share/devlayer/config/nvim"
+	if !strings.Contains(text, dest) {
+		t.Fatalf("linux bundle does not place the nvim config at %s", dest)
+	}
+}
+
 // gitstatusd must sit next to the plugin. If it is absent, the plugin
 // downloads it into the home directory. A noexec home then refuses to run it.
 func TestLinuxBundleShipsGitstatusd(t *testing.T) {

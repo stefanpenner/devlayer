@@ -55,6 +55,12 @@ func Install(scriptDir string) error {
 	if err := installNvimPlugins(scriptDir); err != nil {
 		return err
 	}
+	if err := placeNvimConfig(scriptDir, prefix); err != nil {
+		return err
+	}
+	if err := placeNvimData(scriptDir, prefix); err != nil {
+		return err
+	}
 
 	fmt.Printf("==> Done. Ensure PATH includes %s%cbin\n", prefix, filepath.Separator)
 	return nil
@@ -92,6 +98,34 @@ func installDotfiles(scriptDir string) error {
 		return fmt.Errorf("dotfiles: %w", err)
 	}
 	return nil
+}
+
+// placeNvimConfig copies the repo nvim config into the sysroot.
+// A checkout without init.lua skips the copy.
+func placeNvimConfig(root, prefix string) error {
+	src := filepath.Join(root, "config", "nvim")
+	if _, err := os.Stat(filepath.Join(src, "init.lua")); err != nil {
+		return nil
+	}
+	dst := filepath.Join(prefix, "share", "devlayer", "config", "nvim")
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	return copyDirSimple(src, dst)
+}
+
+// placeNvimData extracts the plugin archive into the sysroot data tree.
+// A missing archive is not an error.
+func placeNvimData(scriptDir, prefix string) error {
+	tar := filepath.Join(scriptDir, "devlayer-nvim-plugins.tar.gz")
+	if _, err := os.Stat(tar); err != nil {
+		return nil
+	}
+	dir := filepath.Join(prefix, "share", "devlayer", "data", "nvim")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return archive.ExtractTarGz(tar, dir)
 }
 
 // installNvimPlugins extracts the plugin archive into the nvim data directory.

@@ -170,7 +170,7 @@ func writeWrappers(binDir string) error {
 	}{
 		{"git", gitWrapper()},
 		{"zsh", zshWrapper()},
-		{"nvim", nvimWrapper()},
+		{"nvim", NvimWrapper()},
 		{"go", goWrapper()},
 		{"gofmt", gofmtWrapper()},
 		{"zig", zigWrapper()},
@@ -201,10 +201,17 @@ exec "$PREFIX/zsh/bin/zsh" "$@"
 `
 }
 
-func nvimWrapper() string {
+// NvimWrapper points nvim at the sysroot config and plugins.
+// The trees are rung 4 text and the locked plugin pack.
+// A prefix without both trees keeps the home config.
+func NvimWrapper() string {
 	return `#!/bin/sh
 PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
 export VIMRUNTIME="$PREFIX/nvim/share/nvim/runtime"
+if [ -f "$PREFIX/share/devlayer/config/nvim/init.lua" ] && [ -d "$PREFIX/share/devlayer/data/nvim/site/pack/core/opt/snacks.nvim" ]; then
+  export XDG_CONFIG_HOME="$PREFIX/share/devlayer/config"
+  export XDG_DATA_HOME="$PREFIX/share/devlayer/data"
+fi
 exec "$PREFIX/nvim/bin/nvim" "$@"
 `
 }

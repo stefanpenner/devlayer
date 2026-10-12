@@ -43,12 +43,16 @@ func TestWrappers(t *testing.T) {
 		},
 		{
 			name: "nvim",
-			body: nvimWrapper(),
+			body: NvimWrapper(),
 			want: []string{
 				"#!/bin/sh",
 				prefix,
 				"VIMRUNTIME=",
 				"nvim/share/nvim/runtime",
+				`[ -f "$PREFIX/share/devlayer/config/nvim/init.lua" ]`,
+				`[ -d "$PREFIX/share/devlayer/data/nvim/site/pack/core/opt/snacks.nvim" ]`,
+				`export XDG_CONFIG_HOME="$PREFIX/share/devlayer/config"`,
+				`export XDG_DATA_HOME="$PREFIX/share/devlayer/data"`,
 				`exec "$PREFIX/nvim/bin/nvim" "$@"`,
 			},
 		},

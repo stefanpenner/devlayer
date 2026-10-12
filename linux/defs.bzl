@@ -74,6 +74,7 @@ def _trees(repo):
         ("share/zsh-fast-syntax-highlighting", "@fast_syntax_highlighting//:all", "@fast_syntax_highlighting//:fast-syntax-highlighting.plugin.zsh", 1),
         ("share/zsh-history-substring-search", "@zsh_history_substring_search//:all", "@zsh_history_substring_search//:zsh-history-substring-search.zsh", 1),
         ("share/powerlevel10k", "@powerlevel10k//:all", "@powerlevel10k//:powerlevel10k.zsh-theme", 1),
+        ("share/devlayer/config/nvim", "//config/nvim:config", "//config/nvim:init.lua", 1),
     ]
 
 _FILES = [
