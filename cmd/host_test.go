@@ -20,7 +20,7 @@ func TestDarwinWrappersOmitTheHostStub(t *testing.T) {
 
 func TestHostAppStaysOutOfTheLinuxBundle(t *testing.T) {
 	defs := readHostFile(t, "LINUX_DEFS")
-	for _, name := range []string{"terminal-browser", "termium"} {
+	for _, name := range []string{"terminal-browser", "termium", "simserve"} {
 		if strings.Contains(defs, name) {
 			t.Fatalf("linux bundle names %s", name)
 		}
@@ -29,13 +29,13 @@ func TestHostAppStaysOutOfTheLinuxBundle(t *testing.T) {
 
 func TestLsListsTheHostAppOnUnixOnly(t *testing.T) {
 	linux := bundledBinaries("linux")
-	for _, name := range []string{"terminal-browser", "grok", "agent", "termium"} {
+	for _, name := range []string{"terminal-browser", "grok", "agent", "termium", "simserve"} {
 		if !containsName(linux, name) {
 			t.Fatalf("linux catalog = %v", linux)
 		}
 	}
 	windows := bundledBinaries("windows")
-	for _, name := range []string{"terminal-browser", "grok", "agent", "termium"} {
+	for _, name := range []string{"terminal-browser", "grok", "agent", "termium", "simserve"} {
 		if containsName(windows, name) {
 			t.Fatalf("windows catalog = %v", windows)
 		}

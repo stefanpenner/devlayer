@@ -1,4 +1,4 @@
-//! One host app is a name, a version, and one archive pin per machine.
+//! One host app is a name, a version, one archive pin per machine, and the host libraries it still needs.
 
 /// Pin is one download for one OS and one CPU.
 #[derive(Clone, Copy)]
@@ -22,6 +22,12 @@ pub enum Pack {
     Gzip,
 }
 
+/// HostLib is one library the downloaded program still needs.
+pub struct HostLib {
+    pub name: &'static str,
+    pub why: &'static str,
+}
+
 /// App is one program the stub can run.
 pub struct App {
     pub name: &'static str,
@@ -33,6 +39,9 @@ pub struct App {
     pub arg0: bool,
     /// install runs the program setup once, then runs the installed copy.
     pub install: bool,
+    /// links are libraries the downloaded program still needs.
+    /// An empty slice means this row does not record them yet.
+    pub links: &'static [HostLib],
     pub pins: &'static [Pin],
 }
 
@@ -135,6 +144,54 @@ const TERMIUM: &[Pin] = &[
     },
 ];
 
+const SIMSERVE: &[Pin] = &[Pin {
+    os: "darwin",
+    arch: "arm64",
+    url: "https://github.com/stefanpenner/lcc.live/releases/download/simserve-0.1.0/simserve-darwin-arm64.gz",
+    sha256: "ef242a999e103551408e8d579424e278964ec96badb71ff46062807ef93f8378",
+    size: 298_822,
+    plain: 723_488,
+}];
+
+/// JPEG_CAN_LEAVE is the reason for the three frameworks JPEG encode still uses.
+const JPEG_CAN_LEAVE: &str = "JPEG encode uses this framework. A later pin can drop it.";
+
+/// SIMSERVE_LINKS records `otool -L` plus the two frameworks the program opens by name.
+const SIMSERVE_LINKS: &[HostLib] = &[
+    HostLib {
+        name: "/usr/lib/libobjc.A.dylib",
+        why: "The program sends Objective-C messages.",
+    },
+    HostLib {
+        name: "/System/Library/Frameworks/IOSurface.framework/Versions/A/IOSurface",
+        why: "The program reads the phone framebuffer.",
+    },
+    HostLib {
+        name: "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        why: JPEG_CAN_LEAVE,
+    },
+    HostLib {
+        name: "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        why: JPEG_CAN_LEAVE,
+    },
+    HostLib {
+        name: "/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO",
+        why: JPEG_CAN_LEAVE,
+    },
+    HostLib {
+        name: "/usr/lib/libSystem.B.dylib",
+        why: "macOS has no static libc. libc, libm, and pthread are in this file.",
+    },
+    HostLib {
+        name: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator",
+        why: "The program opens this framework by name. It talks to the booted phone. It stays on the Mac.",
+    },
+    HostLib {
+        name: "SimulatorKit.framework/SimulatorKit",
+        why: "The program opens this framework by name. Touch uses it. It stays on the Mac.",
+    },
+];
+
 /// APPS is the catalog. The file name selects one row.
 pub static APPS: &[App] = &[
     App {
@@ -145,6 +202,7 @@ pub static APPS: &[App] = &[
         pack: Pack::TarGz { strip: 1 },
         arg0: false,
         install: false,
+        links: &[],
         pins: TERMINAL_BROWSER,
     },
     App {
@@ -155,6 +213,7 @@ pub static APPS: &[App] = &[
         pack: Pack::Gzip,
         arg0: true,
         install: false,
+        links: &[],
         pins: GROK,
     },
     App {
@@ -165,7 +224,19 @@ pub static APPS: &[App] = &[
         pack: Pack::TarGz { strip: 0 },
         arg0: true,
         install: true,
+        links: &[],
         pins: TERMIUM,
+    },
+    App {
+        name: "simserve",
+        aliases: &[],
+        version: "0.1.0",
+        exec: "simserve",
+        pack: Pack::Gzip,
+        arg0: false,
+        install: false,
+        links: SIMSERVE_LINKS,
+        pins: SIMSERVE,
     },
 ];
 

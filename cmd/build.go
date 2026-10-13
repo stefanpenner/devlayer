@@ -217,13 +217,14 @@ func compileDarwinTools(root, binDir, scriptDir string, vers *versions.Versions,
 
 // installHostStub copies the Darwin host stub.
 // The file name selects the app. The archive is not a build input.
+// The names match the hoststub catalog, plus each alias.
 func installHostStub(binDir, scriptDir string) error {
 	fmt.Println("  host stub")
 	bin, err := bazelOutput(scriptDir, "//hoststub:hoststub_darwin_arm64")
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"terminal-browser", "grok", "agent", "termium"} {
+	for _, name := range []string{"terminal-browser", "grok", "agent", "termium", "simserve"} {
 		out := filepath.Join(binDir, name)
 		if err := copyFile(bin, out); err != nil {
 			return fmt.Errorf("copy host stub: %w", err)

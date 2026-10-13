@@ -3,7 +3,7 @@
 
 mod catalog;
 
-pub use catalog::{find, machine, pin, App, Pack, Pin, APPS};
+pub use catalog::{find, machine, pin, App, HostLib, Pack, Pin, APPS};
 
 use sha2::Digest;
 use std::fs::{self, File};
@@ -718,6 +718,54 @@ mod tests {
         assert!(pin(app, "windows", "x64").is_err());
         assert!(!find("terminal-browser").unwrap().install);
         assert!(!find("grok").unwrap().install);
+    }
+
+    #[test]
+    fn simserve_is_a_darwin_citizen() {
+        let app = find("simserve").unwrap();
+        assert_eq!(app.version, "0.1.0");
+        assert_eq!(app.exec, "simserve");
+        assert!(app.aliases.is_empty());
+        assert!(!app.arg0);
+        assert!(!app.install);
+        assert!(matches!(app.pack, Pack::Gzip));
+        let got = pin(app, "darwin", "arm64").unwrap();
+        assert_eq!(
+            got.url,
+            "https://github.com/stefanpenner/lcc.live/releases/download/simserve-0.1.0/simserve-darwin-arm64.gz"
+        );
+        assert_eq!(
+            got.sha256,
+            "ef242a999e103551408e8d579424e278964ec96badb71ff46062807ef93f8378"
+        );
+        assert_eq!(got.size, 298_822);
+        assert_eq!(got.plain, 723_488);
+        assert!(pin(app, "linux", "arm64").is_err());
+        assert!(pin(app, "linux", "x64").is_err());
+        assert!(pin(app, "darwin", "x64").is_err());
+        assert!(pin(app, "windows", "x64").is_err());
+        let names: Vec<_> = app.links.iter().map(|row| row.name).collect();
+        assert_eq!(
+            names,
+            [
+                "/usr/lib/libobjc.A.dylib",
+                "/System/Library/Frameworks/IOSurface.framework/Versions/A/IOSurface",
+                "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+                "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+                "/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO",
+                "/usr/lib/libSystem.B.dylib",
+                "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator",
+                "SimulatorKit.framework/SimulatorKit",
+            ]
+        );
+        assert!(app.links[2].why.contains("later pin"));
+        assert!(app.links[3].why.contains("later pin"));
+        assert!(app.links[4].why.contains("later pin"));
+        assert!(app.links[6].why.contains("by name"));
+        assert!(app.links[7].why.contains("by name"));
+        assert!(find("terminal-browser").unwrap().links.is_empty());
+        assert!(find("grok").unwrap().links.is_empty());
+        assert!(find("termium").unwrap().links.is_empty());
     }
 
     #[test]
