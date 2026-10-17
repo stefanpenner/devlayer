@@ -1,24 +1,14 @@
 load("@rules_go//go:def.bzl", "go_binary")
 
-# A throwaway ed25519 key for the SSH test, made by the pinned dropbearkey.
-# Random per build, so this file is not reproducible; it never leaves the
-# test disk. Never use it anywhere else.
-genrule(
-    name = "test_key",
-    testonly = True,
-    srcs = ["//layers:dropbear"],
-    outs = ["test_key"],
-    cmd = "$(location //layers:dropbear) dropbearkey -t ed25519 -f $@ > /dev/null 2>&1",
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
-
+# The SSH and identity checks. ssh and ssh-keygen come from the same
+# OpenSSH build as sshd, on the test's disk only; the runtime layer has no
+# SSH client. Every key is made inside the VM.
 go_binary(
     name = "sshcheck",
-    testonly = True,
     srcs = ["main.go"],
-    data = [":test_key"],
+    data = [
+        "//layers:ssh",
+        "//layers:ssh-keygen",
+    ],
     visibility = ["//node:__subpackages__"],
 )

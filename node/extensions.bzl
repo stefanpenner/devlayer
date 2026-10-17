@@ -56,11 +56,14 @@ _QEMU_BUILD = """
 # QEMU from Alpine (musl). The test harness starts it with lib/ld-musl-*.so.1.
 filegroup(
     name = "qemu",
-    srcs = glob(["lib/**", "usr/lib/**", "usr/bin/qemu-system-x86_64", "usr/share/qemu/**"]),
+    srcs = glob(["lib/**", "usr/lib/**", "usr/bin/qemu-system-x86_64", "usr/bin/swtpm", "usr/share/qemu/**"]),
     visibility = ["//visibility:public"],
 )
 
 alias(name = "qemu-system-x86_64", actual = "usr/bin/qemu-system-x86_64", visibility = ["//visibility:public"])
+
+# swtpm: a software TPM 2.0 for -tpmdev emulator.
+alias(name = "swtpm", actual = "usr/bin/swtpm", visibility = ["//visibility:public"])
 
 # OVMF from the same qemu package: edk2-x86_64-code.fd has HttpDxe.
 alias(name = "ovmf_code", actual = "usr/share/qemu/edk2-x86_64-code.fd", visibility = ["//visibility:public"])
@@ -68,7 +71,8 @@ alias(name = "ovmf_code", actual = "usr/share/qemu/edk2-x86_64-code.fd", visibil
 alias(name = "ovmf_vars", actual = "usr/share/qemu/edk2-i386-vars.fd", visibility = ["//visibility:public"])
 """
 
-# QEMU 11.1.2 and its libraries, Homebrew bottle tag arm64_golden_gate (macOS 27).
+# QEMU 11.1.2, swtpm 0.10.2, and their libraries, Homebrew bottle tag
+# arm64_golden_gate (macOS 27).
 _QEMU_MACOS_ARM64 = {
     "qemu": "a399faaf2f8fb45d3b1f35704041a9104f7f717e9fda1b12d4deac9e919d0d33",
     "capstone": "6b31fe379681e2c0778e30b3516cdfc2cfdff6424f666463643f1507039daf0b",
@@ -95,9 +99,12 @@ _QEMU_MACOS_ARM64 = {
     "snappy": "7f20ac629eaf9a34a0e4d0e1fe60a933d42ececf3d956988fa8b24916e467c85",
     "vde": "972ce0f14fb0fe92932f45b887019b228ac4529f06d0a95eeb88ece1359d76ba",
     "zstd": "7fb4af03304cc4897326168cdcd53290311c5543150f5502a61c3e84b6d62765",
+    "swtpm": "481e1daf351c3210c7d4109bdf0841c0703ed16b2b7992a069555eaa4a8d8f71",
+    "libtpms": "8335ea28c832407e001886232c1fdd6e45da78a314a6dc812efc96da4504946f",
+    "json-glib": "0623708504a6e97d0b0a07f007bc31d72db43db18b2c02e43918a2b6d49e6674",
 }
 
-# QEMU 11.0.3 for x86_64 Linux hosts, Alpine v3.24.
+# QEMU 11.0.3 and swtpm 0.10.2 for x86_64 Linux hosts, Alpine v3.24.
 _QEMU_LINUX_X86_64 = {
     "main/brotli-libs-1.2.0-r1.apk": "f0823de7c6d45859aeb6a7facfc5cfbf2dadb83ad4f27c794cb6ecc74e578cee",
     "community/capstone-5.0.9-r0.apk": "168f1d03ab87ba63f14bfbef720d5fd3e907efd2b242d167916bc18ad982229b",
@@ -150,9 +157,13 @@ _QEMU_LINUX_X86_64 = {
     "main/yajl-2.1.0-r9.apk": "191009556bf22fc2e052cf38e5710016ac98c7f865fa3c3ca0e304c0d2cf60d7",
     "main/zlib-1.3.2-r1.apk": "63aeea03c15a2f9018f81805cfc8aa926bdf5cd68921f22149c2fbb5d0ee9f47",
     "main/zstd-libs-1.5.7-r2.apk": "23c6065b0049b2406441564bcf0032515a43f78e80d76fcb85535a3803ef5d4e",
+    "community/json-glib-1.10.8-r0.apk": "c213f9fd6b9717f2baec2ddf930ffb70227894e5db633ca73bb9b61e91a45808",
+    "main/libcrypto3-3.5.9-r0.apk": "6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689",
+    "community/libtpms-0.10.2-r0.apk": "c46796d48e5c82cdb8ceece72a832f3cca021364e1cbb09406682fbc40965b41",
+    "community/swtpm-0.10.2-r0.apk": "9d953d6c920730ffa01abe44f4ec653f784375ffa6d44c5b7846bb63b266e37c",
 }
 
-# QEMU 11.0.3 for aarch64 Linux hosts, Alpine v3.24.
+# QEMU 11.0.3 and swtpm 0.10.2 for aarch64 Linux hosts, Alpine v3.24.
 _QEMU_LINUX_AARCH64 = {
     "main/brotli-libs-1.2.0-r1.apk": "e0e7a7892f28326a9f18e09607b1aea72baedda470bc4e3d2b11262b9ae5dda3",
     "community/capstone-5.0.9-r0.apk": "d9304823c7396cfee33fa1e9250995296141c63480c921f2996b76e77089f38b",
@@ -204,6 +215,10 @@ _QEMU_LINUX_AARCH64 = {
     "main/yajl-2.1.0-r9.apk": "897030fa9e1724da03bf7259b756a36406cf26d60b1bb870284745052e622c97",
     "main/zlib-1.3.2-r1.apk": "1f77a542ac6634761b9fe38d8bdca19b154071dcfa25432e73f2bc8a0740a33f",
     "main/zstd-libs-1.5.7-r2.apk": "2bb5136c89f5b0bbe1554c8915a3b520d5aa63ae2a51d4d821eb81698db5a818",
+    "community/json-glib-1.10.8-r0.apk": "4ec772f45e08d6ba9cfbf47edaf6c20fd3b358ac9000bfebc28040383d198495",
+    "main/libcrypto3-3.5.9-r0.apk": "2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983",
+    "community/libtpms-0.10.2-r0.apk": "4657329f97a6f28f8776a40016082dca896c3d655aa0a9eb706ffd473b92a611",
+    "community/swtpm-0.10.2-r0.apk": "75c4dd5cb1e725755adb170f191eaec318248288f03414fd29fbf4b9830076b2",
 }
 
 def _node_repos_impl(_module_ctx):

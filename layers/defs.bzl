@@ -45,10 +45,10 @@ RUNTIME_TOYBOX = [
     "uptime",
 ]
 
-# dropbearmulti names the runtime installs. dbclient stays in the binary for
-# the SSH test but gets no name in the layer.
-RUNTIME_DROPBEAR = {
-    "sbin/dropbear": "../bin/dropbearmulti",
-    "bin/dropbearkey": "dropbearmulti",
-    "bin/scp": "dropbearmulti",
+# OpenSSH programs in the runtime layer, by path. ssh and ssh-keygen are
+# built too, for the tests; they are not in the layer.
+RUNTIME_OPENSSH = {
+    "sbin/sshd": "sshd",
+    "libexec/sshd-session": "sshd-session",
+    "libexec/sshd-auth": "sshd-auth",
 }

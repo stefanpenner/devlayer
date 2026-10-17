@@ -6,7 +6,14 @@
 // runs /sbin/init from the runtime layer.
 //
 // Stage 2 is /sbin/init in the runtime layer, PID 1. It mounts cgroup2,
-// brings up lo, mounts extra layers, starts dropbear, and runs one payload.
+// brings up lo, mounts extra layers, starts node-identity and then sshd, and
+// runs one payload.
+//
+// Identity. node-identity serves the SSH host key from the TPM. Without a
+// TPM, or when the key cannot be loaded, it prints a FATAL line and exits;
+// sshd is then not started, and the node stays up so the console stays
+// readable. node_identity=ephemeral on the command line uses a RAM key with a
+// WARNING, for tests and dev only. It is never the default.
 // A node runs /etc/node/hook when it exists. A test (node_test=1 on the
 // kernel command line) runs /test/entry from the virtio disk with serial
 // "test", sends stdout to hvc0 and stderr to hvc1, and exits QEMU with the
@@ -35,6 +42,7 @@
 #include <sys/io.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#include <signal.h>
 #include <sys/reboot.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -285,13 +293,58 @@ static void loopback_up(void) {
     close(s);
 }
 
-// dropbear in the foreground, logging to the console. Host keys are made on
-// first use in /etc/dropbear, which is on the tmpfs overlay.
-static pid_t start_sshd(void) {
-    mkdir("/etc/dropbear", 0700);
+#define IDENTITY_PUB "/run/node-identity/ssh_host_ecdsa_key.pub"
+
+// One line to the console and to the kernel log at level crit, so it shows
+// on every console (tty0, ttyS0) and in dmesg.
+static void alert(const char *msg) {
+    dprintf(2, "%s\n", msg);
+    int k = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+    if (k >= 0) {
+        dprintf(k, "<2>%s\n", msg);
+        close(k);
+    }
+}
+
+static pid_t start_identity(void) {
+    const char *m = getenv("node_identity");
+    int ephemeral = m && strcmp(m, "ephemeral") == 0;
+    if (m && !ephemeral) say("node_identity=%s is not a mode; using the TPM", m);
+    unlink(IDENTITY_PUB);
     pid_t pid = fork();
     if (pid == 0) {
-        char *argv[] = {"/sbin/dropbear", "-F", "-E", "-R", "-s", "-p", "22", NULL};
+        char *tpm[] = {"/sbin/node-identity", "agent", NULL};
+        char *ram[] = {"/sbin/node-identity", "agent", "-ephemeral", NULL};
+        execv(tpm[0], ephemeral ? ram : tpm);
+        _exit(127);
+    }
+    return pid;
+}
+
+// Waits until node-identity publishes the host key. Returns 0 when it exits
+// first or takes more than 30 s; it has then printed why.
+static int identity_ready(pid_t pid) {
+    for (int i = 0; i < 1500; i++) {
+        if (access(IDENTITY_PUB, F_OK) == 0) return 1;
+        int st;
+        if (waitpid(pid, &st, WNOHANG) == pid) {
+            if (!WIFEXITED(st) || WEXITSTATUS(st) == 127)
+                alert("identity: FATAL /sbin/node-identity did not run. sshd not started");
+            return 0;
+        }
+        usleep(20000);
+    }
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+    alert("identity: FATAL the TPM did not answer in 30 s. sshd not started");
+    return 0;
+}
+
+// sshd in the foreground, logging to the console. Its host key is the agent's.
+static pid_t start_sshd(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        char *argv[] = {"/sbin/sshd", "-D", "-e", "-f", "/etc/ssh/sshd_config", NULL};
         execv(argv[0], argv);
         _exit(127);
     }
@@ -353,7 +406,14 @@ static int stage2(void) {
     say("%s", "stage 2: runtime layer up, cgroup2 mounted");
     loopback_up();
     boot_layers();
-    pid_t sshd = start_sshd();
+    pid_t identity = start_identity();
+    pid_t sshd = -1;
+    if (identity_ready(identity)) {
+        sshd = start_sshd();
+    } else {
+        identity = -1;
+        alert("node-init: no host identity, so no sshd. The node stays up; see the identity line above.");
+    }
 
     const char *t = getenv("node_test");
     if (t && strcmp(t, "1") == 0) return run_test();
@@ -371,10 +431,16 @@ static int stage2(void) {
     for (;;) {
         pid_t pid = wait(NULL);
         if (pid < 0 && errno == ECHILD) pause();
-        if (pid == sshd) {
-            say("%s", "dropbear exited; restarting");
+        if (pid > 0 && pid == sshd) {
+            say("%s", "sshd exited; restarting");
             sleep(1);
             sshd = start_sshd();
+        }
+        if (pid > 0 && pid == identity) {
+            say("%s", "node-identity exited; restarting");
+            sleep(1);
+            identity = start_identity();
+            if (!identity_ready(identity)) identity = -1;
         }
     }
 }

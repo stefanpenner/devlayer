@@ -1,4 +1,4 @@
-"""QEMU for the tests, from pinned Homebrew bottles. No install, no brew.
+"""QEMU and swtpm for the tests, from pinned Homebrew bottles. No install, no brew.
 
 Each bottle is a ghcr.io blob, addressed and checked by its SHA-256.
 The bottles keep @@HOMEBREW_PREFIX@@ in their load commands. The test
@@ -24,6 +24,7 @@ filegroup(
     srcs = glob([
         "cellar/*/*/lib/**/*.dylib",
         "cellar/qemu/*/bin/qemu-system-x86_64",
+        "cellar/swtpm/*/bin/swtpm",
         "cellar/qemu/*/share/qemu/*.bin",
         "cellar/qemu/*/share/qemu/*.rom",
         "cellar/qemu/*/share/qemu/edk2-x86_64-code.fd",
@@ -35,6 +36,12 @@ filegroup(
 alias(
     name = "qemu-system-x86_64",
     actual = glob(["cellar/qemu/*/bin/qemu-system-x86_64"])[0],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "swtpm",
+    actual = glob(["cellar/swtpm/*/bin/swtpm"])[0],
     visibility = ["//visibility:public"],
 )
 

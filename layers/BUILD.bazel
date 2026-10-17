@@ -1,6 +1,7 @@
 # Layers: read-only EROFS images, one per concern, mounted by content hash.
 #
-#   runtime  what a node boots: /init, dropbear, a small toybox. No compilers,
+#   runtime  what a node boots: /init, OpenSSH (LibreSSL libcrypto),
+#            node-identity (the TPM host key), a small toybox. No compilers,
 #            no language runtimes, no git. The SER9 image is this layer only.
 #   dev      the full devlayer Linux sysroot. Step 2 of the layering plan; for
 #            now tests attach it as an extra disk at /layers/dev.
@@ -9,7 +10,7 @@
 #
 # Builds need a Linux x86_64 exec host, like //node:kernel. See node/README.md.
 
-load(":defs.bzl", "RUNTIME_DROPBEAR", "RUNTIME_TOYBOX")
+load(":defs.bzl", "RUNTIME_OPENSSH", "RUNTIME_TOYBOX")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -32,30 +33,39 @@ _MKIMAGE_SRCS = [
     "@node_hosttools_linux_x86_64//:usr/bin/mkfs.erofs",
 ]
 
-# dropbear: static musl, public-key logins only (localoptions.h).
+# OpenSSH portable on LibreSSL's libcrypto: static musl, by the pinned zig.
+_OPENSSH = ["sshd", "sshd-session", "sshd-auth", "ssh", "ssh-keygen"]
+
 genrule(
-    name = "dropbear",
+    name = "openssh",
     srcs = [
-        "localoptions.h",
-        "@dropbear_src//:all_srcs",
-        "@dropbear_src//:configure",
+        "@libressl_src//:all_srcs",
+        "@libressl_src//:configure",
+        "@openssh_src//:all_srcs",
+        "@openssh_src//:configure",
         "@node_hosttools_linux_x86_64//:all",
         "@node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1",
         "@zig_linux_amd64//:all",
         "@zig_linux_amd64//:zig",
     ],
-    outs = ["dropbearmulti"],
+    outs = ["openssh/" + b for b in _OPENSSH],
     cmd = " ".join([
-        "SRC=$$(dirname $(location @dropbear_src//:configure))",
+        "OPENSSH_SRC=$$(dirname $(location @openssh_src//:configure))",
+        "LIBRESSL_SRC=$$(dirname $(location @libressl_src//:configure))",
         "ZIG=$(location @zig_linux_amd64//:zig)",
         "HOST_ROOT=$$(dirname $$(dirname $(location @node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1)))",
-        "OPTIONS=$(location localoptions.h)",
-        "OUT=$@",
-        "sh $(location dropbear.sh)",
+        "OUT_DIR=$(RULEDIR)/openssh",
+        "sh $(location openssh.sh)",
     ]),
     target_compatible_with = _LINUX_X86_64,
-    tools = ["dropbear.sh"],
+    tools = ["openssh.sh"],
 )
+
+# Single-file names for the test payloads.
+[alias(
+    name = b,
+    actual = "openssh/" + b,
+) for b in _OPENSSH]
 
 # toybox: devlayer's toolbox build (macos/toolbox.sh) with the runtime applets.
 genrule(
@@ -85,9 +95,15 @@ genrule(
 genrule(
     name = "runtime",
     srcs = _MKIMAGE_SRCS + [
-        ":dropbear",
+        ":openssh",
+        ":sshd",
+        ":sshd-session",
+        ":sshd-auth",
         ":toybox",
         "//node:init",
+        "//node/identity",
+        "runtime/etc/ssh/sshd_config",
+        "runtime/etc/ssh/trusted_user_ca_keys",
         "runtime/etc/passwd",
         "runtime/etc/group",
         "@stefanpenner_keys//file",
@@ -96,19 +112,20 @@ genrule(
     cmd = " ".join(_MKIMAGE + [
         "-file sbin/init=$(location //node:init)",
         "-link sbin/node-layer=init",
-        "-file bin/dropbearmulti=$(location :dropbear)",
+        "-file sbin/node-identity=$(location //node/identity)",
+        "-file etc/ssh/sshd_config=$(location runtime/etc/ssh/sshd_config)",
+        "-file etc/ssh/trusted_user_ca_keys=$(location runtime/etc/ssh/trusted_user_ca_keys)",
         "-file bin/toybox=$(location :toybox)",
         "-file etc/passwd=$(location runtime/etc/passwd)",
         "-file etc/group=$(location runtime/etc/group)",
         "-file root/.ssh/authorized_keys=$(location @stefanpenner_keys//file)",
     ] + ["-link bin/%s=toybox" % a for a in RUNTIME_TOYBOX] + [
-        "-link %s=%s" % (k, v)
-        for k, v in RUNTIME_DROPBEAR.items()
+        "-file %s=$(location :%s)" % (k, v)
+        for k, v in RUNTIME_OPENSSH.items()
     ] + [
         "-dir dev -dir proc -dir sys -dir run -dir tmp -dir var -dir etc/node",
-        "-dir etc/dropbear -dir test -dir layers/.by-hash",
+        "-dir etc/ssh/sshd_config.d -dir var/empty -dir test -dir layers/.by-hash",
         "-mode root=0700 -mode root/.ssh=0700 -mode root/.ssh/authorized_keys=0600",
-        "-mode etc/dropbear=0700",
         "-z lz4hc",
     ]),
     target_compatible_with = _LINUX_X86_64,

@@ -8,6 +8,12 @@ Stdout, stderr, and the exit status come back to `bazel test`.
 The node boots from the runtime layer alone. `layers` attaches more EROFS
 layers as extra read-only disks, for example {"//layers:dev": "dev"}. Init
 mounts each one at /layers/<name> after checking its sha256.
+
+`tpm = True` gives the guest a TPM 2.0 (swtpm behind tpm-crb, the interface
+of the SER9's AMD fTPM). `boots` boots the same disks and TPM state several
+times. `cmdline` adds kernel options. `expect_serial` must appear in every
+boot log. `host_key_across_boots` ("same" or "differ") compares the
+payload's `hostkey: ` line across boots.
 """
 
 load("//linux:cc.bzl", "linux_transition")
@@ -71,8 +77,21 @@ def _node_vm_test_impl(ctx):
         f = target.files.to_list()[0]
         layers.append(name + "=" + f.short_path)
         layer_files.append(f)
+    extra = []
+    env = {}
+    if ctx.attr.tpm:
+        extra.append(ctx.file._swtpm)
+        env["NODE_SWTPM"] = ctx.file._swtpm.short_path
+    if ctx.attr.boots > 1:
+        env["NODE_BOOTS"] = str(ctx.attr.boots)
+    if ctx.attr.cmdline:
+        env["NODE_CMDLINE"] = ctx.attr.cmdline
+    if ctx.attr.expect_serial:
+        env["NODE_EXPECT_SERIAL"] = ctx.attr.expect_serial
+    if ctx.attr.host_key_across_boots:
+        env["NODE_HOSTKEY_ACROSS_BOOTS"] = ctx.attr.host_key_across_boots
     runfiles = ctx.runfiles(
-        files = [disk, ctx.file.kernel, ctx.file.initrd, qemu] + layer_files + ctx.files._qemu_files,
+        files = [disk, ctx.file.kernel, ctx.file.initrd, qemu] + layer_files + extra + ctx.files._qemu_files,
     ).merge(ctx.attr._vmrun[DefaultInfo].default_runfiles)
     return [
         DefaultInfo(executable = out, runfiles = runfiles),
@@ -82,7 +101,7 @@ def _node_vm_test_impl(ctx):
             "NODE_INITRD": ctx.file.initrd.short_path,
             "NODE_DISK": disk.short_path,
             "NODE_LAYERS": ",".join(layers),
-        }),
+        } | env),
     ]
 
 node_vm_test = rule(
@@ -91,6 +110,11 @@ node_vm_test = rule(
     attrs = {
         "binary": attr.label(mandatory = True, executable = True, cfg = linux_transition),
         "layers": attr.label_keyed_string_dict(allow_files = [".erofs"]),
+        "tpm": attr.bool(),
+        "boots": attr.int(default = 1),
+        "cmdline": attr.string(),
+        "expect_serial": attr.string(),
+        "host_key_across_boots": attr.string(values = ["", "same", "differ"]),
         "arch": attr.string(default = "x86_64"),
         "os": attr.string(default = "linux"),
         "kernel": attr.label(default = "//node:vmlinuz", allow_single_file = True),
@@ -102,6 +126,7 @@ node_vm_test = rule(
         "_hosttools": attr.label(default = "@node_hosttools_linux_x86_64//:all", cfg = "exec"),
         "_qemu": attr.label(default = "//node:qemu-system-x86_64", allow_single_file = True),
         "_qemu_files": attr.label(default = "//node:qemu"),
+        "_swtpm": attr.label(default = "//node:swtpm", allow_single_file = True),
     } | _allowlist(),
 )
 

@@ -569,11 +569,19 @@ exports_files(
             build_file_content = _FILEGROUP_ALL + _exports(["bin/clang", "bin/llvm-ar", "bin/llvm-strip"]),
         )
 
-    # Node runtime layer (layers/): dropbear, and the SSH keys it trusts.
+    # Node runtime layer (layers/): OpenSSH, LibreSSL, and the SSH keys sshd
+    # trusts. The tarball signatures were checked with gpg when pinned (see
+    # node/README.md); the sha256 pins carry that check forward.
     _http_archive(sums,
-        name = "dropbear_src",
-        urls = ["https://matt.ucc.asn.au/dropbear/releases/dropbear-{}.tar.bz2".format(v["DROPBEAR"])],
-        strip_prefix = "dropbear-{}".format(v["DROPBEAR"]),
+        name = "openssh_src",
+        urls = ["https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-{}.tar.gz".format(v["OPENSSH"])],
+        strip_prefix = "openssh-{}".format(v["OPENSSH"]),
+        build_file_content = _ALL_SRCS + _exports(["configure"]),
+    )
+    _http_archive(sums,
+        name = "libressl_src",
+        urls = ["https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-{}.tar.gz".format(v["LIBRESSL"])],
+        strip_prefix = "libressl-{}".format(v["LIBRESSL"]),
         build_file_content = _ALL_SRCS + _exports(["configure"]),
     )
     _http_file(sums,

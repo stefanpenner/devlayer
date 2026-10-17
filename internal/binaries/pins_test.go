@@ -46,7 +46,8 @@ func TestSourceArchiveURLs(t *testing.T) {
 		"linux_kernel":             "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.11.tar.xz",
 		"kernel_llvm_linux_amd64":  "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.3-x86_64.tar.xz",
 		"kernel_llvm_linux_arm64":  "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.3-aarch64.tar.xz",
-		"dropbear":                 "https://matt.ucc.asn.au/dropbear/releases/dropbear-2026.94.tar.bz2",
+		"openssh":                  "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.6p1.tar.gz",
+		"libressl":                 "https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz",
 		"stefanpenner_keys":        "https://github.com/stefanpenner.keys",
 	}
 	if len(got) != len(want) {

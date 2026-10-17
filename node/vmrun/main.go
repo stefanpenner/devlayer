@@ -14,6 +14,16 @@
 // line gets node_layer_<name>=<sha256 of the image>. Init mounts it at
 // /layers/<name> only when the bytes match.
 //
+//	NODE_SWTPM            swtpm path; set means the guest gets a TPM 2.0 (tpm-crb)
+//	NODE_BOOTS            boots of the same disks and TPM state, default 1
+//	NODE_CMDLINE          more kernel command line
+//	NODE_EXPECT_SERIAL    text every boot log must contain
+//	NODE_HOSTKEY_ACROSS_BOOTS  "same" or "differ": compares the payload's
+//	                      "hostkey: " stdout line across boots
+//
+// The TPM state directory lives in TEST_TMPDIR for the whole test, so every
+// boot sees the same TPM, as a real node does. The guest keeps nothing else.
+//
 // NODE_VM_ACCEL picks kvm, hvf, or tcg. Empty means kvm when /dev/kvm opens,
 // hvf on an Intel Mac, and tcg otherwise. Apple silicon has no x86 HVF.
 package main
@@ -40,9 +50,6 @@ func main() {
 
 	dir, err := os.MkdirTemp(os.Getenv("TEST_TMPDIR"), "vm")
 	check(err)
-	outPath := filepath.Join(dir, "stdout")
-	errPath := filepath.Join(dir, "stderr")
-	bootPath := filepath.Join(dir, "boot.log")
 
 	accel := os.Getenv("NODE_VM_ACCEL")
 	if accel == "" {
@@ -53,6 +60,9 @@ func main() {
 		cpu = "host"
 	}
 	appendArgs := "console=ttyS0 ip=dhcp panic=-1 node_test=1"
+	if v := os.Getenv("NODE_CMDLINE"); v != "" {
+		appendArgs += " " + v
+	}
 	var layerArgs []string
 	if v := os.Getenv("NODE_LAYERS"); v != "" {
 		for _, l := range strings.Split(v, ",") {
@@ -69,38 +79,127 @@ func main() {
 				"-device", "virtio-blk-pci,drive=l"+name+",serial=layer-"+name)
 		}
 	}
+	swtpm := os.Getenv("NODE_SWTPM")
+	tpmState := filepath.Join(dir, "tpm-state")
+	if swtpm != "" {
+		swtpm = mustAbs(swtpm)
+		check(os.MkdirAll(tpmState, 0o700))
+	}
+	boots := 1
+	if v := os.Getenv("NODE_BOOTS"); v != "" {
+		_, err := fmt.Sscan(v, &boots)
+		check(err)
+	}
+
+	var hostKeys []string
+	status := 0
+	for n := 1; n <= boots; n++ {
+		bootDir := filepath.Join(dir, fmt.Sprintf("boot%d", n))
+		check(os.MkdirAll(bootDir, 0o755))
+		args := baseArgs(qemu, accel, cpu, kernel, initrd, disk, appendArgs, bootDir)
+		args = append(args, layerArgs...)
+		var tpm *exec.Cmd
+		if swtpm != "" {
+			sock := filepath.Join(bootDir, "swtpm.sock")
+			tpm = hostCommand(swtpm, []string{"socket", "--tpm2", "--terminate",
+				"--tpmstate", "dir=" + tpmState,
+				"--ctrl", "type=unixio,path=" + sock})
+			tpm.Stderr = os.Stderr
+			check(tpm.Start())
+			waitFor(sock)
+			args = append(args,
+				"-chardev", "socket,id=chrtpm,path="+sock,
+				"-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
+				"-device", "tpm-crb,tpmdev=tpm0")
+		}
+		code, out := boot(qemu, args, bootDir, accel, n, boots)
+		if tpm != nil {
+			tpm.Process.Kill()
+			tpm.Wait()
+		}
+		if v := os.Getenv("NODE_EXPECT_SERIAL"); v != "" {
+			b, _ := os.ReadFile(filepath.Join(bootDir, "boot.log"))
+			if !strings.Contains(string(b), v) {
+				fmt.Fprintf(os.Stderr, "vmrun: boot %d: the serial log lacks %q\n", n, v)
+				code = 1
+			} else {
+				fmt.Fprintf(os.Stderr, "vmrun: boot %d: serial has %q\n", n, v)
+			}
+		}
+		for _, l := range strings.Split(out, "\n") {
+			if k, ok := strings.CutPrefix(l, "hostkey: "); ok {
+				hostKeys = append(hostKeys, k)
+			}
+		}
+		if code != 0 {
+			status = code
+			break
+		}
+	}
+	if mode := os.Getenv("NODE_HOSTKEY_ACROSS_BOOTS"); mode != "" && status == 0 {
+		if len(hostKeys) != boots {
+			fail(fmt.Errorf("want one hostkey line per boot, got %d", len(hostKeys)))
+		}
+		same := true
+		for _, k := range hostKeys[1:] {
+			same = same && k == hostKeys[0]
+		}
+		switch {
+		case mode == "same" && !same:
+			fail(fmt.Errorf("the host key changed across boots: %q", hostKeys))
+		case mode == "differ" && same:
+			fail(fmt.Errorf("the host key stayed the same across boots: %q", hostKeys[0]))
+		}
+		fmt.Fprintf(os.Stderr, "vmrun: host key across %d boots: %s, as expected\n", boots, mode)
+	}
+	os.Exit(status)
+}
+
+func baseArgs(qemu, accel, cpu, kernel, initrd, disk, appendArgs, bootDir string) []string {
 	share := filepath.Join(filepath.Dir(filepath.Dir(qemu)), "share", "qemu")
-	args := []string{
+	return []string{
 		"-L", share,
 		"-machine", "q35", "-accel", accel, "-cpu", cpu, "-smp", "2", "-m", "2048",
 		"-display", "none", "-vga", "none", "-monitor", "none", "-no-reboot",
-		"-serial", "file:" + bootPath,
+		"-serial", "file:" + filepath.Join(bootDir, "boot.log"),
 		"-kernel", kernel, "-initrd", initrd,
 		"-append", appendArgs,
 		"-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,romfile=",
 		"-drive", "if=none,id=t,format=raw,readonly=on,file=" + disk,
 		"-device", "virtio-blk-pci,drive=t,serial=test",
 		"-device", "virtio-serial-pci",
-		"-chardev", "file,id=o,path=" + outPath, "-device", "virtconsole,chardev=o",
-		"-chardev", "file,id=e,path=" + errPath, "-device", "virtconsole,chardev=e",
+		"-chardev", "file,id=o,path=" + filepath.Join(bootDir, "stdout"), "-device", "virtconsole,chardev=o",
+		"-chardev", "file,id=e,path=" + filepath.Join(bootDir, "stderr"), "-device", "virtconsole,chardev=e",
 		"-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
 	}
-	args = append(args, layerArgs...)
-	cmd := qemuCommand(qemu, args)
+}
+
+// boot runs one QEMU and returns the payload status and its stdout.
+func boot(qemu string, args []string, bootDir, accel string, n, boots int) (int, string) {
+	cmd := hostCommand(qemu, args)
 	var qerr strings.Builder
 	cmd.Stderr = &qerr
 	start := time.Now()
 	runErr := cmd.Run()
 	wall := time.Since(start)
 
-	copyTo(os.Stdout, outPath)
-	copyTo(os.Stderr, errPath)
+	bootPath := filepath.Join(bootDir, "boot.log")
+	out, _ := os.ReadFile(filepath.Join(bootDir, "stdout"))
+	if boots > 1 {
+		fmt.Printf("--- boot %d ---\n", n)
+	}
+	os.Stdout.Write(out)
+	copyTo(os.Stderr, filepath.Join(bootDir, "stderr"))
 	if d := os.Getenv("TEST_UNDECLARED_OUTPUTS_DIR"); d != "" {
 		if b, err := os.ReadFile(bootPath); err == nil {
-			os.WriteFile(filepath.Join(d, "boot.log"), b, 0o644)
+			name := "boot.log"
+			if boots > 1 {
+				name = fmt.Sprintf("boot%d.log", n)
+			}
+			os.WriteFile(filepath.Join(d, name), b, 0o644)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "vmrun: accel=%s wall=%.2fs\n", accel, wall.Seconds())
+	fmt.Fprintf(os.Stderr, "vmrun: boot %d: accel=%s wall=%.2fs\n", n, accel, wall.Seconds())
 
 	var ee *exec.ExitError
 	switch {
@@ -108,10 +207,21 @@ func main() {
 		// Exit 0 means a power-off or reset without isa-debug-exit.
 		fail(fmt.Errorf("the guest stopped before the payload reported a status\n%s", tail(bootPath)))
 	case errors.As(runErr, &ee) && ee.ExitCode()%2 == 1:
-		os.Exit((ee.ExitCode() - 1) / 2)
+		return (ee.ExitCode() - 1) / 2, string(out)
 	default:
 		fail(fmt.Errorf("qemu: %v: %s\n%s", runErr, qerr.String(), tail(bootPath)))
 	}
+	return 1, string(out)
+}
+
+func waitFor(path string) {
+	for i := 0; i < 200; i++ {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	fail(fmt.Errorf("%s never appeared", path))
 }
 
 func fileSHA256(path string) (string, error) {
@@ -142,9 +252,10 @@ func pickAccel() string {
 	return "tcg"
 }
 
-// qemuCommand starts an Alpine QEMU with its own musl loader, or a Homebrew
-// QEMU with its bottle libraries. The host libc and host libraries are not used.
-func qemuCommand(qemu string, args []string) *exec.Cmd {
+// hostCommand starts an Alpine program (QEMU, swtpm) with its own musl
+// loader, or a Homebrew one with its bottle libraries. The host libc and host
+// libraries are not used.
+func hostCommand(qemu string, args []string) *exec.Cmd {
 	root := filepath.Dir(filepath.Dir(filepath.Dir(qemu)))
 	loaders, _ := filepath.Glob(filepath.Join(root, "lib", "ld-musl-*.so.1"))
 	if len(loaders) == 1 {

@@ -30,7 +30,7 @@ _QEMU = {
 [alias(
     name = name,
     actual = select({k: v + "//:" + name for k, v in _QEMU.items()}),
-) for name in ["qemu", "qemu-system-x86_64"]]
+) for name in ["qemu", "qemu-system-x86_64", "swtpm"]]
 
 _LINUX_X86_64 = [
     "@platforms//os:linux",
@@ -153,12 +153,48 @@ node_vm_test(
     tags = ["node-vm"],
 )
 
-# dropbear comes up and takes a key login; the runtime has no toolchains.
+# SSH and identity. The guest gets a TPM 2.0 from the pinned swtpm behind
+# tpm-crb, the interface of the SER9's AMD fTPM.
+#
+# Key login, password refused, user and host certificates, host key = TPM key.
 node_vm_test(
     name = "ssh_vm",
     size = "medium",
-    testonly = True,
     binary = "//node/sshcheck",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# Two boots on one swtpm state dir: the same host key, and no OS state.
+node_vm_test(
+    name = "identity_tpm_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    boots = 2,
+    host_key_across_boots = "same",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# No TPM: fail closed. sshd is not listening, the FATAL line is on serial.
+node_vm_test(
+    name = "no_tpm_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_check=no-tpm",
+    expect_serial = "identity: FATAL no TPM 2.0 (/dev/tpmrm0 missing): enable fTPM in BIOS (Security > AMD fTPM). sshd not started",
+    tags = ["node-vm"],
+)
+
+# The explicit opt-in: a RAM host key, a WARNING, a new key every boot.
+node_vm_test(
+    name = "ephemeral_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    boots = 2,
+    cmdline = "node_identity=ephemeral node_check=ephemeral",
+    expect_serial = "identity: WARNING node_identity=ephemeral",
+    host_key_across_boots = "differ",
     tags = ["node-vm"],
 )
 

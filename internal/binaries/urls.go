@@ -184,7 +184,8 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 	kernel := vers.Get("KERNEL_VERSION")
 	kernelMajor, _, _ := strings.Cut(kernel, ".")
 	kllvm := vers.Get("KERNEL_LLVM_VERSION")
-	dropbear := vers.Get("DROPBEAR_VERSION")
+	openssh := vers.Get("OPENSSH_VERSION")
+	libressl := vers.Get("LIBRESSL_VERSION")
 	out := map[string]string{
 		"btop":                     fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
 		"htop":                     fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
@@ -202,7 +203,8 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 		"linux_kernel":             fmt.Sprintf("https://cdn.kernel.org/pub/linux/kernel/v%s.x/linux-%s.tar.xz", kernelMajor, kernel),
 		"kernel_llvm_linux_amd64":  fmt.Sprintf("https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-%s-x86_64.tar.xz", kllvm),
 		"kernel_llvm_linux_arm64":  fmt.Sprintf("https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-%s-aarch64.tar.xz", kllvm),
-		"dropbear":                 fmt.Sprintf("https://matt.ucc.asn.au/dropbear/releases/dropbear-%s.tar.bz2", dropbear),
+		"openssh":                  fmt.Sprintf("https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-%s.tar.gz", openssh),
+		"libressl":                 fmt.Sprintf("https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-%s.tar.gz", libressl),
 		// Not versioned: the pinned sha256 fails the build when the keys change.
 		"stefanpenner_keys": "https://github.com/stefanpenner.keys",
 	}

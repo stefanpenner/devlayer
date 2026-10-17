@@ -1,0 +1,25 @@
+# sshd for the node runtime layer. Keys only.
+Port 22
+Include /etc/ssh/sshd_config.d/*.conf
+
+# The host key lives in the TPM. node-identity serves it over the agent
+# protocol and writes the public half to /run/node-identity.
+HostKey /run/node-identity/ssh_host_ecdsa_key.pub
+HostKeyAgent /run/node-identity/agent.sock
+# A host certificate (step-ca, penner.network#15) goes in a drop-in:
+#   /etc/ssh/sshd_config.d/host-cert.conf: HostCertificate /etc/ssh/ssh_host_ecdsa_key-cert.pub
+
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+# User CAs (step-ca) go here. Empty until step-ca exists.
+TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+# PAM is not compiled in.
+
+PidFile /run/sshd.pid
+PrintMotd no
+Subsystem sftp internal-sftp
