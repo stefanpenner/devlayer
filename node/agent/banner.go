@@ -71,9 +71,18 @@ func (k *kmsgLog) poll() []string {
 		if !ok {
 			continue
 		}
-		msg = strings.TrimRight(strings.SplitN(msg, "\n", 2)[0], " ")
+		msg = strings.TrimSpace(strings.SplitN(msg, "\n", 2)[0])
+		// Skip node-agent's own lines: the banner mirror repeats the FATAL
+		// lines it shows.
+		if strings.HasPrefix(msg, "node-agent") {
+			continue
+		}
 		if strings.Contains(msg, "FATAL") || strings.Contains(msg, "identity: WARNING") {
-			if len(k.lines) == 0 || k.lines[len(k.lines)-1] != msg {
+			seen := false
+			for _, l := range k.lines {
+				seen = seen || l == msg
+			}
+			if !seen {
 				k.lines = append(k.lines, msg)
 			}
 			if len(k.lines) > 4 {
@@ -270,7 +279,7 @@ func heartbeat(in info) string {
 }
 
 func toTTY(path, s string) {
-	f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NOCTTY, 0)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|syscall.O_NOCTTY, 0)
 	if err != nil {
 		return
 	}
@@ -289,7 +298,7 @@ func bannerLoop(c config, st *status) {
 		if s := render(key, false); s != last || time.Since(lastFull) >= 10*time.Minute {
 			last, lastFull = s, time.Now()
 			toTTY(c.tty, render(in, true))
-			logk(7, render(in, false))
+			logk(7, "node-agent banner:"+strings.ReplaceAll(render(in, false), "\n", "\nnode-agent| "))
 			lastBeat = time.Now()
 		} else if time.Since(lastBeat) >= c.heartbeat {
 			toTTY(c.tty, heartbeat(in)+"\n")

@@ -318,6 +318,36 @@ func sshdLogChecks() {
 	}
 }
 
+// runChecks runs the banner loop the way init does, into a file instead of
+// tty0, with a FATAL line in the kernel log. Each banner block shows it once.
+func runChecks() {
+	if k, err := os.OpenFile("/dev/kmsg", os.O_WRONLY, 0); err == nil {
+		fmt.Fprintf(k, "<2>identity: FATAL agentcheck test line\n")
+		k.Close()
+	}
+	out := "/tmp/tty.txt"
+	must(os.WriteFile(out, nil, 0o644))
+	cmd := exec.Command(agent, "run", "-tty", out, "-heartbeat", "1s")
+	must(cmd.Start())
+	time.Sleep(7 * time.Second)
+	cmd.Process.Kill()
+	cmd.Wait()
+	b, _ := os.ReadFile(out)
+	t := string(b)
+	blocks := strings.Count(t, "== devlayer node")
+	fatals := strings.Count(t, "identity: FATAL agentcheck test line")
+	switch {
+	case blocks == 0:
+		bad("run: no banner on the tty\n%s", t)
+	case fatals != blocks:
+		bad("run: %d banner(s) but the FATAL line %d times\n%s", blocks, fatals, t)
+	case !strings.Contains(t, "node: "):
+		bad("run: no heartbeat line\n%s", t)
+	default:
+		ok("run: %d banner(s), the FATAL line once in each, heartbeat lines follow", blocks)
+	}
+}
+
 func main() {
 	mode := os.Getenv("node_check")
 	if mode == "" {
@@ -336,6 +366,7 @@ func main() {
 
 	bannerChecks()
 	sshdLogChecks()
+	runChecks()
 
 	s.publish(v1, false)
 	log, m := watch(s, v1, 3)
