@@ -191,7 +191,7 @@ const marker = "/tmp/reboot-marker"
 func watch(s *server, current string, checks int, extra ...string) (string, string) {
 	os.Remove(marker)
 	args := append([]string{"watch", "-index", s.url, "-roots", "/tmp/ca.pem",
-		"-interval", "200ms", "-grace", "100ms", "-fail-wait", "200ms",
+		"-interval", "200ms", "-grace", "100ms", "-fail-wait", "200ms", "-early", "0s",
 		"-checks", fmt.Sprint(checks), "-reboot-marker", marker}, extra...)
 	cmd := exec.Command(agent, args...)
 	cmd.Env = append(os.Environ(), "node_release="+current)
@@ -379,11 +379,18 @@ func main() {
 
 	s.failIdx = true
 	log, m = watch(s, v1, 2)
-	expect("index HTTP 500", log, m, "", "release check failed, not rebooting")
+	expect("index HTTP 500", log, m, "", "release check failed, retrying in 200ms; not rebooting")
 	s.failIdx = false
 
 	log, m = watch(s, v1, 2, "-index", "https://127.0.0.1:1/index.json")
-	expect("index unreachable", log, m, "", "release check failed, not rebooting")
+	expect("index unreachable", log, m, "", "release check failed, retrying in 200ms; not rebooting")
+
+	// Right after boot a failure is "waiting for the network", retried fast,
+	// and the first good answer ends that.
+	s.failIdx = true
+	log, m = watch(s, v1, 2, "-early", "1h", "-early-retry", "100ms")
+	expect("index fails right after boot", log, m, "", "waiting for the network, retrying every 100ms")
+	s.failIdx = false
 
 	s.publish(v3, true)
 	log, m = watch(s, v1, 2)

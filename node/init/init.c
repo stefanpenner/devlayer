@@ -35,9 +35,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/ethtool.h>
+#include <linux/input.h>
 #include <linux/loop.h>
 #include <linux/sockios.h>
 #include <net/if.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,6 +51,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define RUNTIME_IMAGE "/runtime.erofs"
@@ -482,6 +485,129 @@ static int run_test(void) {
     return code;
 }
 
+// ─── shutdown ───────────────────────────────────────────────────────────────
+//
+// PID 1 owns reboot and poweroff. toybox reboot, halt and poweroff signal it
+// (SIGTERM, SIGUSR1, SIGUSR2, the busybox convention); Ctrl-Alt-Del sends
+// SIGINT (init turns the kernel's own CAD reset off); SIGPWR and the ACPI
+// power button mean poweroff. The sequence: say what is happening, SIGTERM
+// to every process, up to 3 s for them to exit, SIGKILL, sync, reboot(2).
+// Every root write is on tmpfs, so there is nothing to unmount.
+// The handler uses only async-signal-safe calls, so it can run from any
+// point in init. A forked init child (the log relay, the button watcher)
+// inherits the handler; it exits instead.
+
+static volatile sig_atomic_t stopping;
+
+// One line at level crit: on every console and in dmesg.
+static void kmsg_line(const char *a, const char *b) {
+    int k = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+    if (k < 0) return;
+    char buf[256];
+    size_t n = 0, la = strlen(a), lb = strlen(b);
+    if (3 + la + lb + 1 > sizeof buf) return;
+    memcpy(buf, "<2>", 3);
+    n = 3;
+    memcpy(buf + n, a, la);
+    n += la;
+    memcpy(buf + n, b, lb);
+    n += lb;
+    buf[n++] = '\n';
+    write(k, buf, n); // one write is one kernel log record
+    close(k);
+}
+
+static void shutdown_now(int cmd, const char *why) {
+    if (getpid() != 1) _exit(0);
+    if (stopping) return;
+    stopping = 1;
+    const char *what = cmd == (int)RB_POWER_OFF ? "powering off" : cmd == (int)RB_HALT_SYSTEM ? "halting" : "rebooting";
+    kmsg_line("node-init: ", why);
+    kmsg_line("node-init: stopping every process, then ", what);
+    kill(-1, SIGTERM);
+    struct timespec ts = {0, 100 * 1000 * 1000};
+    for (int i = 0; i < 30; i++) {
+        while (waitpid(-1, NULL, WNOHANG) > 0) {}
+        if (kill(-1, 0) != 0 && errno == ESRCH) break;
+        nanosleep(&ts, NULL);
+    }
+    kill(-1, SIGKILL);
+    while (waitpid(-1, NULL, WNOHANG) > 0) {}
+    sync();
+    reboot(cmd);
+    for (;;) pause();
+}
+
+static void on_signal(int sig) {
+    switch (sig) {
+    case SIGTERM: shutdown_now(RB_AUTOBOOT, "SIGTERM (reboot)"); break;
+    case SIGINT:  shutdown_now(RB_AUTOBOOT, "Ctrl-Alt-Del"); break;
+    case SIGUSR1: shutdown_now(RB_HALT_SYSTEM, "SIGUSR1 (halt)"); break;
+    case SIGUSR2: shutdown_now(RB_POWER_OFF, "SIGUSR2 (poweroff)"); break;
+    case SIGPWR:  shutdown_now(RB_POWER_OFF, "SIGPWR (power failure or power button)"); break;
+    }
+}
+
+static void shutdown_signals(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = on_signal;
+    sigfillset(&sa.sa_mask);
+    int sigs[] = {SIGTERM, SIGINT, SIGUSR1, SIGUSR2, SIGPWR};
+    for (unsigned i = 0; i < sizeof sigs / sizeof sigs[0]; i++) sigaction(sigs[i], &sa, NULL);
+    reboot(RB_DISABLE_CAD); // Ctrl-Alt-Del now sends SIGINT to PID 1
+}
+
+// The ACPI power button is an input device with KEY_POWER. One child
+// watches every such /dev/input/event* and sends SIGPWR to init on a press.
+static int has_key_power(int fd) {
+    unsigned long bits[KEY_MAX / (8 * sizeof(unsigned long)) + 1];
+    memset(bits, 0, sizeof bits);
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof bits), bits) < 0) return 0;
+    return (bits[KEY_POWER / (8 * sizeof(unsigned long))] >> (KEY_POWER % (8 * sizeof(unsigned long)))) & 1;
+}
+
+static void start_power_button(void) {
+    pid_t pid = fork();
+    if (pid != 0) return;
+    signal(SIGTERM, SIG_DFL);
+    struct pollfd fds[16];
+    int n = 0;
+    // The button driver probes before init runs; give USB keyboards a moment.
+    for (int tries = 0; tries < 2 && n == 0; tries++) {
+        DIR *d = opendir("/dev/input");
+        struct dirent *e;
+        while (d && (e = readdir(d)) != NULL && n < 16) {
+            if (strncmp(e->d_name, "event", 5) != 0) continue;
+            char path[64];
+            snprintf(path, sizeof path, "/dev/input/%s", e->d_name);
+            int fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd < 0) continue;
+            if (has_key_power(fd)) {
+                fds[n].fd = fd;
+                fds[n++].events = POLLIN;
+            } else {
+                close(fd);
+            }
+        }
+        if (d) closedir(d);
+        if (n == 0) sleep(5);
+    }
+    if (n == 0) _exit(0);
+    for (;;) {
+        if (poll(fds, (nfds_t)n, -1) <= 0) continue;
+        for (int i = 0; i < n; i++) {
+            if (!(fds[i].revents & POLLIN)) continue;
+            struct input_event ev;
+            while (read(fds[i].fd, &ev, sizeof ev) == (ssize_t)sizeof ev) {
+                if (ev.type == EV_KEY && ev.code == KEY_POWER && ev.value == 1) {
+                    kill(1, SIGPWR);
+                }
+            }
+        }
+    }
+}
+
 static int stage2(void) {
     must_mount("cgroup2", "/sys/fs/cgroup", "cgroup2", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
     must_mount("tmpfs", "/run", "tmpfs", MS_NOSUID | MS_NODEV, "mode=0755");
@@ -489,6 +615,8 @@ static int stage2(void) {
     must_mount("tmpfs", "/tmp", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777");
     must_mount("devpts", "/dev/pts", "devpts", MS_NOSUID | MS_NOEXEC, "ptmxmode=0666,mode=0620");
     say("%s", "stage 2: runtime layer up, cgroup2 mounted");
+    shutdown_signals();
+    start_power_button();
     loopback_up();
     lro_off();
     boot_layers();

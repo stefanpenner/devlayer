@@ -204,6 +204,50 @@ node_vm_test(
     tpm = True,
 )
 
+# Plain reboot and poweroff over SSH: toybox signals PID 1, init stops
+# every process, syncs, and calls reboot(2).
+node_vm_test(
+    name = "reboot_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=reboot",
+    expect_stop = "reboot",
+    tags = ["node-vm"],
+)
+
+node_vm_test(
+    name = "poweroff_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=poweroff",
+    expect_stop = "poweroff",
+    tags = ["node-vm"],
+)
+
+# The ACPI power button (QEMU system_powerdown): a clean poweroff.
+node_vm_test(
+    name = "power_button_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=button",
+    expect_stop = "poweroff",
+    qmp_cmd = "{\"execute\":\"system_powerdown\"}",
+    qmp_on = "ready-for-qmp",
+    tags = ["node-vm"],
+)
+
+# Ctrl-Alt-Del on the keyboard: a clean reboot.
+node_vm_test(
+    name = "ctrl_alt_del_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=cad",
+    expect_stop = "reboot",
+    qmp_cmd = "{\"execute\":\"send-key\",\"arguments\":{\"keys\":[{\"type\":\"qcode\",\"data\":\"ctrl\"},{\"type\":\"qcode\",\"data\":\"alt\"},{\"type\":\"qcode\",\"data\":\"delete\"}]}}",
+    qmp_on = "ready-for-qmp",
+    tags = ["node-vm"],
+)
+
 # No TPM: fail closed. sshd is not listening, the FATAL line is on serial.
 node_vm_test(
     name = "no_tpm_vm",

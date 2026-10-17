@@ -13,7 +13,9 @@ mounts each one at /layers/<name> after checking its sha256.
 of the SER9's AMD fTPM). `boots` boots the same disks and TPM state several
 times. `cmdline` adds kernel options. `expect_serial` must appear in every
 boot log. `host_key_across_boots` ("same" or "differ") compares the
-payload's `hostkey: ` line across boots.
+payload's `hostkey: ` line across boots. `expect_stop` ("reboot" or
+"poweroff") passes on a clean guest stop through init's shutdown.
+`qmp_on`/`qmp_cmd` send one QMP command once the payload prints `qmp_on`.
 """
 
 load("//linux:cc.bzl", "linux_transition")
@@ -88,6 +90,11 @@ def _node_vm_test_impl(ctx):
         env["NODE_CMDLINE"] = ctx.attr.cmdline
     if ctx.attr.expect_serial:
         env["NODE_EXPECT_SERIAL"] = ctx.attr.expect_serial
+    if ctx.attr.expect_stop:
+        env["NODE_EXPECT_STOP"] = ctx.attr.expect_stop
+    if ctx.attr.qmp_on:
+        env["NODE_QMP_ON"] = ctx.attr.qmp_on
+        env["NODE_QMP_CMD"] = ctx.attr.qmp_cmd
     if ctx.attr.host_key_across_boots:
         env["NODE_HOSTKEY_ACROSS_BOOTS"] = ctx.attr.host_key_across_boots
     runfiles = ctx.runfiles(
@@ -115,6 +122,9 @@ node_vm_test = rule(
         "cmdline": attr.string(),
         "expect_serial": attr.string(),
         "host_key_across_boots": attr.string(values = ["", "same", "differ"]),
+        "expect_stop": attr.string(values = ["", "reboot", "poweroff"]),
+        "qmp_on": attr.string(),
+        "qmp_cmd": attr.string(),
         "arch": attr.string(default = "x86_64"),
         "os": attr.string(default = "linux"),
         "kernel": attr.label(default = "//node:vmlinuz", allow_single_file = True),

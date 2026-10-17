@@ -49,6 +49,8 @@ type config struct {
 	retryBase    time.Duration
 	retryMax     time.Duration
 	failWait     time.Duration
+	early        time.Duration
+	earlyRetry   time.Duration
 	checks       int
 	rebootMarker string
 	tty          string
@@ -101,6 +103,8 @@ func main() {
 	fs.DurationVar(&c.retryBase, "retry-base", 5*time.Minute, "wait after boot before retrying a release the shim did not boot; doubles per try")
 	fs.DurationVar(&c.retryMax, "retry-max", 6*time.Hour, "longest retry wait")
 	fs.DurationVar(&c.failWait, "fail-wait", 10*time.Minute, "wait after a release fails verification")
+	fs.DurationVar(&c.early, "early", 3*time.Minute, "until this uptime, and until the first good check, a failed check retries after -early-retry")
+	fs.DurationVar(&c.earlyRetry, "early-retry", 5*time.Second, "retry wait while the network comes up")
 	fs.IntVar(&c.checks, "checks", 0, "exit after this many index checks (tests; 0 = forever)")
 	fs.StringVar(&c.rebootMarker, "reboot-marker", "", "write the target here and exit instead of rebooting (tests)")
 	fs.StringVar(&c.tty, "tty", "/dev/tty0", "where the banner goes")

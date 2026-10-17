@@ -66,11 +66,21 @@ Every 60 s node-agent fetches `https://boot.penner.network/index.json` with If-N
 
 It compares for a difference, not an order, so a rollback also reaches the node. It never reboots on a fetch error, a bad index, or a failed check; the banner shows the error.
 
+Right after boot, DNS or the route may not answer yet: on the SER9 the first check, at 54 s, timed out on the resolver. Until the first good answer, and for the first 3 minutes of uptime, a failed fetch shows `waiting for the network, retrying every 5s (...)`, not in red, and node-agent tries again after 5 s. After that a failure shows `release check failed, retrying in 1m0s; not rebooting (...)` in red.
+
 The loop guard: if the shim boots the old release again (for example a download failed and it used its cache), the node would see the new release again and reboot every two minutes. Before each reboot node-agent writes `{target manifest digest, tries}` to TPM NV index `0x01008001` (owner hierarchy, 128 bytes, no DA). After a failed try it waits 5 min after boot, then 10, 20, and so on up to 6 h, before the next. A new target starts the count again. Without a usable NV index it does not reboot. The TPM is there on every node because sshd needs it, the node keeps no disk state, and the shim cannot know whether Linux came up. `node-agent record` prints the record.
 
 `node_autoreboot=off` on the command line turns the watcher off. Without `node_release` it is off too.
 
-`//node:agent_vm` checks the banner and the watcher against an HTTPS server with a test CA, inside the VM with swtpm: same release, HTTP 500, unreachable, corrupt blob, new release, the loop guard, and a newer target. `//node:agent_optout_vm` checks `node_autoreboot=off`.
+`//node:agent_vm` checks the banner and the watcher against an HTTPS server with a test CA, inside the VM with swtpm: same release, HTTP 500, unreachable, a failure right after boot (fast retry), corrupt blob, new release, the loop guard, and a newer target. `//node:agent_optout_vm` checks `node_autoreboot=off`.
+
+### Reboot, power off, the power button
+
+Init (PID 1) handles the signals that toybox `reboot`, `poweroff` and `halt` send: SIGTERM reboots, SIGUSR2 powers off, SIGUSR1 halts. SIGPWR powers off. Init turns the kernel's Ctrl-Alt-Del off (`reboot(RB_DISABLE_CAD)`), so Ctrl-Alt-Del arrives as SIGINT and reboots cleanly. A small init child watches every `/dev/input/event*` device that has KEY_POWER (the ACPI power button, kernel `CONFIG_ACPI_BUTTON`) and sends init SIGPWR on a press. On the signal, init logs `node-init: <why>` and `node-init: stopping every process, then <rebooting|powering off|halting>`, sends SIGTERM to every process, waits up to 3 s for them to exit, sends SIGKILL to the rest, syncs, and calls reboot(2). `reboot -f` still reboots at once.
+
+The kernel has input, evdev, the i8042 keyboard, and USB HID over xHCI, so a USB keyboard's Ctrl-Alt-Del works on the SER9.
+
+Tests: `//node:reboot_vm` and `//node:poweroff_vm` run `reboot` and `poweroff` over SSH. `//node:power_button_vm` presses the ACPI power button (QMP `system_powerdown`). `//node:ctrl_alt_del_vm` sends Ctrl-Alt-Del (QMP `send-key`). Each test fails unless the serial log has init's shutdown line and the kernel's `reboot: Restarting system` or `reboot: Power down`.
 
 ### Other fixes
 
@@ -146,7 +156,7 @@ The SER9 image does not contain the dev layer.
 | `/sbin/node-identity` | Go, go-tpm 0.9.8, static, 3.4 MB | the host key, held in the TPM; an ssh-agent socket for sshd |
 | `/sbin/node-agent` | Go, static, 5.7 MB | the status banner on the monitor and the release watcher (see Status and updates) |
 | `/etc/ssh/sshd_config`, `/etc/ssh/trusted_user_ca_keys` (empty), `/etc/ssh/sshd_config.d/` | key-only config | see SSH below |
-| `/bin/toybox` and 37 links | toybox 0.8.14, 290 KiB | a shell for SSH sessions, plus `mount`, `losetup`, `sha256sum`, `ps`, `dmesg`, `reboot` and a few more |
+| `/bin/toybox` and 56 links | toybox 0.8.14, 364 KiB | a shell for SSH sessions; `mount`, `losetup`, `sha256sum`, `ps`, `top`, `dmesg`, `reboot`; `grep`, `head`, `tail`, `sed`, `find`, `xargs`, `sort`, `wc` for logs and files; `ping`, `netstat`. toybox has no `less` (its `more` is unfinished), so use `tail` and `grep`. |
 | `/root/.ssh/authorized_keys` | https://github.com/stefanpenner.keys, pinned by sha256 | the only way in |
 | `/etc/passwd`, `/etc/group` | root, and `sshd` (uid 22, home `/var/empty`, shell `/bin/false`) | sshd looks up the user; `sshd` is the privsep user |
 | empty dirs | `dev proc sys run tmp var/empty test layers/.by-hash etc/node etc/ssh/sshd_config.d` | mount points |

@@ -228,6 +228,15 @@ func (f *fetcher) verify(d descriptor, version string) error {
 	return nil
 }
 
+// shortErr drops Go's `Get "<url>": ` prefix; the banner names the URL.
+func shortErr(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err.Error()
+	}
+	return err.Error()
+}
+
 func short(d string) string {
 	d = strings.TrimPrefix(d, "sha256:")
 	if len(d) > 12 {
@@ -274,15 +283,23 @@ func watch(c config, st *status) int {
 	}
 	st.set("running "+c.release+"; checking "+c.index, false)
 	failed := map[string]time.Time{}
+	everOK := false
 	for n := 1; ; n++ {
 		wait := c.interval
 		idx, err := f.getIndex()
 		switch {
+		case err != nil && !everOK && uptime() < c.early:
+			// Right after boot DNS or the route may not answer yet (the
+			// SER9's first check at 54 s timed out on 10.86.1.1:53).
+			wait = c.earlyRetry
+			st.set(fmt.Sprintf("waiting for the network, retrying every %s (%s)", c.earlyRetry, shortErr(err)), false)
 		case err != nil:
-			st.set("release check failed, not rebooting: "+err.Error(), true)
+			st.set(fmt.Sprintf("release check failed, retrying in %s; not rebooting (%s)", c.interval, shortErr(err)), true)
 		case idx == nil:
 			// 304: nothing new since the last look.
+			everOK = true
 		default:
+			everOK = true
 			wait = check(c, f, st, idx, failed)
 		}
 		if c.checks > 0 && n >= c.checks {

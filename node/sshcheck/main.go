@@ -7,6 +7,8 @@
 //	no-tpm     no TPM: sshd is not listening and the FATAL line is in the
 //	           kernel log
 //	ephemeral  node_identity=ephemeral: a RAM host key, with the WARNING
+//	reboot, poweroff  plain reboot or poweroff over SSH; the guest stops
+//	button, cad  wait for vmrun's ACPI power button or Ctrl-Alt-Del
 //
 // It prints "hostkey: <key>" so vmrun can compare host keys across boots.
 // Every SSH key here is made inside the VM by the pinned ssh-keygen, so no
@@ -54,6 +56,14 @@ func main() {
 		noTPMChecks()
 	case "ephemeral":
 		ephemeralChecks()
+	case "reboot", "poweroff":
+		stopChecks(mode)
+	case "button", "cad":
+		// vmrun presses the ACPI power button or sends Ctrl-Alt-Del.
+		waitListen("127.0.0.1:22")
+		fmt.Println("ready-for-qmp")
+		time.Sleep(120 * time.Second)
+		bad("still running 120 s after the %s", mode)
 	default:
 		bad("unknown node_check %q", mode)
 	}
@@ -119,6 +129,20 @@ func tpmChecks() {
 	fmt.Println("hostkey:", served)
 
 	certChecks(served)
+}
+
+// stopChecks logs in and runs plain reboot or poweroff (toybox, which
+// signals PID 1). vmrun passes the test when the guest stops cleanly.
+func stopChecks(cmd string) {
+	waitListen("127.0.0.1:22")
+	must(keygen("-q", "-t", "ed25519", "-N", "", "-C", "test", "-f", "/tmp/id"))
+	pub, err := os.ReadFile("/tmp/id.pub")
+	must(err)
+	appendFile(keys, pub)
+	out, err := ssh("-i", "/tmp/id", "root@127.0.0.1", cmd)
+	fmt.Printf("ssh root@127.0.0.1 %s: %v %s\n", cmd, err, strings.TrimSpace(out))
+	time.Sleep(120 * time.Second)
+	bad("still running 120 s after %s", cmd)
 }
 
 func noTPMChecks() {

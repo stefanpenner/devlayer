@@ -20,6 +20,14 @@
 //	NODE_EXPECT_SERIAL    text every boot log must contain
 //	NODE_HOSTKEY_ACROSS_BOOTS  "same" or "differ": compares the payload's
 //	                      "hostkey: " stdout line across boots
+//	NODE_EXPECT_STOP      "reboot" or "poweroff": the guest is expected to
+//	                      stop through init's shutdown, not report a status.
+//	                      The test passes when QEMU exits cleanly and the
+//	                      serial log has init's shutdown line and the
+//	                      kernel's "Restarting system" or "Power down".
+//	NODE_QMP_ON, NODE_QMP_CMD  when the payload's stdout has NODE_QMP_ON,
+//	                      send the QMP command NODE_QMP_CMD (JSON), for
+//	                      example system_powerdown (the ACPI power button)
 //
 // The TPM state directory lives in TEST_TMPDIR for the whole test, so every
 // boot sees the same TPM, as a real node does. The guest keeps nothing else.
@@ -29,11 +37,13 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,11 +191,23 @@ func baseArgs(qemu, accel, cpu, kernel, initrd, disk, appendArgs, bootDir string
 
 // boot runs one QEMU and returns the payload status and its stdout.
 func boot(qemu string, args []string, bootDir, accel string, n, boots int) (int, string) {
+	var qmpSock string
+	if os.Getenv("NODE_QMP_ON") != "" {
+		d, err := os.MkdirTemp("/tmp", "qmp")
+		check(err)
+		defer os.RemoveAll(d)
+		qmpSock = filepath.Join(d, "s")
+		args = append(args, "-qmp", "unix:"+qmpSock+",server,nowait")
+	}
 	cmd := hostCommand(qemu, args)
 	var qerr strings.Builder
 	cmd.Stderr = &qerr
 	start := time.Now()
-	runErr := cmd.Run()
+	check(cmd.Start())
+	if qmpSock != "" {
+		go qmpWhen(filepath.Join(bootDir, "stdout"), os.Getenv("NODE_QMP_ON"), qmpSock, os.Getenv("NODE_QMP_CMD"))
+	}
+	runErr := cmd.Wait()
 	wall := time.Since(start)
 
 	bootPath := filepath.Join(bootDir, "boot.log")
@@ -208,6 +230,8 @@ func boot(qemu string, args []string, bootDir, accel string, n, boots int) (int,
 
 	var ee *exec.ExitError
 	switch {
+	case runErr == nil && os.Getenv("NODE_EXPECT_STOP") != "":
+		return expectStop(os.Getenv("NODE_EXPECT_STOP"), bootPath), string(out)
 	case runErr == nil:
 		// Exit 0 means a power-off or reset without isa-debug-exit.
 		fail(fmt.Errorf("the guest stopped before the payload reported a status\n%s", tail(bootPath)))
@@ -217,6 +241,46 @@ func boot(qemu string, args []string, bootDir, accel string, n, boots int) (int,
 		fail(fmt.Errorf("qemu: %v: %s\n%s", runErr, qerr.String(), tail(bootPath)))
 	}
 	return 1, string(out)
+}
+
+// expectStop checks a clean guest stop: init's shutdown line, then the
+// kernel's restart or power-down line. -no-reboot turns a reboot into a
+// QEMU exit.
+func expectStop(want, bootPath string) int {
+	b, _ := os.ReadFile(bootPath)
+	log := string(b)
+	kernel := map[string]string{"reboot": "reboot: Restarting system", "poweroff": "reboot: Power down"}[want]
+	for _, s := range []string{"node-init: stopping every process", kernel} {
+		if s == "" || !strings.Contains(log, s) {
+			fmt.Fprintf(os.Stderr, "vmrun: the guest stopped, but the serial log lacks %q\n%s\n", s, tail(bootPath))
+			return 1
+		}
+	}
+	fmt.Fprintf(os.Stderr, "vmrun: clean %s: serial has init's shutdown line and %q\n", want, kernel)
+	return 0
+}
+
+// qmpWhen waits until path contains text, then sends one QMP command.
+func qmpWhen(path, text, sock, command string) {
+	for i := 0; i < 6000; i++ {
+		if b, err := os.ReadFile(path); err == nil && strings.Contains(string(b), text) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	c, err := net.Dial("unix", sock)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vmrun: qmp:", err)
+		return
+	}
+	defer c.Close()
+	r := bufio.NewReader(c)
+	r.ReadString('\n') // greeting
+	fmt.Fprintln(c, `{"execute":"qmp_capabilities"}`)
+	r.ReadString('\n')
+	fmt.Fprintln(c, command)
+	resp, _ := r.ReadString('\n')
+	fmt.Fprintf(os.Stderr, "vmrun: qmp %s -> %s", command, resp)
 }
 
 func waitFor(path string) {
