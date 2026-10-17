@@ -22,8 +22,8 @@ aarch64 | arm64) MUSL=aarch64 ZT=aarch64-linux-musl ;;
 *) echo "build.sh: unsupported exec cpu $(uname -m)" >&2; exit 1 ;;
 esac
 
-W=$(abs "${TMPDIR:-.}/kbuild.$$")
-rm -rf "$W"; mkdir -p "$W/bin" "$W/zig-cache"
+W=$(mktemp -d "${TMPDIR:-/tmp}/kbuild.XXXXXX")
+mkdir -p "$W/bin" "$W/zig-cache"
 trap 'rm -rf "$W"' EXIT
 
 # Pinned musl tools. The loader comes from the same packages, not the host.

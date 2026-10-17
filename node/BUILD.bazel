@@ -124,7 +124,10 @@ genrule(
 # kernel's own writer; -t 0 fixes every mtime.
 genrule(
     name = "initrd",
+    # gen_init_cpio is a src, not a tool: a tool would build the kernel again
+    # in the exec configuration. This target only builds on Linux x86_64.
     srcs = [
+        ":gen_init_cpio",
         ":init",
         ":sysroot_erofs",
     ],
@@ -138,7 +141,6 @@ genrule(
         "rm -f $$L",
     ]),
     target_compatible_with = _LINUX_X86_64,
-    tools = [":gen_init_cpio"],
 )
 
 # Ready to publish. The shim boots vmlinuz with initrd.img and this cmdline.
