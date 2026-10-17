@@ -6,7 +6,7 @@
 //
 // Stage 2 is /sbin/init in the sysroot, PID 1. It mounts cgroup2 and runs one
 // payload. A node runs /etc/node/hook when it exists. A test (node_test=1 on
-// the kernel command line) runs /test/entry from the second disk, sends
+// the kernel command line) runs /test/entry from the first virtio disk, sends
 // stdout to hvc0 and stderr to hvc1, and exits QEMU with the payload status.
 //
 // The kernel passes unknown name=value boot options to init as environment
@@ -140,7 +140,7 @@ static int open_console(const char *path, int fallback) {
 }
 
 static int run_test(void) {
-    must_mount("/dev/vdb", "/test", "erofs", MS_RDONLY, NULL);
+    must_mount("/dev/vda", "/test", "erofs", MS_RDONLY, NULL);
     mkdir("/tmp", 01777);
     must_mount("tmpfs", "/tmp", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777");
     int out = open_console("/dev/hvc0", 1);
