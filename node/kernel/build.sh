@@ -62,6 +62,24 @@ export KBUILD_BUILD_USER=devlayer KBUILD_BUILD_HOST=devlayer KBUILD_BUILD_VERSIO
 # could be extracted"). The tarball is pinned by sha256, so its paths are known.
 xz -dc "$KERNEL_TAR" | tar -x -P -C "$W"
 SRC=$(echo "$W"/linux-*)
+
+# Source edits. Each must match exactly one line; a miss fails the build, so a
+# new kernel version cannot silently drop one.
+edit() {
+    f="$SRC/$1"
+    n=$(grep -cF -- "$2" "$f" || true)
+    [ "$n" = 1 ] || { echo "build.sh: edit $1: '$2' matched $n lines, want 1" >&2; exit 1; }
+    awk -v a="$2" -v b="$3" '{ i = index($0, a); if (i) $0 = substr($0, 1, i - 1) b substr($0, i + length(a)); print }' "$f" > "$f.edit"
+    mv "$f.edit" "$f"
+}
+# atlantic: LRO off from probe. LRO frames make the kernel warn "suspect GRO
+# implementation", and LRO breaks forwarding (bridges, containers). Turning it
+# off with ethtool after the link is up restarts the NIC (aq_ndev_set_features
+# closes and opens it): on the SER9 the AQC113 then took 8 s to renegotiate
+# 10GBASE-T. With the default off, init's LRO-off is a no-op.
+A=drivers/net/ethernet/aquantia/atlantic
+edit $A/aq_cfg.h "#define AQ_CFG_IS_LRO_DEF           1U" "#define AQ_CFG_IS_LRO_DEF           0U"
+edit $A/aq_nic.c "self->ndev->features = aq_hw_caps->hw_features;" "self->ndev->features = aq_hw_caps->hw_features & ~NETIF_F_LRO;"
 O="$W/out"
 J=${NPROC:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 

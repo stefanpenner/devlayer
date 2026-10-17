@@ -117,13 +117,18 @@ genrule(
 # Both consoles get kernel and init output. tty0 (the EFI framebuffer, the
 # monitor) is listed last, so it is /dev/console: a FATAL from node-identity
 # shows on screen. ttyS0 keeps the serial log for QEMU and a serial cable.
+# ttyS0 needs ,115200: bare console=ttyS0 runs at 9600 baud, and the SER9 has a
+# real 16550A at 0x3f8. Console output is synchronous, so the kernel waited on
+# every byte: 18 s to replay the log when ttyS0 registered, about 46 s to
+# reach /init. loglevel=4 prints only errors to the consoles; dmesg keeps
+# everything, and the banner and init write to tty0 themselves.
 # fbcon=font:TER16x32 makes the 4K console readable. The publish script
 # appends node_release=<version> for node-agent's release watcher.
 # printk.devkmsg=on lifts the /dev/kmsg write rate limit, so the banner
 # mirror and sshd's relayed log lines are not dropped from dmesg.
 oci_layout(
     name = "oci",
-    cmdline = "console=ttyS0 console=tty0 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
+    cmdline = "console=ttyS0,115200 console=tty0 loglevel=4 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
     layers = {
         ":vmlinuz": "vmlinuz",
         ":initrd": "initrd.img",

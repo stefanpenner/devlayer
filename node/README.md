@@ -82,6 +82,14 @@ The kernel has input, evdev, the i8042 keyboard, and USB HID over xHCI, so a USB
 
 Tests: `//node:reboot_vm` and `//node:poweroff_vm` run `reboot` and `poweroff` over SSH. `//node:power_button_vm` presses the ACPI power button (QMP `system_powerdown`). `//node:ctrl_alt_del_vm` sends Ctrl-Alt-Del (QMP `send-key`). Each test fails unless the serial log has init's shutdown line and the kernel's `reboot: Restarting system` or `reboot: Power down`.
 
+### Boot time
+
+Measured on the SER9 from `reboot` to SSH: 103 s on 20261017T211201Z. Causes and fixes:
+
+- **The serial console ran at 9600 baud.** Bare `console=ttyS0` means 9600, and the SER9 has a real 16550A at 0x3f8. Console output is synchronous, so the kernel waited on every byte: the 18 s pause after `printk: legacy console [ttyS0] enabled` is the 18,150-byte log replay at 960 B/s, and the 38 KB printed between 18 s and 46 s took about 40 s more. The cmdline is now `console=ttyS0,115200 ... loglevel=4`: only errors reach the consoles, and dmesg keeps everything.
+- **The link negotiated twice.** The kernel's `ip=dhcp` opened eth0 (link up at 46 s), then init turned LRO off, and atlantic closes and reopens the NIC for that, so 10GBASE-T negotiated again (link up at 56 s). `node/kernel/build.sh` now edits atlantic so LRO is off from probe, and init's LRO-off changes nothing.
+- `CONFIG_ACPI_FPDT` gives `/sys/firmware/acpi/fpdt/boot/` (firmware and loader times in ns). VFAT, NLS and efivarfs are built in so the ESP and the boot variables can be read by hand (`mount -t vfat -o ro /dev/nvme0n1p1 /mnt`, `mount -t efivarfs efivarfs /sys/firmware/efi/efivars`). Nothing mounts them at boot.
+
 ### Other fixes
 
 - The host key file in `/run/node-identity` is 0600. sshd runs its private-key permission check on the `HostKey` path even with `HostKeyAgent`, and warned "UNPROTECTED PRIVATE KEY FILE" at 0644.
