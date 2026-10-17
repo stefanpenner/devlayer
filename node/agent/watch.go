@@ -269,7 +269,15 @@ func retryWait(c config, tries int) time.Duration {
 // reboot marker, or when the watcher is off: 0 normally, 1 when it could not
 // start.
 func watch(c config, st *status) int {
+	blessOnce := func() {
+		if msg, err := bless(c.efivars); err != nil {
+			logk(4, "node-agent: could not bless this release for the shim: "+err.Error())
+		} else if msg != "" {
+			logk(5, "node-agent: "+msg)
+		}
+	}
 	if off := watcherOff(c); off != "" {
+		blessOnce()
 		st.set(off, false)
 		if c.checks > 0 || c.rebootMarker != "" {
 			return 0
@@ -297,10 +305,16 @@ func watch(c config, st *status) int {
 			st.set(fmt.Sprintf("release check failed, retrying in %s; not rebooting (%s)", c.interval, shortErr(err)), true)
 		case idx == nil:
 			// 304: nothing new since the last look.
-			everOK = true
 		default:
-			everOK = true
+			if !everOK {
+				blessOnce()
+				everOK = true
+			}
 			wait = check(c, f, st, idx, failed)
+		}
+		if err == nil && !everOK {
+			blessOnce()
+			everOK = true
 		}
 		if c.checks > 0 && n >= c.checks {
 			return 0

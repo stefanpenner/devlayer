@@ -6,6 +6,7 @@ go_binary(
     name = "agent",
     srcs = [
         "banner.go",
+        "bless.go",
         "main.go",
         "nv.go",
         "watch.go",

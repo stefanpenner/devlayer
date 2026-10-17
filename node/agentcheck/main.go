@@ -192,7 +192,7 @@ func watch(s *server, current string, checks int, extra ...string) (string, stri
 	os.Remove(marker)
 	args := append([]string{"watch", "-index", s.url, "-roots", "/tmp/ca.pem",
 		"-interval", "200ms", "-grace", "100ms", "-fail-wait", "200ms", "-early", "0s",
-		"-checks", fmt.Sprint(checks), "-reboot-marker", marker}, extra...)
+		"-checks", fmt.Sprint(checks), "-reboot-marker", marker, "-efivars", "/tmp/no-efivars"}, extra...)
 	cmd := exec.Command(agent, args...)
 	cmd.Env = append(os.Environ(), "node_release="+current)
 	out, err := cmd.CombinedOutput()
@@ -371,6 +371,32 @@ func main() {
 	s.publish(v1, false)
 	log, m := watch(s, v1, 3)
 	expect("same release", log, m, "", "up to date: "+v1)
+
+	// The first good answer blesses the release: ShimTrial goes away, so the
+	// shim does not roll back after boot_tries boots. Not again once gone.
+	os.MkdirAll("/tmp/efivars", 0o755)
+	trial := "/tmp/efivars/ShimTrial-c6f2a1d4-5b3e-4f8a-9d71-2e6b0c4a8f15"
+	os.WriteFile(trial, []byte{7, 0, 0, 0, 1, 2}, 0o644)
+	log, m = watch(s, v1, 1, "-efivars", "/tmp/efivars")
+	expect("bless", log, m, "", "blessed this release for the shim (deleted ShimTrial)")
+	if _, err := os.Stat(trial); err == nil {
+		bad("bless: ShimTrial is still there")
+	}
+	log, m = watch(s, v1, 1, "-efivars", "/tmp/efivars")
+	if strings.Contains(log, "blessed") {
+		bad("bless: blessed again with no ShimTrial\n%s", log)
+	}
+	// A failed fetch is no proof of health: no bless.
+	os.WriteFile(trial, []byte{7, 0, 0, 0, 1, 2}, 0o644)
+	s.failIdx = true
+	log, m = watch(s, v1, 1, "-efivars", "/tmp/efivars")
+	s.failIdx = false
+	if _, err := os.Stat(trial); err != nil || strings.Contains(log, "blessed") {
+		bad("bless: blessed after a failed check\n%s", log)
+	} else {
+		ok("bless: not after a failed check")
+	}
+	os.Remove(trial)
 	if s.notMod > 0 {
 		ok("index re-checks are conditional (If-None-Match, %d x 304)", s.notMod)
 	} else {

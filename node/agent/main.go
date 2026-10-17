@@ -56,6 +56,7 @@ type config struct {
 	tty          string
 	heartbeat    time.Duration
 	nvIndex      uint
+	efivars      string
 	release      string
 	autoreboot   string
 }
@@ -110,6 +111,7 @@ func main() {
 	fs.StringVar(&c.tty, "tty", "/dev/tty0", "where the banner goes")
 	fs.DurationVar(&c.heartbeat, "heartbeat", 60*time.Second, "one-line status interval")
 	fs.UintVar(&c.nvIndex, "nv-index", 0x01008001, "TPM NV index for the reboot record")
+	fs.StringVar(&c.efivars, "efivars", defaultEfivars, "efivarfs directory with the shim's ShimTrial variable (empty: never bless)")
 	fs.Parse(args)
 	c.release = os.Getenv("node_release")
 	c.autoreboot = os.Getenv("node_autoreboot")
