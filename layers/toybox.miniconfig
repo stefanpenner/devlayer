@@ -1,4 +1,5 @@
-# Runtime layer userland: a shell for SSH sessions and devlayer push, and
+# Runtime layer userland: a shell for SSH sessions and devlayer push, pwd
+# for the devlayer wrappers in other layers (toysh has no pwd builtin), and
 # the few tools a person needs to look at a node. Nothing else.
 CONFIG_SH=y
 CONFIG_CD=y
@@ -29,6 +30,7 @@ CONFIG_MOUNTPOINT=y
 CONFIG_MV=y
 CONFIG_PRINTF=y
 CONFIG_PS=y
+CONFIG_PWD=y
 CONFIG_REBOOT=y
 CONFIG_RM=y
 CONFIG_MD5SUM=y

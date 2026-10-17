@@ -31,6 +31,7 @@ RUNTIME_TOYBOX = [
     "poweroff",
     "printf",
     "ps",
+    "pwd",
     "reboot",
     "rm",
     "sh",

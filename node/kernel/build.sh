@@ -57,7 +57,10 @@ export SOURCE_DATE_EPOCH=0
 export KBUILD_BUILD_TIMESTAMP="1970-01-01 00:00:00 UTC"
 export KBUILD_BUILD_USER=devlayer KBUILD_BUILD_HOST=devlayer KBUILD_BUILD_VERSION=1
 
-xz -dc "$KERNEL_TAR" | tar -x -C "$W"
+# -P: GNU tar then skips its renamed-directory check. On overlayfs that check
+# fails about one extraction in three ("Directory renamed before its status
+# could be extracted"). The tarball is pinned by sha256, so its paths are known.
+xz -dc "$KERNEL_TAR" | tar -x -P -C "$W"
 SRC=$(echo "$W"/linux-*)
 O="$W/out"
 J=${NPROC:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
