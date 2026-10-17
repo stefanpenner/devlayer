@@ -180,6 +180,15 @@ It is not `fallbacks.txt`.
 The `share/zsh` tree is a directory beside the binary.
 Those shell functions are not inside the zsh binary.
 
+## Node
+
+[node/](node/README.md) builds a kernel, an initrd, and an EROFS of the Linux sysroot.
+The kernel source and the kernel LLVM are rung 0 pins.
+The Alpine build tools, mkfs.erofs, and QEMU are sha256 pins in [node/extensions.bzl](node/extensions.bzl).
+The kernel action still runs host `sh`, `sed`, `awk`, `grep`, and `tar`. That is rung 2.
+The kernel LLVM links the host glibc. A Linux x86_64 exec host builds the kernel.
+Two kernel builds in different directories gave the same bytes.
+
 ## Limits
 
 - Darwin nvim, htop, and eza clone a tag and compile with the host toolchain ([build.go](cmd/build.go)). Darwin btop and make hash the tarball, then the host compiler builds them.
