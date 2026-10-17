@@ -58,6 +58,8 @@ func main() {
 	stage, err := os.MkdirTemp(filepath.Dir(*out), "stage")
 	check(err)
 	defer os.RemoveAll(stage)
+	// MkdirTemp makes 0700. The stage is the image's root directory.
+	check(os.Chmod(stage, 0o755))
 
 	if *tarball != "" {
 		check(untar(*tarball, stage))
