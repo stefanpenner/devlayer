@@ -4,12 +4,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,6 +28,8 @@ const (
 )
 
 type info struct {
+	// fqdn: the node's DNS name (ser9.penner.network), or "" (see nodeName).
+	fqdn                                   string
 	host, iface, mac, addr, gw, dns, speed string
 	release, latest                        string
 	tpm                                    bool
@@ -186,6 +190,7 @@ func collect(st *status, k *kmsgLog) info {
 			break
 		}
 	}
+	in.fqdn = nodeName(in.host, in.ip)
 	in.release = os.Getenv("node_release")
 	st.mu.Lock()
 	in.latest = st.latest
@@ -213,11 +218,17 @@ func collect(st *status, k *kmsgLog) info {
 	return in
 }
 
-func or(s, def string) string {
-	if s == "" {
-		return def
+// or is the first non-empty value, else the last one.
+func or(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
 	}
-	return s
+	if len(vals) == 0 {
+		return ""
+	}
+	return vals[len(vals)-1]
 }
 
 // The dashboard: Tokyo Night colors (init loads the palette into the VT,
@@ -267,10 +278,14 @@ func render(in info, color bool) string {
 	for _, l := range logo {
 		fmt.Fprintf(&b, " %s\n", c(blue, l))
 	}
-	fmt.Fprintf(&b, " %s %s\n", c(cyan, "== devlayer node"), c(gray, "· penner.network"))
+	fmt.Fprintf(&b, " %s %s\n", c(cyan, "== "+or(in.fqdn, in.ip, "no address yet")), c(gray, "· devlayer node"))
 
 	section("IDENTITY")
-	row("host", c(white, or(in.host, "(none)")))
+	if in.fqdn != "" {
+		row("host", c(white, in.fqdn)+"  "+c(gray, or(in.ip, "no address")))
+	} else {
+		row("host", c(white, or(in.ip, "(no address)"))+"  "+c(gray, "no DNS name"))
+	}
 	if in.tpm {
 		row("tpm", c(green, "yes"))
 	} else {
@@ -317,26 +332,30 @@ func render(in info, color bool) string {
 	}
 
 	left := "up " + in.up.String()
-	right := "ssh root@" + or(in.ip, "<ip>")
-	if !in.sshd {
-		right = "ssh: not yet"
+	right := "ssh root@" + or(in.fqdn, in.ip, "<ip>")
+	alt := ""
+	if in.fqdn != "" && in.ip != "" {
+		alt = "  or root@" + in.ip
 	}
-	pad := width - 2 - len(left) - len(right)
+	if !in.sshd {
+		right, alt = "ssh: not yet", ""
+	}
+	pad := width - 2 - len(left) - len(right) - len(alt)
 	if pad < 2 {
 		pad = 2
 	}
 	fmt.Fprintf(&b, "\n %s\n", c(gray, strings.Repeat("─", width-1)))
-	fmt.Fprintf(&b, " %s%s%s\n", c(gray, left), strings.Repeat(" ", pad), c(bold, right))
+	fmt.Fprintf(&b, " %s%s%s%s\n", c(gray, left), strings.Repeat(" ", pad), c(bold, right), c(gray, alt))
 	return b.String()
 }
 
 func heartbeat(in info) string {
 	ssh := "sshd down"
 	if in.sshd {
-		ssh = "ssh root@" + in.ip
+		ssh = "ssh root@" + or(in.fqdn, in.ip)
 	}
 	return fmt.Sprintf("node: %s | %s | %s | release %s | up %s | %s",
-		or(in.host, "(none)"), or(in.addr, "no address"), ssh, or(in.release, "?"), in.up, or(in.update, "-"))
+		or(in.fqdn, in.host, "(none)"), or(in.addr, "no address"), ssh, or(in.release, "?"), in.up, or(in.update, "-"))
 }
 
 // repaint draws s over the previous banner: cursor home, each line cleared
@@ -412,5 +431,83 @@ func bannerLoop(c config, st *status) {
 			lastBeat = time.Now()
 		}
 		time.Sleep(2 * time.Second)
+	}
+}
+
+// nodeName is the node's DNS name for the dashboard, ser9.penner.network,
+// or "" so the caller shows the address. The kernel hostname when it has a
+// domain; otherwise the PTR record of the address, looked up in the
+// background (1 s limit; again after 10 min, or 1 min after a failure).
+// A name without a host label (penner.network itself) does not count.
+// The first PTR answer also sets the kernel hostname to its first label
+// when the kernel has none of its own (the default "node", or the address
+// that ip= autoconfiguration leaves), so the shell and the logs agree.
+func nodeName(host, ip string) string {
+	if fullName(host) {
+		return host
+	}
+	return ptr.get(host, ip)
+}
+
+// fullName: host.domain.tld, not an address, not the bare domain.
+func fullName(n string) bool {
+	n = strings.TrimSuffix(n, ".")
+	return strings.Count(n, ".") >= 2 && net.ParseIP(n) == nil && n != "penner.network"
+}
+
+var ptr ptrCache
+
+type ptrCache struct {
+	mu      sync.Mutex
+	ip      string
+	name    string
+	next    time.Time
+	running bool
+}
+
+func (p *ptrCache) get(host, ip string) string {
+	if ip == "" {
+		return ""
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ip != ip {
+		p.ip, p.name, p.next = ip, "", time.Time{}
+	}
+	if !p.running && time.Now().After(p.next) {
+		p.running = true
+		go p.lookup(host, ip)
+	}
+	return p.name
+}
+
+func (p *ptrCache) lookup(host, ip string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	names, _ := net.DefaultResolver.LookupAddr(ctx, ip)
+	cancel()
+	name := ""
+	for _, n := range names {
+		if n = strings.TrimSuffix(n, "."); fullName(n) {
+			name = n
+			break
+		}
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.running = false
+	if p.ip != ip {
+		return
+	}
+	p.name = name
+	if name == "" {
+		p.next = time.Now().Add(time.Minute)
+		return
+	}
+	p.next = time.Now().Add(10 * time.Minute)
+	if host == "" || host == "node" || host == "(none)" || net.ParseIP(host) != nil {
+		label, _, _ := strings.Cut(name, ".")
+		if err := syscall.Sethostname([]byte(label)); err == nil {
+			logk(6, fmt.Sprintf("node-agent: hostname %s (PTR of %s is %s)", label, ip, name))
+		}
 	}
 }

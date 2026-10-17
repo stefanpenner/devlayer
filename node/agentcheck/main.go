@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -335,7 +336,7 @@ func runChecks() {
 	cmd.Wait()
 	b, _ := os.ReadFile(out)
 	t := string(b)
-	blocks := strings.Count(t, "== devlayer node")
+	blocks := strings.Count(t, "· devlayer node")
 	fatals := strings.Count(t, "identity: FATAL agentcheck test line")
 	switch {
 	case blocks == 0:
@@ -435,7 +436,9 @@ func main() {
 	v1, v2, v3, v4 := "20261017T000001Z", "20261017T000002Z", "20261017T000003Z", "20261017T000004Z"
 
 	if mode == "dashboard" {
-		// The dashboard on the real tty0 for a screendump (dashboard_vm).
+		// The dashboard on the real tty0 for a screendump (dashboard_vm),
+		// named as the SER9 is: its FQDN in the header, the host row and ssh.
+		must(syscall.Sethostname([]byte("ser9.penner.network")))
 		dir := "/tmp/efivars-ui"
 		os.MkdirAll(dir, 0o755)
 		os.WriteFile(dir+"/PennerShimBuild-c6f2a1d4-5b3e-4f8a-9d71-2e6b0c4a8f15",
@@ -451,6 +454,19 @@ func main() {
 		cmd.Process.Kill()
 		cmd.Wait()
 		ok("dashboard painted on tty0")
+		// The FQDN in the header, the host row with the address beside it,
+		// and the ssh hint; never the bare domain.
+		bb, _ := exec.Command(agent, "banner", "-efivars", dir).CombinedOutput()
+		t := regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(string(bb), "")
+		for _, want := range []string{"== ser9.penner.network · devlayer node", "host     ser9.penner.network  10.0.2.15", "ssh root@ser9.penner.network", "or root@10.0.2.15"} {
+			if !strings.Contains(t, want) {
+				bad("dashboard: no %q in\n%s", want, t)
+			}
+		}
+		if strings.Contains(t, "· penner.network") {
+			bad("dashboard: the bare domain in\n%s", t)
+		}
+		ok("dashboard names the node ser9.penner.network")
 		done()
 	}
 

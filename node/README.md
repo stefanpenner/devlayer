@@ -49,7 +49,7 @@ Init reads boot options with `getenv`. The kernel passes unknown `name=value` op
 
 ### The banner
 
-A block on the monitor (tty0): host, interface, MAC, link speed, address and gateway, DNS, the release (`node_release`), the latest release in the index, TPM yes/no, the host key's SHA256 fingerprint and its source, sshd state, the exact `ssh root@<ip>` command, uptime, and the watcher state. FATAL and identity WARNING lines from the kernel log show in red. The block prints again when anything in it changes, and every 10 minutes; a one-line heartbeat follows every minute. The same block goes to the kernel log at debug level, so `dmesg` has it. `node-agent banner` prints it once.
+A block on the monitor (tty0): the node's DNS name (`ser9.penner.network`: the kernel hostname when it has a domain, else the PTR record of the address, which also sets the kernel hostname to `ser9`; the address when there is neither) in the header, the host row and the ssh hint, then interface, MAC, link speed, address and gateway, DNS, the release (`node_release`), the latest release in the index, TPM yes/no, the host key's SHA256 fingerprint and its source, sshd state, the exact `ssh root@<name>` command (and `root@<ip>`), uptime, and the watcher state. FATAL and identity WARNING lines from the kernel log show in red. The block prints again when anything in it changes, and every 10 minutes; a one-line heartbeat follows every minute. The same block goes to the kernel log at debug level, so `dmesg` has it. `node-agent banner` prints it once.
 
 The console uses the Terminus 16x32 font (`fbcon=font:TER16x32`); at 3840x2160 the 8x16 font is 480x135 characters. `printk.devkmsg=on` lifts the `/dev/kmsg` rate limit.
 
@@ -115,7 +115,7 @@ There are no modules.
 | Filesystems | EROFS (lz4, deflate), overlayfs, tmpfs with xattrs, hugetlbfs, THP |
 | Network | atlantic, virtio-net, kernel DHCP, IPv6, nftables NAT, bridge, veth, macvlan, macvtap, TUN |
 | Containers | cgroup v2 controllers, all namespaces, seccomp, BPF, io_uring |
-| KVM host | KVM, KVM_AMD (nested), KVM_INTEL, AMD IOMMU, IRQ remap, IOMMUFD, VFIO-PCI, vhost-net, vhost-vsock |
+| KVM host | KVM, KVM_AMD (nested; no KVM_INTEL), AMD IOMMU, IRQ remap, IOMMUFD, VFIO-PCI, vhost-net, vhost-vsock |
 | Guest | virtio-pci, virtio console, virtio RNG, KVM guest clock |
 
 `-mtune` changes scheduling only. `-march=znver4` would break QEMU TCG and Intel test hosts.
