@@ -150,3 +150,15 @@ Apple silicon has no x86 HVF. A Mac runs TCG.
 - The SER9 BIOS must have the IOMMU on for VFIO.
 - The 311 MiB initrd goes through the shim. The shim cache must fit it on the ESP.
 - On this build box, `-accel kvm` hangs at boot. The tests ran with TCG.
+
+## Open decisions
+
+- Sysroot scope. The image ships the whole devlayer sysroot. go and zig are 575 MiB of the 848 MiB tree. A `_NODE` list, like `_BUNDLE`, would cut the initrd to about 100 MiB.
+- Where the EROFS lives. Today it is inside initrd.img, so the current shim boots it. A separate `sysroot.erofs` layer needs the shim to concatenate initrd layers.
+- Remote access. Pick one for `/etc/node/hook`: dropbear built with zig, an agent of our own, or none (cattle, logs over netconsole).
+- Container runtime. The kernel has cgroup v2, namespaces, overlayfs, seccomp, and nftables. Pick crun, runc, or youki, built with zig or pinned.
+- Persistent state. The NVMe is unused. Pick none, a scratch filesystem, or VM disks.
+- dm-verity. Put the EROFS root hash on the command line and verify at mount.
+- lzma. Build erofs-utils with zig to get lzma: 232 MiB instead of 311 MiB, slower reads.
+- Time. The node has no NTP client. KVM guests and TLS need a correct clock.
+- `KVM_INTEL`. Drop it if no test host is Intel.
