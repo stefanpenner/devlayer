@@ -2,8 +2,12 @@
 
 node_vm_test builds one binary for Linux x86_64 musl with zig, puts it and its
 runfiles in an EROFS test image, and boots the node kernel in the pinned QEMU
-with that image as the first virtio disk. Init runs the binary as its payload.
+with that image as a virtio disk. Init runs the binary as its payload.
 Stdout, stderr, and the exit status come back to `bazel test`.
+
+The node boots from the runtime layer alone. `layers` attaches more EROFS
+layers as extra read-only disks, for example {"//layers:dev": "dev"}. Init
+mounts each one at /layers/<name> after checking its sha256.
 """
 
 load("//linux:cc.bzl", "linux_transition")
@@ -61,8 +65,14 @@ def _node_vm_test_impl(ctx):
     ctx.actions.symlink(output = out, target_file = runner, is_executable = True)
 
     qemu = ctx.file._qemu
+    layers = []
+    layer_files = []
+    for target, name in ctx.attr.layers.items():
+        f = target.files.to_list()[0]
+        layers.append(name + "=" + f.short_path)
+        layer_files.append(f)
     runfiles = ctx.runfiles(
-        files = [disk, ctx.file.kernel, ctx.file.initrd, qemu] + ctx.files._qemu_files,
+        files = [disk, ctx.file.kernel, ctx.file.initrd, qemu] + layer_files + ctx.files._qemu_files,
     ).merge(ctx.attr._vmrun[DefaultInfo].default_runfiles)
     return [
         DefaultInfo(executable = out, runfiles = runfiles),
@@ -71,6 +81,7 @@ def _node_vm_test_impl(ctx):
             "NODE_KERNEL": ctx.file.kernel.short_path,
             "NODE_INITRD": ctx.file.initrd.short_path,
             "NODE_DISK": disk.short_path,
+            "NODE_LAYERS": ",".join(layers),
         }),
     ]
 
@@ -79,6 +90,7 @@ node_vm_test = rule(
     test = True,
     attrs = {
         "binary": attr.label(mandatory = True, executable = True, cfg = linux_transition),
+        "layers": attr.label_keyed_string_dict(allow_files = [".erofs"]),
         "arch": attr.string(default = "x86_64"),
         "os": attr.string(default = "linux"),
         "kernel": attr.label(default = "//node:vmlinuz", allow_single_file = True),

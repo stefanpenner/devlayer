@@ -1,6 +1,6 @@
 // vmrun is the test executable of a node_vm_test. It boots the node kernel
-// and initrd in the pinned QEMU, with the test image as the first virtio
-// disk, and node_test=1 on the command line. Init runs /test/entry from that
+// and initrd in the pinned QEMU, with the test image as the virtio disk with
+// serial "test", and node_test=1 on the command line. Init runs /test/entry from that
 // disk. The payload's stdout and stderr come back on two virtio consoles.
 // Its exit status comes back through isa-debug-exit: QEMU exits with
 // (status << 1) | 1.
@@ -8,12 +8,19 @@
 // Environment, set by the rule (paths relative to the runfiles tree):
 //
 //	NODE_QEMU NODE_KERNEL NODE_INITRD NODE_DISK
+//	NODE_LAYERS   name=path,... extra EROFS layers, may be empty
+//
+// Each layer is a read-only disk with serial "layer-<name>", and the command
+// line gets node_layer_<name>=<sha256 of the image>. Init mounts it at
+// /layers/<name> only when the bytes match.
 //
 // NODE_VM_ACCEL picks kvm, hvf, or tcg. Empty means kvm when /dev/kvm opens,
 // hvf on an Intel Mac, and tcg otherwise. Apple silicon has no x86 HVF.
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -45,6 +52,23 @@ func main() {
 	if accel == "kvm" || accel == "hvf" {
 		cpu = "host"
 	}
+	appendArgs := "console=ttyS0 ip=dhcp panic=-1 node_test=1"
+	var layerArgs []string
+	if v := os.Getenv("NODE_LAYERS"); v != "" {
+		for _, l := range strings.Split(v, ",") {
+			name, path, ok := strings.Cut(l, "=")
+			if !ok {
+				fail(fmt.Errorf("NODE_LAYERS entry %q", l))
+			}
+			path = mustAbs(path)
+			sum, err := fileSHA256(path)
+			check(err)
+			appendArgs += " node_layer_" + name + "=" + sum
+			layerArgs = append(layerArgs,
+				"-drive", "if=none,id=l"+name+",format=raw,readonly=on,file="+path,
+				"-device", "virtio-blk-pci,drive=l"+name+",serial=layer-"+name)
+		}
+	}
 	share := filepath.Join(filepath.Dir(filepath.Dir(qemu)), "share", "qemu")
 	args := []string{
 		"-L", share,
@@ -52,15 +76,16 @@ func main() {
 		"-display", "none", "-vga", "none", "-monitor", "none", "-no-reboot",
 		"-serial", "file:" + bootPath,
 		"-kernel", kernel, "-initrd", initrd,
-		"-append", "console=ttyS0 ip=dhcp panic=-1 node_test=1",
+		"-append", appendArgs,
 		"-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,romfile=",
 		"-drive", "if=none,id=t,format=raw,readonly=on,file=" + disk,
-		"-device", "virtio-blk-pci,drive=t",
+		"-device", "virtio-blk-pci,drive=t,serial=test",
 		"-device", "virtio-serial-pci",
 		"-chardev", "file,id=o,path=" + outPath, "-device", "virtconsole,chardev=o",
 		"-chardev", "file,id=e,path=" + errPath, "-device", "virtconsole,chardev=e",
 		"-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
 	}
+	args = append(args, layerArgs...)
 	cmd := qemuCommand(qemu, args)
 	var qerr strings.Builder
 	cmd.Stderr = &qerr
@@ -87,6 +112,19 @@ func main() {
 	default:
 		fail(fmt.Errorf("qemu: %v: %s\n%s", runErr, qerr.String(), tail(bootPath)))
 	}
+}
+
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func pickAccel() string {

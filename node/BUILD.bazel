@@ -1,5 +1,6 @@
-# The node image: a sealed kernel, a tiny initrd, and the devlayer sysroot as
-# a read-only EROFS root. The same kernel is a local test target.
+# The node image: a sealed kernel and a tiny initrd that holds /init and the
+# runtime layer (//layers:runtime) as a read-only EROFS root. Nothing else.
+# The same kernel is a local test target.
 #
 #   bazel build //node:oci          # vmlinuz + initrd.img as an OCI layout
 #   bazel test --config=node //node/...
@@ -89,38 +90,7 @@ genrule(
           "-o $@ $(location init/init.c) && rm -rf $$C",
 )
 
-# The devlayer Linux sysroot plus the node pieces, as one read-only EROFS.
-genrule(
-    name = "sysroot_erofs",
-    srcs = [
-        "//linux:bundle_x86_64",
-        ":init",
-        "root/etc/passwd",
-        "root/etc/group",
-        "@node_hosttools_linux_x86_64//:all",
-        "@node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1",
-        "@node_hosttools_linux_x86_64//:usr/bin/mkfs.erofs",
-    ],
-    outs = ["sysroot.erofs"],
-    cmd = " ".join([
-        "$(location //node/tools/mkimage)",
-        "-out $@",
-        "-mkfs $(location @node_hosttools_linux_x86_64//:usr/bin/mkfs.erofs)",
-        "-loader $(location @node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1)",
-        "-libpath $$(dirname $(location @node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1)):$$(dirname $(location @node_hosttools_linux_x86_64//:usr/bin/mkfs.erofs))/../lib",
-        "-tar $(location //linux:bundle_x86_64)",
-        "-file sbin/init=$(location :init)",
-        "-file etc/passwd=$(location root/etc/passwd)",
-        "-file etc/group=$(location root/etc/group)",
-        "-link bin/sh=../zsh/bin/zsh",
-        "-dir dev -dir proc -dir sys -dir run -dir tmp -dir var -dir root -dir etc/node -dir test",
-        "-dedupe -z lz4hc",
-    ]),
-    target_compatible_with = _LINUX_X86_64,
-    tools = ["//node/tools/mkimage"],
-)
-
-# One uncompressed newc cpio: /init and the EROFS root. gen_init_cpio is the
+# One uncompressed newc cpio: /init and the runtime layer. gen_init_cpio is the
 # kernel's own writer; -t 0 fixes every mtime.
 genrule(
     name = "initrd",
@@ -129,14 +99,14 @@ genrule(
     srcs = [
         ":gen_init_cpio",
         ":init",
-        ":sysroot_erofs",
+        "//layers:runtime",
     ],
     outs = ["initrd.img"],
     cmd = " && ".join([
         "L=$$(mktemp)",
         "printf '%s\\n' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'dir /proc 0755 0 0' " +
         "'dir /sys 0755 0 0' 'dir /lower 0755 0 0' 'dir /rw 0755 0 0' 'dir /newroot 0755 0 0' " +
-        "\"file /init $(location :init) 0755 0 0\" \"file /sysroot.erofs $(location :sysroot_erofs) 0644 0 0\" > $$L",
+        "\"file /init $(location :init) 0755 0 0\" \"file /runtime.erofs $(location //layers:runtime) 0644 0 0\" > $$L",
         "$(location :gen_init_cpio) -t 0 $$L > $@",
         "rm -f $$L",
     ]),
@@ -157,7 +127,8 @@ oci_layout(
 
 # ─── The node as a test target ──────────────────────────────────────────────
 
-# devlayer's own Go tests, built for linux/amd64 and run as PID 1's payload.
+# Every test boots the runtime layer only. The payload comes in on its own
+# EROFS disk. devlayer's own Go tests: static linux/amd64 binaries.
 node_vm_test(
     name = "sums_test_vm",
     size = "medium",
@@ -172,11 +143,22 @@ node_vm_test(
     tags = ["node-vm"],
 )
 
-# The sysroot programs run from the EROFS root on the node kernel.
+# The dev layer (the full devlayer sysroot) attached at /layers/dev: the
+# prototype for layering. Its programs run through their devlayer wrappers.
 node_vm_test(
     name = "sysroot_smoke_vm",
     size = "medium",
     binary = "//node/smoke",
+    layers = {"//layers:dev": "dev"},
+    tags = ["node-vm"],
+)
+
+# dropbear comes up and takes a key login; the runtime has no toolchains.
+node_vm_test(
+    name = "ssh_vm",
+    size = "medium",
+    testonly = True,
+    binary = "//node/sshcheck",
     tags = ["node-vm"],
 )
 

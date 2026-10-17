@@ -6,6 +6,7 @@ exports_files(
         "defs.bzl",
         "host_make.sh",
         "luajit.sh",
+        "toolbox.sh",
     ],
     visibility = ["//visibility:public"],
 )

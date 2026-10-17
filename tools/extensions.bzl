@@ -566,8 +566,21 @@ exports_files(
                 arch = arch,
             )],
             strip_prefix = "llvm-{ver}-{arch}".format(ver = v["KERNEL_LLVM"], arch = arch),
-            build_file_content = _FILEGROUP_ALL + _exports(["bin/clang", "bin/llvm-ar"]),
+            build_file_content = _FILEGROUP_ALL + _exports(["bin/clang", "bin/llvm-ar", "bin/llvm-strip"]),
         )
+
+    # Node runtime layer (layers/): dropbear, and the SSH keys it trusts.
+    _http_archive(sums,
+        name = "dropbear_src",
+        urls = ["https://matt.ucc.asn.au/dropbear/releases/dropbear-{}.tar.bz2".format(v["DROPBEAR"])],
+        strip_prefix = "dropbear-{}".format(v["DROPBEAR"]),
+        build_file_content = _ALL_SRCS + _exports(["configure"]),
+    )
+    _http_file(sums,
+        name = "stefanpenner_keys",
+        urls = ["https://github.com/stefanpenner.keys"],
+        downloaded_file_path = "authorized_keys",
+    )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Shell assets (plugins, themes, scripts)

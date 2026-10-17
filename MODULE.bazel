@@ -153,6 +153,9 @@ use_repo(
     "kernel_llvm_linux_amd64",
     "kernel_llvm_linux_arm64",
     "linux_kernel_src",
+    # Node runtime layer (layers/)
+    "dropbear_src",
+    "stefanpenner_keys",
     # Shell assets
     "bat_extras",
     "fast_syntax_highlighting",

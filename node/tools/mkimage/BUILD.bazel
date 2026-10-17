@@ -3,5 +3,5 @@ load("@rules_go//go:def.bzl", "go_binary")
 go_binary(
     name = "mkimage",
     srcs = ["main.go"],
-    visibility = ["//node:__subpackages__"],
+    visibility = ["//layers:__pkg__", "//node:__subpackages__"],
 )

@@ -2,11 +2,12 @@
 //
 //	mkimage -out root.erofs -mkfs <mkfs.erofs> -loader <ld-musl> -libpath <dirs> \
 //	    [-tar bundle.tar.gz] [-file dest=src]... [-link dest=target]... [-dir dest]... \
-//	    [-files manifest] [-z lz4hc] [-dedupe]
+//	    [-files manifest] [-mode dest=0700]... [-z lz4hc] [-dedupe]
 //
 // The tarball is the devlayer sysroot. Files and links add the node pieces.
 // -files reads a JSON list of {"dest": ..., "src": ...}, for test runfiles.
 // Starlark json.encode writes that file.
+// -mode sets one path's permission bits last, for /root/.ssh and the like.
 // -dedupe hardlinks files with equal bytes and mode. The git build installs
 // one binary under many names; EROFS keeps one inode for a hardlink.
 // mkfs.erofs gets a fixed time, UUID, and owner, so equal trees give equal bytes.
@@ -26,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -35,7 +37,7 @@ func (p *pairs) String() string     { return strings.Join(*p, ",") }
 func (p *pairs) Set(v string) error { *p = append(*p, v); return nil }
 
 func main() {
-	var files, links, dirs pairs
+	var files, links, dirs, modes pairs
 	out := flag.String("out", "", "image path")
 	mkfs := flag.String("mkfs", "", "mkfs.erofs")
 	loader := flag.String("loader", "", "musl loader for mkfs.erofs, empty for a native binary")
@@ -47,6 +49,7 @@ func main() {
 	flag.Var(&files, "file", "dest=src, copied with its mode")
 	flag.Var(&links, "link", "dest=target symlink")
 	flag.Var(&dirs, "dir", "empty directory")
+	flag.Var(&modes, "mode", "dest=octal permission bits")
 	flag.Parse()
 	if *out == "" || *mkfs == "" {
 		fail(fmt.Errorf("need -out and -mkfs"))
@@ -90,6 +93,14 @@ func main() {
 	}
 	if *dedupe {
 		check(hardlinkDups(stage))
+	}
+	for _, m := range modes {
+		dest, bits, ok := strings.Cut(m, "=")
+		n, err := strconv.ParseUint(bits, 8, 32)
+		if !ok || err != nil {
+			fail(fmt.Errorf("-mode %q", m))
+		}
+		check(os.Chmod(filepath.Join(stage, dest), fs.FileMode(n)))
 	}
 
 	args := []string{
