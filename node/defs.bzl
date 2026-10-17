@@ -15,7 +15,9 @@ times. `cmdline` adds kernel options. `expect_serial` must appear in every
 boot log. `host_key_across_boots` ("same" or "differ") compares the
 payload's `hostkey: ` line across boots. `expect_stop` ("reboot" or
 "poweroff") passes on a clean guest stop through init's shutdown.
-`qmp_on`/`qmp_cmd` send one QMP command once the payload prints `qmp_on`.
+`qmp_on`/`qmp_cmd` send one QMP command once the payload prints `qmp_on`;
+`$OUT` in it is the test's undeclared outputs directory. `display = True`
+boots through OVMF with a std VGA (efifb, fbcon), for screendumps.
 """
 
 load("//linux:cc.bzl", "linux_transition")
@@ -92,6 +94,8 @@ def _node_vm_test_impl(ctx):
         env["NODE_EXPECT_SERIAL"] = ctx.attr.expect_serial
     if ctx.attr.expect_stop:
         env["NODE_EXPECT_STOP"] = ctx.attr.expect_stop
+    if ctx.attr.display:
+        env["NODE_DISPLAY"] = "1"
     if ctx.attr.qmp_on:
         env["NODE_QMP_ON"] = ctx.attr.qmp_on
         env["NODE_QMP_CMD"] = ctx.attr.qmp_cmd
@@ -124,6 +128,7 @@ node_vm_test = rule(
         "host_key_across_boots": attr.string(values = ["", "same", "differ"]),
         "expect_stop": attr.string(values = ["", "reboot", "poweroff"]),
         "qmp_on": attr.string(),
+        "display": attr.bool(default = False),
         "qmp_cmd": attr.string(),
         "arch": attr.string(default = "x86_64"),
         "os": attr.string(default = "linux"),

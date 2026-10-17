@@ -48,7 +48,7 @@ func bless(dir string) (string, error) {
 	if f, err := os.Open(p); err == nil {
 		var flags int
 		if ioctl(f.Fd(), 0x80086601, &flags) == nil { // FS_IOC_GETFLAGS
-			flags &^= 0x10 // FS_IMMUTABLE_FL
+			flags &^= 0x10                    // FS_IMMUTABLE_FL
 			ioctl(f.Fd(), 0x40086602, &flags) // FS_IOC_SETFLAGS
 		}
 		f.Close()

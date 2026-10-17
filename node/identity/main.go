@@ -278,10 +278,14 @@ func writeAtomic(path string, b []byte) {
 	must(os.Rename(tmp, path))
 }
 
-// logk writes one line to stderr and to the kernel log at a syslog level,
-// so it shows on every console and in dmesg.
+// logk writes one line to the kernel log at a syslog level: dmesg, and the
+// console for level 2 and below (loglevel=3). The node-agent dashboard shows
+// FATAL and WARNING lines. Stderr (the console) gets every line only with
+// node_verbose=1, the classic scrolling console.
 func logk(level int, msg string) {
-	fmt.Fprintln(os.Stderr, msg)
+	if os.Getenv("node_verbose") == "1" {
+		fmt.Fprintln(os.Stderr, msg)
+	}
 	if f, err := os.OpenFile("/dev/kmsg", os.O_WRONLY, 0); err == nil {
 		fmt.Fprintf(f, "<%d>%s\n", level, msg)
 		f.Close()

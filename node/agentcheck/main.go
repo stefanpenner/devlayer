@@ -328,6 +328,7 @@ func runChecks() {
 	out := "/tmp/tty.txt"
 	must(os.WriteFile(out, nil, 0o644))
 	cmd := exec.Command(agent, "run", "-tty", out, "-heartbeat", "1s", "-efivars", "/tmp/no-efivars")
+	cmd.Env = withoutVerbose()
 	must(cmd.Start())
 	time.Sleep(7 * time.Second)
 	cmd.Process.Kill()
@@ -349,6 +350,21 @@ func runChecks() {
 		bad("run: no heartbeat line in the kernel log")
 	default:
 		ok("run: %d banner(s) in place, the FATAL line once in each, heartbeat in kmsg only", blocks)
+	}
+
+	// node_verbose=1: the classic scrolling banner, heartbeat lines on the tty.
+	must(os.WriteFile(out, nil, 0o644))
+	cmd = exec.Command(agent, "run", "-tty", out, "-heartbeat", "1s", "-efivars", "/tmp/no-efivars", "-settle", "0s")
+	cmd.Env = append(withoutVerbose(), "node_verbose=1")
+	must(cmd.Start())
+	time.Sleep(4 * time.Second)
+	cmd.Process.Kill()
+	cmd.Wait()
+	b, _ = os.ReadFile(out)
+	if t := string(b); !strings.Contains(t, "node: ") || strings.Contains(t, "\x1b[2J") {
+		bad("run node_verbose=1: want scrolling heartbeat lines and no clear\n%q", t)
+	} else {
+		ok("run node_verbose=1: classic scrolling banner and heartbeat")
 	}
 
 	// The shim line and the EFI report, from a fake efivarfs.
@@ -374,6 +390,17 @@ func runChecks() {
 		}
 	}
 	ok("shim line and EFI report from efivarfs")
+}
+
+// withoutVerbose is the environment minus node_verbose (vmrun sets it).
+func withoutVerbose() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "node_verbose=") {
+			env = append(env, e)
+		}
+	}
+	return env
 }
 
 // kmsgHas: some kernel log record contains s.
@@ -406,6 +433,26 @@ func main() {
 	fmt.Println("mode:", mode)
 	s := startServer()
 	v1, v2, v3, v4 := "20261017T000001Z", "20261017T000002Z", "20261017T000003Z", "20261017T000004Z"
+
+	if mode == "dashboard" {
+		// The dashboard on the real tty0 for a screendump (dashboard_vm).
+		dir := "/tmp/efivars-ui"
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(dir+"/PennerShimBuild-c6f2a1d4-5b3e-4f8a-9d71-2e6b0c4a8f15",
+			append([]byte{6, 0, 0, 0}, "build=4 role=promoted bootcurrent=0002 path=\\EFI\\penner\\shim-next.efi"...), 0o644)
+		s.publish(v1, false)
+		cmd := exec.Command(agent, "run", "-tty", "/dev/tty0", "-efivars", dir, "-index", s.url, "-roots", "/tmp/ca.pem",
+			"-interval", "1h", "-early", "0s")
+		cmd.Env = append(withoutVerbose(), "node_release="+v1)
+		must(cmd.Start())
+		time.Sleep(8 * time.Second)
+		fmt.Println("dashboard: painted")
+		time.Sleep(6 * time.Second)
+		cmd.Process.Kill()
+		cmd.Wait()
+		ok("dashboard painted on tty0")
+		done()
+	}
 
 	if mode == "optout" {
 		s.publish(v2, false)

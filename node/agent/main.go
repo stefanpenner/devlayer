@@ -15,7 +15,8 @@
 //     index names a release other than the one this node booted
 //     (node_release=<version> on the kernel command line, added by the
 //     publish script), it downloads the new manifest and every blob, checks
-//     each sha256, announces the reboot, waits a grace period, and reboots.
+//     each sha256, announces the reboot, waits -grace (0 by default: no
+//     workloads to drain yet), and reboots.
 //     The shim then boots the new release. See watch.go for the loop guard.
 //
 // Boot options (the kernel passes name=value options to init's environment):
@@ -23,6 +24,8 @@
 //	node_release=<version>   the release this node booted; without it the
 //	                         watcher is off
 //	node_autoreboot=off      never reboot for a new release
+//	node_verbose=1           the classic scrolling banner and heartbeat on
+//	                         tty0 instead of the dashboard
 //
 // Usage:
 //
@@ -57,6 +60,7 @@ type config struct {
 	rebootMarker string
 	tty          string
 	heartbeat    time.Duration
+	settle       time.Duration
 	nvIndex      uint
 	efivars      string
 	release      string
@@ -102,7 +106,7 @@ func main() {
 	fs.StringVar(&c.index, "index", "https://boot.penner.network/index.json", "netboot OCI index URL")
 	fs.StringVar(&c.roots, "roots", "", "PEM roots for the index server (default: the built-in ISRG Root YE and X2, as in the shim)")
 	fs.DurationVar(&c.interval, "interval", 60*time.Second, "time between index checks")
-	fs.DurationVar(&c.grace, "grace", 30*time.Second, "wait between announcing a reboot and rebooting")
+	fs.DurationVar(&c.grace, "grace", 0, "wait between announcing a reboot and rebooting (0: at once; raise it when workloads need a drain)")
 	fs.DurationVar(&c.retryBase, "retry-base", 5*time.Minute, "wait after boot before retrying a release the shim did not boot; doubles per try")
 	fs.DurationVar(&c.retryMax, "retry-max", 6*time.Hour, "longest retry wait")
 	fs.DurationVar(&c.failWait, "fail-wait", 10*time.Minute, "wait after a release fails verification")
@@ -112,6 +116,7 @@ func main() {
 	fs.StringVar(&c.rebootMarker, "reboot-marker", "", "write the target here and exit instead of rebooting (tests)")
 	fs.StringVar(&c.tty, "tty", "/dev/tty0", "where the banner goes")
 	fs.DurationVar(&c.heartbeat, "heartbeat", 60*time.Second, "one-line status interval")
+	fs.DurationVar(&c.settle, "settle", 3*time.Second, "first paint waits up to this for the host key and sshd")
 	fs.UintVar(&c.nvIndex, "nv-index", 0x01008001, "TPM NV index for the reboot record")
 	fs.StringVar(&c.efivars, "efivars", defaultEfivars, "efivarfs directory with the shim's ShimTrial variable (empty: never bless)")
 	fs.Parse(args)

@@ -57,10 +57,48 @@
 #define RUNTIME_IMAGE "/runtime.erofs"
 #define DEBUG_EXIT_PORT 0xf4
 
+// node_verbose=1: the classic scrolling console (init's lines, the kernel
+// log at level 7). Without it the console stays quiet: init's lines go to
+// the kernel log only, and node-agent paints its dashboard.
+static int verbose(void) {
+    const char *v = getenv("node_verbose");
+    return v && strcmp(v, "1") == 0;
+}
+
 static void say(const char *fmt, const char *arg) {
-    dprintf(2, "node-init: ");
-    dprintf(2, fmt, arg);
-    dprintf(2, "\n");
+    char line[512];
+    int n = snprintf(line, sizeof line, "node-init: ");
+    snprintf(line + n, sizeof line - (size_t)n, fmt, arg);
+    int k = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+    if (k >= 0) {
+        dprintf(k, "<6>%s\n", line);
+        close(k);
+    }
+    if (verbose()) dprintf(2, "%s\n", line);
+}
+
+// Tokyo Night in the VT palette (ESC ] P n rrggbb), so every ANSI color on
+// tty0 is a Tokyo Night color and the background (color 0) is #1a1b26.
+static const unsigned tokyo_night[16] = {
+    0x1a1b26, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xa9b1d6,
+    0x565f89, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xc0caf5,
+};
+
+static void console_setup(void) {
+    int t = open("/dev/tty0", O_WRONLY | O_NOCTTY | O_CLOEXEC);
+    if (t >= 0) {
+        for (int i = 0; i < 16; i++) dprintf(t, "\033]P%x%06x", i, tokyo_night[i]);
+        // Quiet: clear to the new background; node-agent paints next.
+        dprintf(t, verbose() ? "\033[0m" : "\033[0m\033[2J\033[H");
+        close(t);
+    }
+    if (verbose()) {
+        int p = open("/proc/sys/kernel/printk", O_WRONLY | O_CLOEXEC);
+        if (p >= 0) {
+            dprintf(p, "7\n");
+            close(p);
+        }
+    }
 }
 
 static void die(const char *what) {
@@ -112,9 +150,10 @@ static int stage1(void) {
     must_mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, "mode=0755");
     must_mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
     must_mount("sysfs", "/sys", "sysfs", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
+    console_setup();
 
     say("%s", "stage 1: network from the kernel (ip=, from the shim's lease or DHCP):");
-    copy_file("/proc/net/pnp", 2);
+    if (verbose()) copy_file("/proc/net/pnp", 2);
 
     char loopdev[32];
     attach_loop(RUNTIME_IMAGE, loopdev, sizeof loopdev);

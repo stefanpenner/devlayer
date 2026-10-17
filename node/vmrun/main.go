@@ -69,7 +69,7 @@ func main() {
 	if accel == "kvm" || accel == "hvf" {
 		cpu = "host"
 	}
-	appendArgs := "console=ttyS0 ip=dhcp panic=-1 node_test=1"
+	appendArgs := "console=ttyS0 ip=dhcp panic=-1 node_test=1 node_verbose=1"
 	if v := os.Getenv("NODE_CMDLINE"); v != "" {
 		appendArgs += " " + v
 	}
@@ -108,6 +108,9 @@ func main() {
 		check(os.MkdirAll(bootDir, 0o755))
 		args := baseArgs(qemu, accel, cpu, kernel, initrd, disk, appendArgs, bootDir)
 		args = append(args, layerArgs...)
+		if os.Getenv("NODE_DISPLAY") != "" {
+			args = withDisplay(qemu, args)
+		}
 		var tpm *exec.Cmd
 		if swtpm != "" {
 			// A unix socket path is capped at 108 bytes; bazel's TEST_TMPDIR is
@@ -260,7 +263,20 @@ func expectStop(want, bootPath string) int {
 	return 0
 }
 
+// withDisplay boots through OVMF with a std VGA, so the kernel gets efifb
+// and fbcon draws tty0 like on the SER9 (for screendumps).
+func withDisplay(qemu string, args []string) []string {
+	share := filepath.Join(filepath.Dir(filepath.Dir(qemu)), "share", "qemu")
+	for i := range args {
+		if args[i] == "-vga" && i+1 < len(args) {
+			args[i+1] = "std"
+		}
+	}
+	return append(args, "-drive", "if=pflash,format=raw,readonly=on,file="+filepath.Join(share, "edk2-x86_64-code.fd"))
+}
+
 // qmpWhen waits until path contains text, then sends one QMP command.
+// $OUT in the command is the test's undeclared outputs directory.
 func qmpWhen(path, text, sock, command string) {
 	for i := 0; i < 6000; i++ {
 		if b, err := os.ReadFile(path); err == nil && strings.Contains(string(b), text) {
@@ -278,6 +294,7 @@ func qmpWhen(path, text, sock, command string) {
 	r.ReadString('\n') // greeting
 	fmt.Fprintln(c, `{"execute":"qmp_capabilities"}`)
 	r.ReadString('\n')
+	command = strings.ReplaceAll(command, "$OUT", os.Getenv("TEST_UNDECLARED_OUTPUTS_DIR"))
 	fmt.Fprintln(c, command)
 	resp, _ := r.ReadString('\n')
 	fmt.Fprintf(os.Stderr, "vmrun: qmp %s -> %s", command, resp)

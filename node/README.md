@@ -61,8 +61,8 @@ Every 60 s node-agent fetches `https://boot.penner.network/index.json` with If-N
 
 1. downloads the manifest and checks it against the index digest and version;
 2. downloads every layer and checks size and sha256;
-3. shows `NEW RELEASE <version> verified (manifest <digest>), rebooting in 30s` on the console and in the banner;
-4. writes the reboot record to the TPM, waits 30 s, and reboots. The shim boots the new release.
+3. shows `NEW RELEASE <version> verified (manifest <digest>), rebooting now` on the dashboard;
+4. writes the reboot record to the TPM and reboots at once. The shim boots the new release. `-grace` (default 0) adds a wait between the announcement and the reboot, for when workloads need a drain.
 
 It compares for a difference, not an order, so a rollback also reaches the node. It never reboots on a fetch error, a bad index, or a failed check; the banner shows the error.
 

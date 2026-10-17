@@ -379,7 +379,11 @@ func check(c config, f *fetcher, st *status, idx *index, failed map[string]time.
 			return min(c.interval, need-up)
 		}
 	}
-	st.set(fmt.Sprintf("NEW RELEASE %s verified (manifest %s), rebooting in %s", version, short(d.Digest), c.grace), true)
+	when := "rebooting now"
+	if c.grace > 0 {
+		when = "rebooting in " + c.grace.String()
+	}
+	st.set(fmt.Sprintf("NEW RELEASE %s verified (manifest %s), %s", version, short(d.Digest), when), true)
 	time.Sleep(c.grace)
 	if err := nv.write(record{Target: d.Digest, Version: version, Tries: tries + 1}); err != nil {
 		f.etag = ""

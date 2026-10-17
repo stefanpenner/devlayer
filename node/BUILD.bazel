@@ -120,15 +120,20 @@ genrule(
 # ttyS0 needs ,115200: bare console=ttyS0 runs at 9600 baud, and the SER9 has a
 # real 16550A at 0x3f8. Console output is synchronous, so the kernel waited on
 # every byte: 18 s to replay the log when ttyS0 registered, about 46 s to
-# reach /init. loglevel=4 prints only errors to the consoles; dmesg keeps
-# everything, and the banner and init write to tty0 themselves.
+# reach /init. quiet loglevel=3 keeps the console for KERN_CRIT and worse:
+# the shim screen, a clear, then node-agent's dashboard. dmesg keeps
+# everything; node_verbose=1 brings back the scrolling console. KERN_ERR
+# lines hidden this way on the SER9: the AMI firmware's ACPI BIOS Error
+# (\_SB.PCI0.GPP5.DEV0 defined twice; see node/README.md).
+# kvm_amd.avic=0: the SER9 firmware has no AVIC, and kvm_amd printed a
+# [Firmware Bug] warning trying to enable x2AVIC on every boot.
 # fbcon=font:TER16x32 makes the 4K console readable. The publish script
 # appends node_release=<version> for node-agent's release watcher.
 # printk.devkmsg=on lifts the /dev/kmsg write rate limit, so the banner
 # mirror and sshd's relayed log lines are not dropped from dmesg.
 oci_layout(
     name = "oci",
-    cmdline = "console=ttyS0,115200 console=tty0 loglevel=4 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
+    cmdline = "console=ttyS0,115200 console=tty0 quiet loglevel=3 kvm_amd.avic=0 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
     layers = {
         ":vmlinuz": "vmlinuz",
         ":initrd": "initrd.img",
@@ -221,6 +226,21 @@ node_vm_test(
     tpm = True,
 )
 
+# The dashboard on tty0, as the SER9 monitor shows it: OVMF and efifb, the
+# Tokyo Night palette from init, node-agent painting in place. The QMP
+# screendump lands in test.outputs/node-ui.png.
+node_vm_test(
+    name = "dashboard_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
 # Plain reboot and poweroff over SSH: toybox signals PID 1, init stops
 # every process, syncs, and calls reboot(2).
 node_vm_test(
@@ -288,7 +308,8 @@ node_vm_test(
 )
 
 # KVM host: /dev/kvm opens and KVM_CREATE_VM works inside the node.
-# Needs SVM or VMX in the guest CPU: TCG -cpu max has SVM; KVM needs nested.
+# Needs SVM in the guest CPU (the kernel has kvm_amd only): TCG -cpu max has
+# SVM; with KVM it needs an AMD host with nested virtualization.
 node_vm_test(
     name = "kvm_vm",
     size = "medium",

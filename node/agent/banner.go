@@ -220,8 +220,30 @@ func or(s, def string) string {
 	return s
 }
 
-// render draws the banner. withUptime=false gives the text that decides
-// whether anything changed.
+// The dashboard: Tokyo Night colors (init loads the palette into the VT,
+// so these ANSI colors come out as the Tokyo Night values), the devlayer
+// wordmark, aligned sections, errors in red, and a footer.
+const (
+	blue  = "\x1b[1;34m" // #7aa2f7
+	cyan  = "\x1b[1;36m" // #7dcfff
+	gray  = "\x1b[1;30m" // #565f89
+	white = "\x1b[1;37m" // #c0caf5
+)
+
+var logo = []string{
+	`     _            _                       `,
+	`  __| | _____   _| | __ _ _   _  ___ _ __ `,
+	` / _` + "`" + ` |/ _ \ \ / / |/ _` + "`" + ` | | | |/ _ \ '__|`,
+	`| (_| |  __/\ V /| | (_| | |_| |  __/ |   `,
+	` \__,_|\___| \_/ |_|\__,_|\__, |\___|_|   `,
+	`                          |___/           `,
+}
+
+const width = 72
+
+// render draws the dashboard. color=false gives plain text: the kernel log
+// copy, `node-agent banner`, and the text that decides whether anything
+// changed (with in.up zeroed).
 func render(in info, color bool) string {
 	c := func(code, s string) string {
 		if !color {
@@ -229,47 +251,85 @@ func render(in info, color bool) string {
 		}
 		return code + s + reset
 	}
+	// Not up yet in the first 30 s: "starting" in yellow, not an error.
+	early := in.up < 30*time.Second
+	bad := func(starting, failed string) string {
+		if early {
+			return c(yellow, starting)
+		}
+		return c(red, failed)
+	}
 	var b strings.Builder
-	line := strings.Repeat("=", 72)
-	fmt.Fprintf(&b, "\n%s\n", c(bold, "== devlayer node "+line[17:]))
-	fmt.Fprintf(&b, " host     %s   up %s\n", or(in.host, "(none)"), in.up)
-	fmt.Fprintf(&b, " network  %s %s  %s\n", or(in.iface, "(no interface)"), or(in.mac, "-"), in.speed)
-	fmt.Fprintf(&b, "          %s via %s  dns %s\n", or(in.addr, "(no address)"), or(in.gw, "-"), or(in.dns, "-"))
-	fmt.Fprintf(&b, " release  %s", or(in.release, "(no node_release on the command line)"))
-	if in.latest != "" {
-		fmt.Fprintf(&b, "   index: %s", in.latest)
-	}
+	row := func(label, value string) { fmt.Fprintf(&b, "   %s %s\n", c(gray, fmt.Sprintf("%-8s", label)), value) }
+	section := func(name string) { fmt.Fprintf(&b, "\n %s\n", c(blue, name)) }
+
 	b.WriteString("\n")
-	tpm := c(red, "no (enable AMD fTPM in BIOS: Security)")
-	if in.tpm {
-		tpm = c(green, "yes")
+	for _, l := range logo {
+		fmt.Fprintf(&b, " %s\n", c(blue, l))
 	}
-	fmt.Fprintf(&b, " tpm      %s\n", tpm)
-	if in.shim != "" {
-		fmt.Fprintf(&b, " shim     %s\n", in.shim)
+	fmt.Fprintf(&b, " %s %s\n", c(cyan, "== devlayer node"), c(gray, "· penner.network"))
+
+	section("IDENTITY")
+	row("host", c(white, or(in.host, "(none)")))
+	if in.tpm {
+		row("tpm", c(green, "yes"))
+	} else {
+		row("tpm", c(red, "no (enable AMD fTPM in BIOS: Security)"))
 	}
 	if in.fingerprint != "" {
-		fmt.Fprintf(&b, " host key %s (%s)\n", in.fingerprint, or(in.keySource, "?"))
+		row("host key", fmt.Sprintf("%s (%s)", in.fingerprint, or(in.keySource, "?")))
 	} else {
-		fmt.Fprintf(&b, " host key %s\n", c(red, "none"))
+		row("host key", bad("starting…", "none"))
 	}
+
+	section("NETWORK")
+	row("link", fmt.Sprintf("%s %s  %s", or(in.iface, "(no interface)"), or(in.mac, "-"), in.speed))
+	row("address", fmt.Sprintf("%s via %s  dns %s", or(in.addr, "(no address)"), or(in.gw, "-"), or(in.dns, "-")))
+
+	section("RELEASE")
+	row("running", c(white, or(in.release, "(no node_release on the command line)")))
+	if in.latest != "" {
+		row("index", in.latest)
+	}
+	if in.shim != "" {
+		row("shim", in.shim)
+	}
+
+	section("SERVICES")
 	if in.sshd {
-		fmt.Fprintf(&b, " sshd     %s\n", c(green, "listening on port 22"))
-		fmt.Fprintf(&b, " login    %s\n", c(bold, "ssh root@"+or(in.ip, "<ip>")))
+		row("sshd", c(green, "listening on port 22"))
 	} else {
-		fmt.Fprintf(&b, " sshd     %s\n", c(red, "not running"))
+		row("sshd", bad("starting…", "not running"))
 	}
 	if in.update != "" {
 		u := in.update
 		if in.updateAlert {
 			u = c(yellow, u)
 		}
-		fmt.Fprintf(&b, " update   %s\n", u)
+		row("update", u)
 	}
-	for _, f := range in.fatals {
-		fmt.Fprintf(&b, " %s\n", c(red, f))
+
+	if len(in.fatals) > 0 {
+		section(c(red, "ERRORS"))
+		for _, f := range in.fatals {
+			fmt.Fprintf(&b, "   %s\n", c(red, f))
+		}
 	}
-	fmt.Fprintf(&b, "%s\n", c(bold, line))
+
+	left := "up " + in.up.String()
+	right := "ssh root@" + or(in.ip, "<ip>")
+	if !in.sshd {
+		right = "ssh: not yet"
+	}
+	pad := width - 2 - len(left) - len(right)
+	if pad < 2 {
+		pad = 2
+	}
+	fmt.Fprintf(&b, "\n %s\n", c(gray, strings.Repeat("─", width-1)))
+	fmt.Fprintf(&b, " %s%s%s\n", c(gray, left), strings.Repeat(" ", pad), c(bold, right))
+	if in.sshd {
+		fmt.Fprintf(&b, " %s\n", c(gray, "login    ssh root@"+or(in.ip, "<ip>")))
+	}
 	return b.String()
 }
 
@@ -307,16 +367,26 @@ func toTTY(path, s string) {
 	f.Close()
 }
 
-// bannerLoop keeps the banner in place on tty0: a repaint every 2 s when
+// bannerLoop keeps the dashboard in place on tty0: a repaint every 2 s when
 // anything changed, and every 10 s for the uptime. The kernel log gets the
 // whole block when it changes, and the one-line heartbeat every minute;
 // both at debug level, so they never scroll the monitor.
+//
+// The first paint waits up to 3 s for the host key and sshd, so a normal
+// boot never flashes "starting". node_verbose=1 gives the classic
+// scrolling banner: printed on a change, and a heartbeat line every minute.
 func bannerLoop(c config, st *status) {
 	k := openKmsg()
 	last := ""
 	shim := shimSummary(c.efivars)
 	for _, l := range efiReport(c.efivars) {
 		logk(6, "node-agent: "+l)
+	}
+	verbose := os.Getenv("node_verbose") == "1"
+	for deadline := time.Now().Add(c.settle); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		if _, err := os.Stat(identityPub); err == nil && sshdListening() {
+			break
+		}
 	}
 	first := true
 	lastBeat, lastPaint := time.Now(), time.Time{}
@@ -326,7 +396,10 @@ func bannerLoop(c config, st *status) {
 		key := in
 		key.up = 0
 		s := render(key, false)
-		if s != last || time.Since(lastPaint) >= 10*time.Second {
+		switch {
+		case verbose && s != last:
+			toTTY(c.tty, render(in, true))
+		case !verbose && (s != last || time.Since(lastPaint) >= 10*time.Second):
 			toTTY(c.tty, repaint(render(in, true), first))
 			first, lastPaint = false, time.Now()
 		}
@@ -335,6 +408,9 @@ func bannerLoop(c config, st *status) {
 			logk(7, "node-agent banner:"+strings.ReplaceAll(render(in, false), "\n", "\nnode-agent| "))
 		}
 		if time.Since(lastBeat) >= c.heartbeat {
+			if verbose {
+				toTTY(c.tty, heartbeat(in)+"\n")
+			}
 			logk(7, heartbeat(in))
 			lastBeat = time.Now()
 		}
