@@ -123,8 +123,8 @@ toybox is built by devlayer's own toolbox script, [macos/toolbox.sh](../macos/to
 
 The SSH server is OpenSSH 10.6p1 portable, built against LibreSSL 4.3.3 ([layers/openssh.sh](../layers/openssh.sh)).
 Both tarballs are pinned by sha256 in [checksums.sha256](../internal/sums/checksums.sha256).
-Before pinning, each was checked with gpg against the OpenBSD release keys: Damien Miller `7168B983815A5EEF59A4ADFD2A3F414E736060BA` for OpenSSH and Brent Cook `6F67522EC596C025B24549911FFAA0B24B708F96` for LibreSSL.
-Both are built static musl by the pinned zig, in one Bazel action, with `-ffile-prefix-map` and `--build-id=none`.
+Before pinning, each was checked with gpg against the OpenBSD release keys: Damien Miller `7168B983815A5EEF59A4ADFD2A3F414E736060BA` for OpenSSH and Brent Cook (primary `A1EB079B8D3EB92B4EBD3139663AF51BD5E4D8D5`, signing subkey `6F67522EC596C025B24549911FFAA0B24B708F96`) for LibreSSL.
+Both are built static musl by the pinned zig, in one Bazel action, with `-ffile-prefix-map`, `--build-id=none`, and `--with-openssldir=/etc/ssl` (the default bakes the temp build path into libcrypto).
 
 - Why libcrypto: a TPM 2.0 cannot hold an Ed25519 key. The host key is ECDSA P-256, and OpenSSH `--without-openssl` only does Ed25519.
 - Why LibreSSL: it is smaller than OpenSSL 3 and builds with a plain `configure`. Only its libcrypto is linked.

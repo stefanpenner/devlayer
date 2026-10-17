@@ -40,9 +40,11 @@ J=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 log() { "$@" > "$W/log" 2>&1 || { cat "$W/log" >&2; exit 1; }; }
 
 cd "$W/libressl"
+# --with-openssldir: the default bakes $W/crypto/etc/ssl into libcrypto, and
+# $W is a random temp dir. Nothing on the node reads /etc/ssl.
 log env CFLAGS="-Os -ffunction-sections -fdata-sections" ./configure \
     --host=x86_64-linux-musl --disable-shared --enable-static --disable-tests \
-    --prefix="$W/crypto"
+    --prefix="$W/crypto" --with-openssldir=/etc/ssl
 log make -j"$J" -C crypto install
 log make -C include install
 
