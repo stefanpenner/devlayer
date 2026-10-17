@@ -117,9 +117,13 @@ genrule(
 # Both consoles get kernel and init output. tty0 (the EFI framebuffer, the
 # monitor) is listed last, so it is /dev/console: a FATAL from node-identity
 # shows on screen. ttyS0 keeps the serial log for QEMU and a serial cable.
+# fbcon=font:TER16x32 makes the 4K console readable. The publish script
+# appends node_release=<version> for node-agent's release watcher.
+# printk.devkmsg=on lifts the /dev/kmsg write rate limit, so the banner
+# mirror and sshd's relayed log lines are not dropped from dmesg.
 oci_layout(
     name = "oci",
-    cmdline = "console=ttyS0 console=tty0 ip=dhcp panic=10",
+    cmdline = "console=ttyS0 console=tty0 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
     layers = {
         ":vmlinuz": "vmlinuz",
         ":initrd": "initrd.img",
@@ -175,6 +179,27 @@ node_vm_test(
     binary = "//node/sshcheck",
     boots = 2,
     host_key_across_boots = "same",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# node-agent: the banner, and the release watcher against a local HTTPS
+# server: same release, fetch errors, a corrupt blob, a new release, and
+# the TPM NV loop guard.
+node_vm_test(
+    name = "agent_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# node_autoreboot=off: the watcher never reboots.
+node_vm_test(
+    name = "agent_optout_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_autoreboot=off node_check=optout",
     tags = ["node-vm"],
     tpm = True,
 )

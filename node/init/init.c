@@ -34,7 +34,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/ethtool.h>
 #include <linux/loop.h>
+#include <linux/sockios.h>
 #include <net/if.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -340,11 +342,94 @@ static int identity_ready(pid_t pid) {
     return 0;
 }
 
-// sshd in the foreground, logging to the console. Its host key is the agent's.
+// Hardware LRO off on every NIC. The atlantic driver (the SER9's AQC113)
+// hands TCP merged frames without a GSO size; the kernel then warns
+// "Driver has suspect GRO implementation, TCP performance may be
+// compromised" and mis-sizes its ACKs. Software GRO stays on. A bridge or
+// forwarding needs LRO off anyway.
+static void lro_off(void) {
+    DIR *d = opendir("/sys/class/net");
+    if (!d) return;
+    int s = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    struct dirent *e;
+    while (s >= 0 && (e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.' || strcmp(e->d_name, "lo") == 0) continue;
+        if (strlen(e->d_name) >= IFNAMSIZ) continue;
+        struct ifreq ifr;
+        struct ethtool_value ev = {.cmd = ETHTOOL_GFLAGS};
+        memset(&ifr, 0, sizeof ifr);
+        strcpy(ifr.ifr_name, e->d_name);
+        ifr.ifr_data = (void *)&ev;
+        if (ioctl(s, SIOCETHTOOL, &ifr) != 0 || !(ev.data & ETH_FLAG_LRO)) continue;
+        ev.cmd = ETHTOOL_SFLAGS;
+        ev.data &= ~(unsigned)ETH_FLAG_LRO;
+        if (ioctl(s, SIOCETHTOOL, &ifr) == 0) say("LRO off on %s", e->d_name);
+    }
+    if (s >= 0) close(s);
+    closedir(d);
+}
+
+// sshd logs go to the kernel log, not the console: each line at debug
+// level (dmesg only), except error and fatal lines at level 3, which also
+// print on the console. The banner (node-agent) stays readable. One relay
+// process reads a pipe that every sshd generation writes to.
+static int sshd_log = -1;
+
+static void start_log_relay(void) {
+    int p[2];
+    if (pipe2(p, O_CLOEXEC) != 0) return;
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(p[1]);
+        int k = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+        char buf[4096], line[1024];
+        size_t n = 0;
+        ssize_t r;
+        while ((r = read(p[0], buf, sizeof buf)) > 0) {
+            for (ssize_t i = 0; i < r; i++) {
+                char ch = buf[i];
+                if (ch != '\n' && n < sizeof line - 1) {
+                    if (ch != '\r') line[n++] = ch;
+                    continue;
+                }
+                line[n] = 0;
+                int lvl = (strstr(line, "error:") || strstr(line, "fatal:") || strstr(line, "FATAL")) ? 3 : 7;
+                if (n > 0 && k >= 0) dprintf(k, "<%d>sshd: %s\n", lvl, line);
+                n = 0;
+            }
+        }
+        _exit(0);
+    }
+    close(p[0]);
+    if (pid > 0) sshd_log = p[1];
+    else close(p[1]);
+}
+
+// sshd in the foreground (-D), logging to stderr (-e), which is the relay.
+// Its host key is the agent's.
 static pid_t start_sshd(void) {
     pid_t pid = fork();
     if (pid == 0) {
+        if (sshd_log >= 0) dup2(sshd_log, 2);
         char *argv[] = {"/sbin/sshd", "-D", "-e", "-f", "/etc/ssh/sshd_config", NULL};
+        execv(argv[0], argv);
+        _exit(127);
+    }
+    return pid;
+}
+
+// node-agent: the status banner on tty0 and the release watcher. Its own
+// lines go to the kernel log, so stdout and stderr are /dev/null.
+static pid_t start_agent(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int nul = open("/dev/null", O_RDWR);
+        if (nul >= 0) {
+            dup2(nul, 0);
+            dup2(nul, 1);
+            dup2(nul, 2);
+        }
+        char *argv[] = {"/sbin/node-agent", "run", NULL};
         execv(argv[0], argv);
         _exit(127);
     }
@@ -405,9 +490,16 @@ static int stage2(void) {
     must_mount("devpts", "/dev/pts", "devpts", MS_NOSUID | MS_NOEXEC, "ptmxmode=0666,mode=0620");
     say("%s", "stage 2: runtime layer up, cgroup2 mounted");
     loopback_up();
+    lro_off();
     boot_layers();
+    const char *t = getenv("node_test");
+    int test = t && strcmp(t, "1") == 0;
+    // The banner starts first, so the screen shows the node's state while
+    // the TPM answers. Tests run node-agent themselves.
+    pid_t agent = test ? -1 : start_agent();
     pid_t identity = start_identity();
     pid_t sshd = -1;
+    start_log_relay();
     if (identity_ready(identity)) {
         sshd = start_sshd();
     } else {
@@ -415,8 +507,7 @@ static int stage2(void) {
         alert("node-init: no host identity, so no sshd. The node stays up; see the identity line above.");
     }
 
-    const char *t = getenv("node_test");
-    if (t && strcmp(t, "1") == 0) return run_test();
+    if (test) return run_test();
 
     if (access("/etc/node/hook", X_OK) == 0) {
         if (fork() == 0) {
@@ -435,6 +526,11 @@ static int stage2(void) {
             say("%s", "sshd exited; restarting");
             sleep(1);
             sshd = start_sshd();
+        }
+        if (pid > 0 && pid == agent) {
+            say("%s", "node-agent exited; restarting");
+            sleep(1);
+            agent = start_agent();
         }
         if (pid > 0 && pid == identity) {
             say("%s", "node-identity exited; restarting");

@@ -274,7 +274,7 @@ func (a *hostAgent) Extension(string, []byte) ([]byte, error) {
 
 func writeAtomic(path string, b []byte) {
 	tmp := path + ".tmp"
-	must(os.WriteFile(tmp, b, 0o644))
+	must(os.WriteFile(tmp, b, 0o600)) // sshd refuses a group- or world-readable HostKey path
 	must(os.Rename(tmp, path))
 }
 

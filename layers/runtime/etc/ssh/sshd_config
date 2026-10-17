@@ -9,6 +9,12 @@ HostKeyAgent /run/node-identity/agent.sock
 # A host certificate (step-ca, penner.network#15) goes in a drop-in:
 #   /etc/ssh/sshd_config.d/host-cert.conf: HostCertificate /etc/ssh/ssh_host_ecdsa_key-cert.pub
 
+# Post-quantum key exchange only, plus curve25519 for old clients. The
+# client's order wins, and macOS ssh lists ecdh-sha2-nistp256 first, so
+# offering the NIST curves made it skip ML-KEM and print "connection is not
+# using a post-quantum key exchange algorithm".
+KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org
+
 PermitRootLogin prohibit-password
 PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys

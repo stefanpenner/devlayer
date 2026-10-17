@@ -43,6 +43,41 @@ Every write lands in RAM. A reboot restores the image.
 Init is one static C file, [init/init.c](init/init.c), 35 KB.
 Init reads boot options with `getenv`. The kernel passes unknown `name=value` options to PID 1.
 
+## Status and updates
+
+[node-agent](agent/main.go) starts right after init's stage 2 setup. It has two jobs.
+
+### The banner
+
+A block on the monitor (tty0): host, interface, MAC, link speed, address and gateway, DNS, the release (`node_release`), the latest release in the index, TPM yes/no, the host key's SHA256 fingerprint and its source, sshd state, the exact `ssh root@<ip>` command, uptime, and the watcher state. FATAL and identity WARNING lines from the kernel log show in red. The block prints again when anything in it changes, and every 10 minutes; a one-line heartbeat follows every minute. The same block goes to the kernel log at debug level, so `dmesg` has it. `node-agent banner` prints it once.
+
+The console uses the Terminus 16x32 font (`fbcon=font:TER16x32`); at 3840x2160 the 8x16 font is 480x135 characters. `printk.devkmsg=on` lifts the `/dev/kmsg` rate limit.
+
+sshd logs go through init to the kernel log at debug level: `dmesg` has them, the console does not. Lines with `error:` or `fatal:` go at level 3 and print on the console.
+
+### The release watcher
+
+Every 60 s node-agent fetches `https://boot.penner.network/index.json` with If-None-Match. It trusts ISRG Root YE and ISRG Root X2, the shim's roots ([roots.pem](agent/roots.pem)). The publish script puts `node_release=<version>` on the kernel command line. When the index names another version, node-agent:
+
+1. downloads the manifest and checks it against the index digest and version;
+2. downloads every layer and checks size and sha256;
+3. shows `NEW RELEASE <version> verified (manifest <digest>), rebooting in 30s` on the console and in the banner;
+4. writes the reboot record to the TPM, waits 30 s, and reboots. The shim boots the new release.
+
+It compares for a difference, not an order, so a rollback also reaches the node. It never reboots on a fetch error, a bad index, or a failed check; the banner shows the error.
+
+The loop guard: if the shim boots the old release again (for example a download failed and it used its cache), the node would see the new release again and reboot every two minutes. Before each reboot node-agent writes `{target manifest digest, tries}` to TPM NV index `0x01008001` (owner hierarchy, 128 bytes, no DA). After a failed try it waits 5 min after boot, then 10, 20, and so on up to 6 h, before the next. A new target starts the count again. Without a usable NV index it does not reboot. The TPM is there on every node because sshd needs it, the node keeps no disk state, and the shim cannot know whether Linux came up. `node-agent record` prints the record.
+
+`node_autoreboot=off` on the command line turns the watcher off. Without `node_release` it is off too.
+
+`//node:agent_vm` checks the banner and the watcher against an HTTPS server with a test CA, inside the VM with swtpm: same release, HTTP 500, unreachable, corrupt blob, new release, the loop guard, and a newer target. `//node:agent_optout_vm` checks `node_autoreboot=off`.
+
+### Other fixes
+
+- The host key file in `/run/node-identity` is 0600. sshd runs its private-key permission check on the `HostKey` path even with `HostKeyAgent`, and warned "UNPROTECTED PRIVATE KEY FILE" at 0644.
+- `KexAlgorithms` offers only ML-KEM, sntrup761 and curve25519. The client's order wins, and macOS ssh lists `ecdh-sha2-nistp256` first, so it never picked ML-KEM.
+- Init turns hardware LRO off on every NIC. atlantic's LRO frames made the kernel warn "Driver has suspect GRO implementation, TCP performance may be compromised".
+
 ## Kernel
 
 The source is Linux 7.2.11, the latest stable on 2026-10-15.
@@ -109,6 +144,7 @@ The SER9 image does not contain the dev layer.
 | `/sbin/init`, `/sbin/node-layer` | the zig-built init, 35 KB | PID 1; `node-layer` mounts a layer after boot |
 | `/sbin/sshd`, `/libexec/sshd-session`, `/libexec/sshd-auth` | OpenSSH 10.6p1 with LibreSSL 4.3.3 libcrypto, static musl, 3.9 MB | SSH for people and for `devlayer push` |
 | `/sbin/node-identity` | Go, go-tpm 0.9.8, static, 3.4 MB | the host key, held in the TPM; an ssh-agent socket for sshd |
+| `/sbin/node-agent` | Go, static, 5.7 MB | the status banner on the monitor and the release watcher (see Status and updates) |
 | `/etc/ssh/sshd_config`, `/etc/ssh/trusted_user_ca_keys` (empty), `/etc/ssh/sshd_config.d/` | key-only config | see SSH below |
 | `/bin/toybox` and 37 links | toybox 0.8.14, 290 KiB | a shell for SSH sessions, plus `mount`, `losetup`, `sha256sum`, `ps`, `dmesg`, `reboot` and a few more |
 | `/root/.ssh/authorized_keys` | https://github.com/stefanpenner.keys, pinned by sha256 | the only way in |
