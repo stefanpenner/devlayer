@@ -100,7 +100,12 @@ func main() {
 		args = append(args, layerArgs...)
 		var tpm *exec.Cmd
 		if swtpm != "" {
-			sock := filepath.Join(bootDir, "swtpm.sock")
+			// A unix socket path is capped at 108 bytes; bazel's TEST_TMPDIR is
+			// longer, so the socket lives in a short directory under /tmp.
+			sockDir, err := os.MkdirTemp("/tmp", "swtpm")
+			check(err)
+			defer os.RemoveAll(sockDir)
+			sock := filepath.Join(sockDir, "s")
 			tpm = hostCommand(swtpm, []string{"socket", "--tpm2", "--terminate",
 				"--tpmstate", "dir=" + tpmState,
 				"--ctrl", "type=unixio,path=" + sock})
@@ -259,13 +264,16 @@ func hostCommand(qemu string, args []string) *exec.Cmd {
 	root := filepath.Dir(filepath.Dir(filepath.Dir(qemu)))
 	loaders, _ := filepath.Glob(filepath.Join(root, "lib", "ld-musl-*.so.1"))
 	if len(loaders) == 1 {
-		libs := filepath.Join(root, "lib") + ":" + filepath.Join(root, "usr", "lib")
+		libs := filepath.Join(root, "lib") + ":" + filepath.Join(root, "usr", "lib") + ":" +
+			filepath.Join(root, "usr", "lib", "swtpm") // libswtpm_libtpms.so.0
 		cmd := exec.Command(loaders[0], append([]string{"--library-path", libs, qemu}, args...)...)
 		cmd.Env = []string{}
 		return cmd
 	}
 	cellar := filepath.Dir(filepath.Dir(filepath.Dir(qemu)))
 	dirs, _ := filepath.Glob(filepath.Join(cellar, "*", "*", "lib"))
+	more, _ := filepath.Glob(filepath.Join(cellar, "*", "*", "lib", "swtpm"))
+	dirs = append(dirs, more...)
 	cmd := exec.Command(qemu, args...)
 	cmd.Env = []string{"DYLD_LIBRARY_PATH=" + strings.Join(dirs, ":")}
 	return cmd
