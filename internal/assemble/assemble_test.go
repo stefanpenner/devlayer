@@ -13,7 +13,7 @@ import (
 )
 
 func TestWrappers(t *testing.T) {
-	prefix := `PREFIX="$(cd "$(dirname "$0")/.." && pwd)"`
+	prefix := `case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"`
 	tests := []struct {
 		name string
 		body string

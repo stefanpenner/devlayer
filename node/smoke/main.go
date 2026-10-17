@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 				break
 			}
 		}
-		if err != nil {
+		if err != nil || strings.Contains(string(out), "not found") {
 			failed++
 			fmt.Printf("FAIL %v: %v: %s\n", c, err, out)
 			continue

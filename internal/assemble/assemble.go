@@ -185,9 +185,10 @@ func writeWrappers(binDir string) error {
 	return nil
 }
 
+// Wrappers use only sh builtins. A node sysroot has no dirname.
 func gitWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 export GIT_EXEC_PATH="$PREFIX/git/libexec/git-core"
 exec "$PREFIX/git/bin/git" "$@"
 `
@@ -195,7 +196,7 @@ exec "$PREFIX/git/bin/git" "$@"
 
 func zshWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 for d in "$PREFIX"/zsh/share/zsh/*/functions; do [ -d "$d" ] && export FPATH="$d${FPATH:+:$FPATH}" && break; done
 exec "$PREFIX/zsh/bin/zsh" "$@"
 `
@@ -206,7 +207,7 @@ exec "$PREFIX/zsh/bin/zsh" "$@"
 // A prefix without both trees keeps the home config.
 func NvimWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 export VIMRUNTIME="$PREFIX/nvim/share/nvim/runtime"
 if [ -f "$PREFIX/share/devlayer/config/nvim/init.lua" ] && [ -d "$PREFIX/share/devlayer/data/nvim/site/pack/core/opt/snacks.nvim" ]; then
   export XDG_CONFIG_HOME="$PREFIX/share/devlayer/config"
@@ -218,7 +219,7 @@ exec "$PREFIX/nvim/bin/nvim" "$@"
 
 func goWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 export GOROOT="$PREFIX/go"
 exec "$PREFIX/go/bin/go" "$@"
 `
@@ -226,7 +227,7 @@ exec "$PREFIX/go/bin/go" "$@"
 
 func gofmtWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 export GOROOT="$PREFIX/go"
 exec "$PREFIX/go/bin/gofmt" "$@"
 `
@@ -234,21 +235,21 @@ exec "$PREFIX/go/bin/gofmt" "$@"
 
 func zigWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 exec "$PREFIX/zig/zig" "$@"
 `
 }
 
 func ccWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 exec "$PREFIX/zig/zig" cc "$@"
 `
 }
 
 func cxxWrapper() string {
 	return `#!/bin/sh
-PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+case "$0" in */*) D="${0%/*}" ;; *) D=. ;; esac; PREFIX="$(cd "$D/.." && pwd)"
 exec "$PREFIX/zig/zig" c++ "$@"
 `
 }
