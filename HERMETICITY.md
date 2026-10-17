@@ -182,12 +182,15 @@ Those shell functions are not inside the zsh binary.
 
 ## Node
 
-[node/](node/README.md) builds a kernel, an initrd, and an EROFS of the Linux sysroot.
+[node/](node/README.md) builds a kernel and an initrd that holds the runtime layer.
+[layers/](layers/BUILD.bazel) builds the runtime layer (init, dropbear, toybox) and the dev layer (the Linux sysroot) as EROFS images.
+dropbear and the GitHub keys file are rung 0 pins. dropbear's `configure` runs host `sh`, `sed`, and `awk` (rung 2).
 The kernel source and the kernel LLVM are rung 0 pins.
 The Alpine build tools, mkfs.erofs, and QEMU are sha256 pins in [node/extensions.bzl](node/extensions.bzl).
 The kernel action still runs host `sh`, `sed`, `awk`, `grep`, and `tar`. That is rung 2.
 The kernel LLVM links the host glibc. A Linux x86_64 exec host builds the kernel.
-Two kernel builds in different directories gave the same bytes.
+Two builds in different checkouts and output bases gave the same vmlinuz, runtime layer, and initrd.
+The dev layer is not reproducible yet: the foreign_cc builds in the bundle embed sandbox paths.
 
 ## Limits
 
