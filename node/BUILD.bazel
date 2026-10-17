@@ -165,6 +165,18 @@ node_vm_test(
     tags = ["node-vm"],
 )
 
+# A static ip= in place of ip=dhcp: efi-boot-shim's kernel_ip hands the
+# kernel its own DHCP lease (QEMU user net here), so the kernel skips DHCP.
+# init prints /proc/net/pnp; "#MANUAL" there means the static path.
+node_vm_test(
+    name = "kernel_ip_vm",
+    size = "medium",
+    binary = "//internal/sums:sums_test",
+    cmdline = "ip=10.0.2.15::10.0.2.2:255.255.255.0:::off:10.0.2.3",
+    expect_serial = "#MANUAL",
+    tags = ["node-vm"],
+)
+
 # SSH and identity. The guest gets a TPM 2.0 from the pinned swtpm behind
 # tpm-crb, the interface of the SER9's AMD fTPM.
 #

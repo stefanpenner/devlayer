@@ -113,7 +113,7 @@ static int stage1(void) {
     must_mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
     must_mount("sysfs", "/sys", "sysfs", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
 
-    say("%s", "stage 1: network from the kernel (ip=dhcp):");
+    say("%s", "stage 1: network from the kernel (ip=, from the shim's lease or DHCP):");
     copy_file("/proc/net/pnp", 2);
 
     char loopdev[32];
