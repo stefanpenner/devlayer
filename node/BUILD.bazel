@@ -114,9 +114,12 @@ genrule(
 )
 
 # Ready to publish. The shim boots vmlinuz with initrd.img and this cmdline.
+# Both consoles get kernel and init output. tty0 (the EFI framebuffer, the
+# monitor) is listed last, so it is /dev/console: a FATAL from node-identity
+# shows on screen. ttyS0 keeps the serial log for QEMU and a serial cable.
 oci_layout(
     name = "oci",
-    cmdline = "console=tty0 ip=dhcp panic=10",
+    cmdline = "console=ttyS0 console=tty0 ip=dhcp panic=10",
     layers = {
         ":vmlinuz": "vmlinuz",
         ":initrd": "initrd.img",
