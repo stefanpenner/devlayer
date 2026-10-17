@@ -35,6 +35,7 @@ type info struct {
 	update                                 string
 	updateAlert                            bool
 	fatals                                 []string
+	shim                                   string
 	up                                     time.Duration
 }
 
@@ -244,6 +245,9 @@ func render(in info, color bool) string {
 		tpm = c(green, "yes")
 	}
 	fmt.Fprintf(&b, " tpm      %s\n", tpm)
+	if in.shim != "" {
+		fmt.Fprintf(&b, " shim     %s\n", in.shim)
+	}
 	if in.fingerprint != "" {
 		fmt.Fprintf(&b, " host key %s (%s)\n", in.fingerprint, or(in.keySource, "?"))
 	} else {
@@ -278,6 +282,22 @@ func heartbeat(in info) string {
 		or(in.host, "(none)"), or(in.addr, "no address"), ssh, or(in.release, "?"), in.up, or(in.update, "-"))
 }
 
+// repaint draws s over the previous banner: cursor home, each line cleared
+// to its end, then the rest of the screen cleared. No scrolling, so a
+// console line in between is painted over at the next repaint.
+func repaint(s string, first bool) string {
+	var b strings.Builder
+	if first {
+		b.WriteString("\x1b[?25l\x1b[H\x1b[2J") // hide the cursor, clear once
+	}
+	b.WriteString("\x1b[H")
+	for _, l := range strings.Split(strings.TrimPrefix(s, "\n"), "\n") {
+		b.WriteString(l + "\x1b[K\n")
+	}
+	b.WriteString("\x1b[J")
+	return b.String()
+}
+
 func toTTY(path, s string) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|syscall.O_NOCTTY, 0)
 	if err != nil {
@@ -287,21 +307,35 @@ func toTTY(path, s string) {
 	f.Close()
 }
 
+// bannerLoop keeps the banner in place on tty0: a repaint every 2 s when
+// anything changed, and every 10 s for the uptime. The kernel log gets the
+// whole block when it changes, and the one-line heartbeat every minute;
+// both at debug level, so they never scroll the monitor.
 func bannerLoop(c config, st *status) {
 	k := openKmsg()
 	last := ""
-	lastBeat, lastFull := time.Now(), time.Now()
+	shim := shimSummary(c.efivars)
+	for _, l := range efiReport(c.efivars) {
+		logk(6, "node-agent: "+l)
+	}
+	first := true
+	lastBeat, lastPaint := time.Now(), time.Time{}
 	for {
 		in := collect(st, k)
+		in.shim = shim
 		key := in
 		key.up = 0
-		if s := render(key, false); s != last || time.Since(lastFull) >= 10*time.Minute {
-			last, lastFull = s, time.Now()
-			toTTY(c.tty, render(in, true))
+		s := render(key, false)
+		if s != last || time.Since(lastPaint) >= 10*time.Second {
+			toTTY(c.tty, repaint(render(in, true), first))
+			first, lastPaint = false, time.Now()
+		}
+		if s != last {
+			last = s
 			logk(7, "node-agent banner:"+strings.ReplaceAll(render(in, false), "\n", "\nnode-agent| "))
-			lastBeat = time.Now()
-		} else if time.Since(lastBeat) >= c.heartbeat {
-			toTTY(c.tty, heartbeat(in)+"\n")
+		}
+		if time.Since(lastBeat) >= c.heartbeat {
+			logk(7, heartbeat(in))
 			lastBeat = time.Now()
 		}
 		time.Sleep(2 * time.Second)

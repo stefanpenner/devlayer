@@ -327,7 +327,7 @@ func runChecks() {
 	}
 	out := "/tmp/tty.txt"
 	must(os.WriteFile(out, nil, 0o644))
-	cmd := exec.Command(agent, "run", "-tty", out, "-heartbeat", "1s")
+	cmd := exec.Command(agent, "run", "-tty", out, "-heartbeat", "1s", "-efivars", "/tmp/no-efivars")
 	must(cmd.Start())
 	time.Sleep(7 * time.Second)
 	cmd.Process.Kill()
@@ -341,10 +341,60 @@ func runChecks() {
 		bad("run: no banner on the tty\n%s", t)
 	case fatals != blocks:
 		bad("run: %d banner(s) but the FATAL line %d times\n%s", blocks, fatals, t)
-	case !strings.Contains(t, "node: "):
-		bad("run: no heartbeat line\n%s", t)
+	case strings.Contains(t, "node: "):
+		bad("run: a heartbeat line on the tty (it scrolls the banner away)\n%s", t)
+	case !strings.Contains(t, "\x1b[H") || strings.Count(t, "\x1b[2J") != 1:
+		bad("run: the banner is not painted in place (cursor home, one clear)\n%q", t)
+	case !kmsgHas("node: "):
+		bad("run: no heartbeat line in the kernel log")
 	default:
-		ok("run: %d banner(s), the FATAL line once in each, heartbeat lines follow", blocks)
+		ok("run: %d banner(s) in place, the FATAL line once in each, heartbeat in kmsg only", blocks)
+	}
+
+	// The shim line and the EFI report, from a fake efivarfs.
+	dir := "/tmp/efivars-shim"
+	os.MkdirAll(dir, 0o755)
+	put := func(name string, b []byte) { must(os.WriteFile(dir+"/"+name, append([]byte{7, 0, 0, 0}, b...), 0o644)) }
+	put("PennerShimBuild-c6f2a1d4-5b3e-4f8a-9d71-2e6b0c4a8f15", []byte("build=3 role=promoted bootcurrent=0002 path=\\EFI\\penner\\shim-next.efi"))
+	upd := make([]byte, 41)
+	upd[0], upd[1], upd[33] = 3, 0xf8, 2
+	put("ShimUpdate-c6f2a1d4-5b3e-4f8a-9d71-2e6b0c4a8f15", upd)
+	put("BootOrder-8be4df61-93ca-11d2-aa0d-00e098032b8c", []byte{1, 0, 2, 0})
+	put("Boot0001-8be4df61-93ca-11d2-aa0d-00e098032b8c", append([]byte{1, 0, 0, 0, 0, 0}, 'p', 0, 'e', 0, 'n', 0, 0, 0))
+	b, _ = exec.Command(agent, "banner", "-efivars", dir).CombinedOutput()
+	e, _ := exec.Command(agent, "efi", "-efivars", dir).CombinedOutput()
+	for _, want := range []string{" shim     build=3 role=promoted bootcurrent=0002", "ShimUpdate Failed build 2 f80000"} {
+		if !strings.Contains(string(b), want) {
+			bad("banner lacks %q\n%s", want, b)
+		}
+	}
+	for _, want := range []string{"efi: BootOrder 0001,0002", `efi: Boot0001 "pen"`} {
+		if !strings.Contains(string(e), want) {
+			bad("efi report lacks %q\n%s", want, e)
+		}
+	}
+	ok("shim line and EFI report from efivarfs")
+}
+
+// kmsgHas: some kernel log record contains s.
+func kmsgHas(s string) bool {
+	fd, err := syscall.Open("/dev/kmsg", syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return false
+	}
+	defer syscall.Close(fd)
+	buf := make([]byte, 8192)
+	for {
+		n, err := syscall.Read(fd, buf)
+		if err == syscall.EPIPE {
+			continue
+		}
+		if err != nil || n <= 0 {
+			return false
+		}
+		if strings.Contains(string(buf[:n]), s) {
+			return true
+		}
 	}
 }
 

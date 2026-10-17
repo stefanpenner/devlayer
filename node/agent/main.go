@@ -4,9 +4,11 @@
 //   - The status banner. A block on the monitor (tty0) with the node's
 //     address, link speed, release, TPM host key, sshd state, the exact ssh
 //     command, uptime, and any FATAL line in red. It is printed again when
-//     anything in it changes, and a one-line heartbeat follows every minute.
-//     The block also goes to the kernel log at debug level, so dmesg has it
-//     without printing it twice on the console.
+//     anything in it changes, in place (cursor home, no scrolling), and its
+//     uptime every 10 s. The block, and a one-line heartbeat every minute,
+//     go to the kernel log at debug level only, so dmesg has them and the
+//     monitor never scrolls. A "shim" line says which efi-boot-shim booted
+//     the node (PennerShimBuild), and dmesg gets the EFI boot variables.
 //
 //   - The release watcher. Every minute it fetches the netboot index
 //     (https://boot.penner.network/index.json) with If-None-Match. When the
@@ -120,7 +122,13 @@ func main() {
 	case "banner":
 		var st status
 		st.line = watcherOff(c)
-		fmt.Print(render(collect(&st, nil), false))
+		in := collect(&st, nil)
+		in.shim = shimSummary(c.efivars)
+		fmt.Print(render(in, false))
+	case "efi":
+		for _, l := range efiReport(c.efivars) {
+			fmt.Println(l)
+		}
 	case "record":
 		nv, err := openNV(uint32(c.nvIndex))
 		if err != nil {
@@ -149,7 +157,7 @@ func main() {
 		}()
 		bannerLoop(c, &st)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: node-agent [run|banner|record|watch] [flags]")
+		fmt.Fprintln(os.Stderr, "usage: node-agent [run|banner|efi|record|watch] [flags]")
 		os.Exit(2)
 	}
 }
