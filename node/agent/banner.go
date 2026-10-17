@@ -327,9 +327,6 @@ func render(in info, color bool) string {
 	}
 	fmt.Fprintf(&b, "\n %s\n", c(gray, strings.Repeat("─", width-1)))
 	fmt.Fprintf(&b, " %s%s%s\n", c(gray, left), strings.Repeat(" ", pad), c(bold, right))
-	if in.sshd {
-		fmt.Fprintf(&b, " %s\n", c(gray, "login    ssh root@"+or(in.ip, "<ip>")))
-	}
 	return b.String()
 }
 
