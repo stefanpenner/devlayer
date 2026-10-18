@@ -1,0 +1,346 @@
+# The node image: a sealed kernel and a tiny initrd that holds /init and the
+# runtime layer (//layers:runtime) as a read-only EROFS root. Nothing else.
+# The same kernel is a local test target.
+#
+#   bazel build //node:oci          # vmlinuz + initrd.img as an OCI layout
+#   bazel test --config=node //node/...
+#
+# The kernel build needs a Linux x86_64 exec host. See node/README.md.
+
+load(":defs.bzl", "node_vm_test", "oci_layout")
+
+package(default_visibility = ["//visibility:public"])
+
+[config_setting(
+    name = name,
+    constraint_values = ["@platforms//os:" + os, "@platforms//cpu:" + cpu],
+) for name, os, cpu in [
+    ("macos_arm64", "macos", "arm64"),
+    ("linux_x86_64", "linux", "x86_64"),
+    ("linux_aarch64", "linux", "aarch64"),
+]]
+
+# QEMU and its firmware, pinned for each host.
+_QEMU = {
+    ":macos_arm64": "@node_qemu_macos_arm64",
+    ":linux_x86_64": "@node_qemu_linux_x86_64",
+    ":linux_aarch64": "@node_qemu_linux_aarch64",
+}
+
+[alias(
+    name = name,
+    actual = select({k: v + "//:" + name for k, v in _QEMU.items()}),
+) for name in ["qemu", "qemu-system-x86_64", "swtpm"]]
+
+_LINUX_X86_64 = [
+    "@platforms//os:linux",
+    "@platforms//cpu:x86_64",
+]
+
+# allnoconfig plus kernel/ser9.config, LLVM=1, no modules. HOSTCC is zig.
+genrule(
+    name = "kernel",
+    srcs = [
+        "kernel/ser9.config",
+        "@linux_kernel_src//file",
+        "@kernel_llvm_linux_amd64//:all",
+        "@kernel_llvm_linux_amd64//:bin/clang",
+        "@node_hosttools_linux_x86_64//:all",
+        "@node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1",
+        "@zig_linux_amd64//:all",
+        "@zig_linux_amd64//:zig",
+    ],
+    outs = [
+        "vmlinuz",
+        "kernel.config",
+        "gen_init_cpio",
+    ],
+    cmd = " ".join([
+        "KERNEL_TAR=$(location @linux_kernel_src//file)",
+        "LLVM_BIN=$$(dirname $(location @kernel_llvm_linux_amd64//:bin/clang))",
+        "HOST_ROOT=$$(dirname $$(dirname $(location @node_hosttools_linux_x86_64//:lib/ld-musl-x86_64.so.1)))",
+        "ZIG=$(location @zig_linux_amd64//:zig)",
+        "FRAGMENT=$(location kernel/ser9.config)",
+        "OUT_BZIMAGE=$(location vmlinuz)",
+        "OUT_CONFIG=$(location kernel.config)",
+        "OUT_CPIO_TOOL=$(location gen_init_cpio)",
+        "sh $(location kernel/build.sh)",
+    ]),
+    target_compatible_with = _LINUX_X86_64,
+    tools = ["kernel/build.sh"],
+)
+
+# PID 1, static musl, built by the pinned zig on any host.
+genrule(
+    name = "init",
+    srcs = [
+        "init/init.c",
+    ] + select({
+        ":linux_x86_64": ["@zig_linux_amd64//:all", "@zig_linux_amd64//:zig"],
+        ":linux_aarch64": ["@zig_linux_arm64//:all", "@zig_linux_arm64//:zig"],
+        ":macos_arm64": ["@zig_darwin_arm64//:all", "@zig_darwin_arm64//:zig"],
+    }),
+    outs = ["init.bin"],
+    cmd = select({
+        ":linux_x86_64": "Z=$(location @zig_linux_amd64//:zig)",
+        ":linux_aarch64": "Z=$(location @zig_linux_arm64//:zig)",
+        ":macos_arm64": "Z=$(location @zig_darwin_arm64//:zig)",
+    }) + " && C=$$(mktemp -d) && ZIG_GLOBAL_CACHE_DIR=$$C ZIG_LOCAL_CACHE_DIR=$$C " +
+          "$$Z cc -target x86_64-linux-musl -static -Os -s -Wall -Wextra -Werror " +
+          "-o $@ $(location init/init.c) && rm -rf $$C",
+)
+
+# One uncompressed newc cpio: /init and the runtime layer. gen_init_cpio is the
+# kernel's own writer; -t 0 fixes every mtime.
+genrule(
+    name = "initrd",
+    # gen_init_cpio is a src, not a tool: a tool would build the kernel again
+    # in the exec configuration. This target only builds on Linux x86_64.
+    srcs = [
+        ":gen_init_cpio",
+        ":init",
+        "//layers:runtime",
+    ],
+    outs = ["initrd.img"],
+    cmd = " && ".join([
+        "L=$$(mktemp)",
+        "printf '%s\\n' 'dir /dev 0755 0 0' 'nod /dev/console 0600 0 0 c 5 1' 'dir /proc 0755 0 0' " +
+        "'dir /sys 0755 0 0' 'dir /lower 0755 0 0' 'dir /rw 0755 0 0' 'dir /newroot 0755 0 0' " +
+        "\"file /init $(location :init) 0755 0 0\" \"file /runtime.erofs $(location //layers:runtime) 0644 0 0\" > $$L",
+        "$(location :gen_init_cpio) -t 0 $$L > $@",
+        "rm -f $$L",
+    ]),
+    target_compatible_with = _LINUX_X86_64,
+)
+
+# Ready to publish. The shim boots vmlinuz with initrd.img and this cmdline.
+# Both consoles get kernel and init output. tty0 (the EFI framebuffer, the
+# monitor) is listed last, so it is /dev/console: a FATAL from node-identity
+# shows on screen. ttyS0 keeps the serial log for QEMU and a serial cable.
+# ttyS0 needs ,115200: bare console=ttyS0 runs at 9600 baud, and the SER9 has a
+# real 16550A at 0x3f8. Console output is synchronous, so the kernel waited on
+# every byte: 18 s to replay the log when ttyS0 registered, about 46 s to
+# reach /init. quiet loglevel=3 keeps the console for KERN_CRIT and worse:
+# the shim screen, a clear, then node-agent's dashboard. dmesg keeps
+# everything; node_verbose=1 brings back the scrolling console. KERN_ERR
+# lines hidden this way on the SER9: the AMI firmware's ACPI BIOS Error
+# (\_SB.PCI0.GPP5.DEV0 defined twice; see node/README.md).
+# kvm_amd.avic=0: the SER9 firmware has no AVIC, and kvm_amd printed a
+# [Firmware Bug] warning trying to enable x2AVIC on every boot.
+# fbcon=font:TER16x32 makes the 4K console readable. The publish script
+# appends node_release=<version> for node-agent's release watcher.
+# printk.devkmsg=on lifts the /dev/kmsg write rate limit, so the banner
+# mirror and sshd's relayed log lines are not dropped from dmesg.
+oci_layout(
+    name = "oci",
+    cmdline = "console=ttyS0,115200 console=tty0 quiet loglevel=3 kvm_amd.avic=0 fbcon=font:TER16x32 printk.devkmsg=on ip=dhcp panic=10",
+    layers = {
+        ":vmlinuz": "vmlinuz",
+        ":initrd": "initrd.img",
+    },
+    target_compatible_with = _LINUX_X86_64,
+    version = "7.2.11-devlayer-ser9",
+)
+
+# ─── The node as a test target ──────────────────────────────────────────────
+
+# Every test boots the runtime layer only. The payload comes in on its own
+# EROFS disk. devlayer's own Go tests: static linux/amd64 binaries.
+node_vm_test(
+    name = "sums_test_vm",
+    size = "medium",
+    binary = "//internal/sums:sums_test",
+    tags = ["node-vm"],
+)
+
+node_vm_test(
+    name = "versions_test_vm",
+    size = "medium",
+    binary = "//internal/versions:versions_test",
+    tags = ["node-vm"],
+)
+
+# The dev layer (the full devlayer sysroot) attached at /layers/dev: the
+# prototype for layering. Its programs run through their devlayer wrappers.
+node_vm_test(
+    name = "sysroot_smoke_vm",
+    size = "medium",
+    binary = "//node/smoke",
+    layers = {"//layers:dev": "dev"},
+    tags = ["node-vm"],
+)
+
+# A static ip= in place of ip=dhcp: efi-boot-shim's kernel_ip hands the
+# kernel its own DHCP lease (QEMU user net here), so the kernel skips DHCP.
+# init prints /proc/net/pnp; "#MANUAL" there means the static path.
+node_vm_test(
+    name = "kernel_ip_vm",
+    size = "medium",
+    binary = "//internal/sums:sums_test",
+    cmdline = "ip=10.0.2.15::10.0.2.2:255.255.255.0:::off:10.0.2.3",
+    expect_serial = "#MANUAL",
+    tags = ["node-vm"],
+)
+
+# SSH and identity. The guest gets a TPM 2.0 from the pinned swtpm behind
+# tpm-crb, the interface of the SER9's AMD fTPM.
+#
+# Key login, password refused, user and host certificates, host key = TPM key.
+node_vm_test(
+    name = "ssh_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# Two boots on one swtpm state dir: the same host key, and no OS state.
+node_vm_test(
+    name = "identity_tpm_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    boots = 2,
+    host_key_across_boots = "same",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# node-agent: the banner, and the release watcher against a local HTTPS
+# server: same release, fetch errors, a corrupt blob, a new release, and
+# the TPM NV loop guard.
+node_vm_test(
+    name = "agent_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# node_autoreboot=off: the watcher never reboots.
+node_vm_test(
+    name = "agent_optout_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_autoreboot=off node_check=optout",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# The dashboard on tty0, as the SER9 monitor shows it: OVMF and efifb, the
+# Tokyo Night palette from init, node-agent painting in place. The QMP
+# screendump lands in test.outputs/node-ui.png.
+node_vm_test(
+    name = "dashboard_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# The dashboard centered on a 1920x1080 console.
+node_vm_test(
+    name = "dashboard_1080_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-1080.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    resolution = "1920x1080",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# The dashboard centered on a 2560x1440 console.
+node_vm_test(
+    name = "dashboard_1440_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-1440.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    resolution = "2560x1440",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# Plain reboot and poweroff over SSH: toybox signals PID 1, init stops
+# every process, syncs, and calls reboot(2).
+node_vm_test(
+    name = "reboot_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=reboot",
+    expect_stop = "reboot",
+    tags = ["node-vm"],
+)
+
+node_vm_test(
+    name = "poweroff_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=poweroff",
+    expect_stop = "poweroff",
+    tags = ["node-vm"],
+)
+
+# The ACPI power button (QEMU system_powerdown): a clean poweroff.
+node_vm_test(
+    name = "power_button_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=button",
+    expect_stop = "poweroff",
+    qmp_cmd = "{\"execute\":\"system_powerdown\"}",
+    qmp_on = "ready-for-qmp",
+    tags = ["node-vm"],
+)
+
+# Ctrl-Alt-Del on the keyboard: a clean reboot.
+node_vm_test(
+    name = "ctrl_alt_del_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_identity=ephemeral node_check=cad",
+    expect_stop = "reboot",
+    qmp_cmd = "{\"execute\":\"send-key\",\"arguments\":{\"keys\":[{\"type\":\"qcode\",\"data\":\"ctrl\"},{\"type\":\"qcode\",\"data\":\"alt\"},{\"type\":\"qcode\",\"data\":\"delete\"}]}}",
+    qmp_on = "ready-for-qmp",
+    tags = ["node-vm"],
+)
+
+# No TPM: fail closed. sshd is not listening, the FATAL line is on serial.
+node_vm_test(
+    name = "no_tpm_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    cmdline = "node_check=no-tpm",
+    expect_serial = "identity: FATAL no TPM 2.0 (/dev/tpmrm0 missing): enable fTPM in BIOS (Security > AMD fTPM). sshd not started",
+    tags = ["node-vm"],
+)
+
+# The explicit opt-in: a RAM host key, a WARNING, a new key every boot.
+node_vm_test(
+    name = "ephemeral_vm",
+    size = "medium",
+    binary = "//node/sshcheck",
+    boots = 2,
+    cmdline = "node_identity=ephemeral node_check=ephemeral",
+    expect_serial = "identity: WARNING node_identity=ephemeral",
+    host_key_across_boots = "differ",
+    tags = ["node-vm"],
+)
+
+# KVM host: /dev/kvm opens and KVM_CREATE_VM works inside the node.
+# Needs SVM in the guest CPU (the kernel has kvm_amd only): TCG -cpu max has
+# SVM; with KVM it needs an AMD host with nested virtualization.
+node_vm_test(
+    name = "kvm_vm",
+    size = "medium",
+    binary = "//node/kvmcheck",
+    tags = ["node-vm"],
+)

@@ -11,4 +11,6 @@ go_test(
     name = "versions_test",
     srcs = ["versions_test.go"],
     embed = [":versions"],
+    # node:*_vm runs this test inside the node VM.
+    visibility = ["//node:__pkg__"],
 )

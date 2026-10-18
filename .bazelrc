@@ -54,3 +54,8 @@ test --test_output=errors
 # CI writes this before Bazel (see .github/workflows/bazel-ci-cache.sh).
 # Absent on developer machines, so local builds keep the default output root.
 try-import %workspace%/.bazelrc.ci
+
+# Node VM tests (node/). Boots the node kernel in the pinned QEMU.
+# NODE_VM_ACCEL=tcg|kvm|hvf overrides the pick; the client env passes it.
+test:node --test_tag_filters=node-vm
+test:node --test_env=NODE_VM_ACCEL

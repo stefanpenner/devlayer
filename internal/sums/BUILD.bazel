@@ -17,4 +17,6 @@ go_test(
     name = "sums_test",
     srcs = ["sums_test.go"],
     embed = [":sums"],
+    # node:*_vm runs this test inside the node VM.
+    visibility = ["//node:__pkg__"],
 )

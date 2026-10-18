@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary")
+
+# The SSH and identity checks. ssh and ssh-keygen come from the same
+# OpenSSH build as sshd, on the test's disk only; the runtime layer has no
+# SSH client. Every key is made inside the VM.
+go_binary(
+    name = "sshcheck",
+    srcs = ["main.go"],
+    data = [
+        "//layers:ssh",
+        "//layers:ssh-keygen",
+    ],
+    visibility = ["//node:__subpackages__"],
+)

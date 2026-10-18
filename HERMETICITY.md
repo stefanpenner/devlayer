@@ -180,6 +180,19 @@ It is not `fallbacks.txt`.
 The `share/zsh` tree is a directory beside the binary.
 Those shell functions are not inside the zsh binary.
 
+## Node
+
+[node/](node/README.md) builds a kernel and an initrd that holds the runtime layer.
+[layers/](layers/BUILD.bazel) builds the runtime layer (init, OpenSSH, node-identity, toybox) and the dev layer (the Linux sysroot) as EROFS images.
+OpenSSH, LibreSSL, and the GitHub keys file are rung 0 pins. OpenSSH's and LibreSSL's `configure` run host `sh`, `sed`, and `awk` (rung 2).
+The VM tests' swtpm is pinned with QEMU: Alpine packages on Linux, Homebrew bottles on macOS.
+The kernel source and the kernel LLVM are rung 0 pins.
+The Alpine build tools, mkfs.erofs, and QEMU are sha256 pins in [node/extensions.bzl](node/extensions.bzl).
+The kernel action still runs host `sh`, `sed`, `awk`, `grep`, and `tar`. That is rung 2.
+The kernel LLVM links the host glibc. A Linux x86_64 exec host builds the kernel.
+Two builds in different checkouts and output bases gave the same vmlinuz, runtime layer, and initrd.
+The dev layer is not reproducible yet: the foreign_cc builds in the bundle embed sandbox paths.
+
 ## Limits
 
 - Darwin nvim, htop, and eza clone a tag and compile with the host toolchain ([build.go](cmd/build.go)). Darwin btop and make hash the tarball, then the host compiler builds them.

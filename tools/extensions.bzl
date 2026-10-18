@@ -548,6 +548,48 @@ exports_files(
             build_file_content = _FILEGROUP_ALL + _exports(["zig"]),
         )
 
+    # Node kernel source and the kernel.org LLVM that builds it (node/).
+    # The source major selects the v<N>.x directory.
+    _http_file(sums,
+        name = "linux_kernel_src",
+        urls = ["https://cdn.kernel.org/pub/linux/kernel/v{major}.x/linux-{ver}.tar.xz".format(
+            major = v["KERNEL"].split(".")[0],
+            ver = v["KERNEL"],
+        )],
+        downloaded_file_path = "linux.tar.xz",
+    )
+    for plat, arch in [("linux_amd64", "x86_64"), ("linux_arm64", "aarch64")]:
+        _http_archive(sums,
+            name = "kernel_llvm_" + plat,
+            urls = ["https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-{ver}-{arch}.tar.xz".format(
+                ver = v["KERNEL_LLVM"],
+                arch = arch,
+            )],
+            strip_prefix = "llvm-{ver}-{arch}".format(ver = v["KERNEL_LLVM"], arch = arch),
+            build_file_content = _FILEGROUP_ALL + _exports(["bin/clang", "bin/llvm-ar", "bin/llvm-strip"]),
+        )
+
+    # Node runtime layer (layers/): OpenSSH, LibreSSL, and the SSH keys sshd
+    # trusts. The tarball signatures were checked with gpg when pinned (see
+    # node/README.md); the sha256 pins carry that check forward.
+    _http_archive(sums,
+        name = "openssh_src",
+        urls = ["https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-{}.tar.gz".format(v["OPENSSH"])],
+        strip_prefix = "openssh-{}".format(v["OPENSSH"]),
+        build_file_content = _ALL_SRCS + _exports(["configure"]),
+    )
+    _http_archive(sums,
+        name = "libressl_src",
+        urls = ["https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-{}.tar.gz".format(v["LIBRESSL"])],
+        strip_prefix = "libressl-{}".format(v["LIBRESSL"]),
+        build_file_content = _ALL_SRCS + _exports(["configure"]),
+    )
+    _http_file(sums,
+        name = "stefanpenner_keys",
+        urls = ["https://github.com/stefanpenner.keys"],
+        downloaded_file_path = "authorized_keys",
+    )
+
     # ═══════════════════════════════════════════════════════════════════════════
     # Shell assets (plugins, themes, scripts)
     # ═══════════════════════════════════════════════════════════════════════════

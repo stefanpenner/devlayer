@@ -16,7 +16,9 @@ use_repo(
     go_deps,
     "com_github_burntsushi_toml",
     "com_github_charmbracelet_lipgloss",
+    "com_github_google_go_tpm",
     "com_github_ulikunitz_xz",
+    "org_golang_x_crypto",
 )
 
 # ─── Hermetic C/C++ toolchain (zig-based) ───────────────────────────────────
@@ -149,6 +151,14 @@ use_repo(
     "zig_darwin_arm64",
     "zig_linux_amd64",
     "zig_linux_arm64",
+    # Node kernel (node/)
+    "kernel_llvm_linux_amd64",
+    "kernel_llvm_linux_arm64",
+    "linux_kernel_src",
+    # Node runtime layer (layers/)
+    "libressl_src",
+    "openssh_src",
+    "stefanpenner_keys",
     # Shell assets
     "bat_extras",
     "fast_syntax_highlighting",
@@ -173,4 +183,14 @@ use_repo(
     "rust_aarch64_apple_darwin",
     "rust_aarch64_unknown_linux_musl",
     "rust_x86_64_unknown_linux_musl",
+)
+
+# ─── Node: kernel build tools, mkfs.erofs, QEMU (node/) ─────────────────────
+node_repos = use_extension("//node:extensions.bzl", "node_repos")
+use_repo(
+    node_repos,
+    "node_hosttools_linux_x86_64",
+    "node_qemu_linux_aarch64",
+    "node_qemu_linux_x86_64",
+    "node_qemu_macos_arm64",
 )

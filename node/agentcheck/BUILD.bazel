@@ -1,0 +1,11 @@
+load("@rules_go//go:def.bzl", "go_binary")
+
+# The node-agent checks: the banner, and the release watcher against a
+# local HTTPS server with a test CA made inside the VM.
+go_binary(
+    name = "agentcheck",
+    srcs = ["main.go"],
+    pure = "on",
+    static = "on",
+    visibility = ["//node:__subpackages__"],
+)

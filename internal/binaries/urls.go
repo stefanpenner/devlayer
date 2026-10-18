@@ -181,20 +181,32 @@ func SourceArchiveURLs(vers *versions.Versions) map[string]string {
 	nvim := vers.Get("NVIM_VERSION")
 	toybox := vers.Get("TOYBOX_VERSION")
 	glow := vers.Get("GLOW_VERSION")
+	kernel := vers.Get("KERNEL_VERSION")
+	kernelMajor, _, _ := strings.Cut(kernel, ".")
+	kllvm := vers.Get("KERNEL_LLVM_VERSION")
+	openssh := vers.Get("OPENSSH_VERSION")
+	libressl := vers.Get("LIBRESSL_VERSION")
 	out := map[string]string{
-		"btop":     fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
-		"htop":     fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
-		"make":     fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", makeVer),
-		"ncurses":  fmt.Sprintf("https://ftp.gnu.org/gnu/ncurses/ncurses-%s.tar.gz", ncurses),
-		"libiconv": fmt.Sprintf("https://ftp.gnu.org/gnu/libiconv/libiconv-%s.tar.gz", iconv),
-		"git":      fmt.Sprintf("https://mirrors.edge.kernel.org/pub/software/scm/git/git-%s.tar.xz", git),
-		"zsh":      fmt.Sprintf("https://www.zsh.org/pub/zsh-%s.tar.xz", zsh),
-		"zlib":     fmt.Sprintf("https://zlib.net/fossils/zlib-%s.tar.gz", zlib),
+		"btop":                     fmt.Sprintf("https://github.com/aristocratos/btop/archive/refs/tags/v%s.tar.gz", btop),
+		"htop":                     fmt.Sprintf("https://github.com/htop-dev/htop/releases/download/%s/htop-%s.tar.xz", htop, htop),
+		"make":                     fmt.Sprintf("https://ftp.gnu.org/gnu/make/make-%s.tar.gz", makeVer),
+		"ncurses":                  fmt.Sprintf("https://ftp.gnu.org/gnu/ncurses/ncurses-%s.tar.gz", ncurses),
+		"libiconv":                 fmt.Sprintf("https://ftp.gnu.org/gnu/libiconv/libiconv-%s.tar.gz", iconv),
+		"git":                      fmt.Sprintf("https://mirrors.edge.kernel.org/pub/software/scm/git/git-%s.tar.xz", git),
+		"zsh":                      fmt.Sprintf("https://www.zsh.org/pub/zsh-%s.tar.xz", zsh),
+		"zlib":                     fmt.Sprintf("https://zlib.net/fossils/zlib-%s.tar.gz", zlib),
 		"nvim":                     fmt.Sprintf("https://github.com/neovim/neovim/archive/refs/tags/v%s.tar.gz", nvim),
 		"toybox":                   fmt.Sprintf("https://github.com/landley/toybox/archive/refs/tags/%s.tar.gz", toybox),
 		"glow":                     fmt.Sprintf("https://github.com/charmbracelet/glow/archive/refs/tags/v%s.tar.gz", glow),
 		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
 		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
+		"linux_kernel":             fmt.Sprintf("https://cdn.kernel.org/pub/linux/kernel/v%s.x/linux-%s.tar.xz", kernelMajor, kernel),
+		"kernel_llvm_linux_amd64":  fmt.Sprintf("https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-%s-x86_64.tar.xz", kllvm),
+		"kernel_llvm_linux_arm64":  fmt.Sprintf("https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-%s-aarch64.tar.xz", kllvm),
+		"openssh":                  fmt.Sprintf("https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-%s.tar.gz", openssh),
+		"libressl":                 fmt.Sprintf("https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-%s.tar.gz", libressl),
+		// Not versioned: the pinned sha256 fails the build when the keys change.
+		"stefanpenner_keys": "https://github.com/stefanpenner.keys",
 	}
 	// These URLs are neovim v0.12.5 cmake.deps/deps.txt. They are not version keys.
 	for k, u := range NvimDepURLs() {

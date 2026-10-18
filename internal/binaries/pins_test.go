@@ -43,6 +43,12 @@ func TestSourceArchiveURLs(t *testing.T) {
 		"glow":                     "https://github.com/charmbracelet/glow/archive/refs/tags/v3.0.0.tar.gz",
 		"gitstatusd_linux_aarch64": "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-aarch64.tar.gz",
 		"gitstatusd_linux_x86_64":  "https://github.com/romkatv/gitstatus/releases/download/v1.5.4/gitstatusd-linux-x86_64.tar.gz",
+		"linux_kernel":             "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.11.tar.xz",
+		"kernel_llvm_linux_amd64":  "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.3-x86_64.tar.xz",
+		"kernel_llvm_linux_arm64":  "https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.3-aarch64.tar.xz",
+		"openssh":                  "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.6p1.tar.gz",
+		"libressl":                 "https://cdn.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz",
+		"stefanpenner_keys":        "https://github.com/stefanpenner.keys",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len %d want %d (%v)", len(got), len(want), got)

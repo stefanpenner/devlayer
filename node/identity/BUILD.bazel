@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_binary")
+
+# The node's SSH host key, held by the TPM. See main.go.
+go_binary(
+    name = "identity",
+    srcs = ["main.go"],
+    out = "node-identity",
+    gc_linkopts = ["-s", "-w"],
+    pure = "on",
+    static = "on",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_google_go_tpm//legacy/tpm2",
+        "@com_github_google_go_tpm//tpmutil",
+        "@org_golang_x_crypto//ssh",
+        "@org_golang_x_crypto//ssh/agent",
+    ],
+)
