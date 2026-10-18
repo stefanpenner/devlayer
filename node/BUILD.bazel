@@ -255,16 +255,16 @@ node_vm_test(
     tpm = True,
 )
 
-# The dashboard centered on a 3840x2160 console.
+# The dashboard centered on a 2560x1440 console.
 node_vm_test(
-    name = "dashboard_4k_vm",
+    name = "dashboard_1440_vm",
     size = "medium",
     binary = "//node/agentcheck",
     cmdline = "node_check=dashboard",
     display = True,
-    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-4k.png","format":"png"}}',
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-1440.png","format":"png"}}',
     qmp_on = "dashboard: painted",
-    resolution = "3840x2160",
+    resolution = "2560x1440",
     tags = ["node-vm"],
     tpm = True,
 )
