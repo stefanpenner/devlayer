@@ -265,11 +265,19 @@ func expectStop(want, bootPath string) int {
 
 // withDisplay boots through OVMF with a std VGA, so the kernel gets efifb
 // and fbcon draws tty0 like on the SER9 (for screendumps).
+// NODE_DISPLAY=WxH: a VGA whose EDID prefers that mode, so OVMF's GOP and
+// efifb run at it (vgamem for 4K at 32 bpp).
 func withDisplay(qemu string, args []string) []string {
 	share := filepath.Join(filepath.Dir(filepath.Dir(qemu)), "share", "qemu")
+	vga := "std"
+	w, h, sized := strings.Cut(os.Getenv("NODE_DISPLAY"), "x")
+	if sized {
+		vga = "none"
+		args = append(args, "-device", fmt.Sprintf("VGA,edid=on,xres=%s,yres=%s,vgamem_mb=64", w, h))
+	}
 	for i := range args {
 		if args[i] == "-vga" && i+1 < len(args) {
-			args[i+1] = "std"
+			args[i+1] = vga
 		}
 	}
 	return append(args, "-drive", "if=pflash,format=raw,readonly=on,file="+filepath.Join(share, "edk2-x86_64-code.fd"))

@@ -241,6 +241,34 @@ node_vm_test(
     tpm = True,
 )
 
+# The dashboard centered on a 1920x1080 console.
+node_vm_test(
+    name = "dashboard_1080_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-1080.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    resolution = "1920x1080",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
+# The dashboard centered on a 3840x2160 console.
+node_vm_test(
+    name = "dashboard_4k_vm",
+    size = "medium",
+    binary = "//node/agentcheck",
+    cmdline = "node_check=dashboard",
+    display = True,
+    qmp_cmd = '{"execute":"screendump","arguments":{"filename":"$OUT/node-ui-4k.png","format":"png"}}',
+    qmp_on = "dashboard: painted",
+    resolution = "3840x2160",
+    tags = ["node-vm"],
+    tpm = True,
+)
+
 # Plain reboot and poweroff over SSH: toybox signals PID 1, init stops
 # every process, syncs, and calls reboot(2).
 node_vm_test(

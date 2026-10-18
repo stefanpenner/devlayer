@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -374,6 +375,42 @@ func repaint(s string, first bool) string {
 	return b.String()
 }
 
+// ttySize is the console's columns and rows (TIOCGWINSZ), or 0, 0.
+func ttySize(path string) (cols, rows int) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOCTTY, 0)
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	var ws struct{ Row, Col, X, Y uint16 }
+	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&ws))); e != 0 {
+		return 0, 0
+	}
+	return int(ws.Col), int(ws.Row)
+}
+
+// center pads the dashboard (width columns wide at most) to the middle of
+// a cols x rows console: spaces on the left, blank lines on top. An unknown
+// or small console gets it at the top left, as before.
+func center(s string, cols, rows int) string {
+	lines := strings.Split(strings.TrimPrefix(s, "\n"), "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	left := max(0, (cols-width-1)/2)
+	top := max(0, (rows-len(lines))/2)
+	pad := strings.Repeat(" ", left)
+	var b strings.Builder
+	b.WriteString(strings.Repeat("\n", top))
+	for _, l := range lines {
+		if l != "" {
+			l = pad + l
+		}
+		b.WriteString(l + "\n")
+	}
+	return b.String()
+}
+
 func toTTY(path, s string) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|syscall.O_NOCTTY, 0)
 	if err != nil {
@@ -406,17 +443,22 @@ func bannerLoop(c config, st *status) {
 	}
 	first := true
 	lastBeat, lastPaint := time.Now(), time.Time{}
+	var size [2]int
 	for {
 		in := collect(st, k)
 		in.shim = shim
 		key := in
 		key.up = 0
 		s := render(key, false)
+		// A new console size (a mode change, a resize) clears and re-centers.
+		cols, rows := ttySize(c.tty)
+		resized := size != [2]int{cols, rows}
+		size = [2]int{cols, rows}
 		switch {
 		case verbose && s != last:
 			toTTY(c.tty, render(in, true))
-		case !verbose && (s != last || time.Since(lastPaint) >= 10*time.Second):
-			toTTY(c.tty, repaint(render(in, true), first))
+		case !verbose && (s != last || resized || time.Since(lastPaint) >= 10*time.Second):
+			toTTY(c.tty, repaint(center(render(in, true), cols, rows), first || resized))
 			first, lastPaint = false, time.Now()
 		}
 		if s != last {
